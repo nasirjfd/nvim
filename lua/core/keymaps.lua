@@ -101,5 +101,5 @@ vim.keymap.set("t", "<C-j>", "<cmd>wincmd j<cr>", { desc = "Go Down" })
 vim.keymap.set("t", "<C-k>", "<cmd>wincmd k<cr>", { desc = "Go Up" })
 vim.keymap.set("t", "<C-l>", "<cmd>wincmd l<cr>", { desc = "Go Right" })
 
-vim.keymap.set([{"n", "v"}, "m", "%")
-vim.keymap.set(["n", "vp", "viwp")
+vim.keymap.set({"n", "v"}, "m", "%")
+vim.keymap.set("n", "vp", "viwp")
