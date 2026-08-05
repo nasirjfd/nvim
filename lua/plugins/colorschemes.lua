@@ -1,6 +1,13 @@
 -- Colorschemes: Theme configurations
 return {
   {
+    "nickkadutskyi/jb.nvim",
+    priority = 1000,
+    config = function()
+      vim.cmd.colorscheme("jb")
+    end,
+  },
+  {
     "f-person/auto-dark-mode.nvim",
     opts = {
       update_interval = 1000,

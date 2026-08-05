@@ -66,4 +66,20 @@ return {
     event = "BufReadPre",
     opts = {},
   },
+  {
+    "karb94/neoscroll.nvim",
+    config = function()
+      require("neoscroll").setup()
+
+      local neoscroll = require("neoscroll")
+
+      vim.keymap.set("n", "<C-u>", function()
+        neoscroll.ctrl_u({ duration = 70 })
+      end)
+
+      vim.keymap.set("n", "<C-d>", function()
+        neoscroll.ctrl_d({ duration = 70 })
+      end)
+    end,
+  },
 }

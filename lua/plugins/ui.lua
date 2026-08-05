@@ -59,8 +59,20 @@ return {
       },
     },
     keys = {
-      { "<leader>?", function() require("which-key").show({ global = false }) end, desc = "Buffer Keymaps" },
-      { "<leader>K", function() require("which-key").show({ global = true }) end, desc = "All Keymaps" },
+      {
+        "<leader>?",
+        function()
+          require("which-key").show({ global = false })
+        end,
+        desc = "Buffer Keymaps",
+      },
+      {
+        "<leader>K",
+        function()
+          require("which-key").show({ global = true })
+        end,
+        desc = "All Keymaps",
+      },
     },
   },
 
@@ -119,6 +131,7 @@ return {
   -- ════════════════════════════════════════════════════════════════════════════
   {
     "iamcco/markdown-preview.nvim",
+    enabled = false,
     cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
     ft = { "markdown" },
     build = "cd app && npm install",
@@ -138,7 +151,12 @@ return {
       }
     end,
     keys = {
-      { "<leader>mp", "<cmd>MarkdownPreviewToggle<cr>", desc = "Markdown Preview", ft = "markdown" },
+      {
+        "<leader>mp",
+        "<cmd>MarkdownPreviewToggle<cr>",
+        desc = "Markdown Preview",
+        ft = "markdown",
+      },
     },
   },
 
@@ -178,13 +196,22 @@ return {
       callout = {
         note = { raw = "[!NOTE]", rendered = " Note", highlight = "RenderMarkdownInfo" },
         tip = { raw = "[!TIP]", rendered = " Tip", highlight = "RenderMarkdownSuccess" },
-        important = { raw = "[!IMPORTANT]", rendered = " Important", highlight = "RenderMarkdownHint" },
+        important = {
+          raw = "[!IMPORTANT]",
+          rendered = " Important",
+          highlight = "RenderMarkdownHint",
+        },
         warning = { raw = "[!WARNING]", rendered = " Warning", highlight = "RenderMarkdownWarn" },
         caution = { raw = "[!CAUTION]", rendered = " Caution", highlight = "RenderMarkdownError" },
       },
     },
     keys = {
-      { "<leader>mr", "<cmd>RenderMarkdown toggle<cr>", desc = "Render Markdown Toggle", ft = "markdown" },
+      {
+        "<leader>mr",
+        "<cmd>RenderMarkdown toggle<cr>",
+        desc = "Render Markdown Toggle",
+        ft = "markdown",
+      },
     },
   },
 
@@ -221,12 +248,19 @@ return {
     },
     keys = {
       { "<leader>dt", "<cmd>Trouble diagnostics toggle<cr>", desc = "Trouble (workspace)" },
-      { "<leader>dT", "<cmd>Trouble diagnostics toggle filter.buf=0<cr>", desc = "Trouble (buffer)" },
+      {
+        "<leader>dT",
+        "<cmd>Trouble diagnostics toggle filter.buf=0<cr>",
+        desc = "Trouble (buffer)",
+      },
       { "<leader>dL", "<cmd>Trouble loclist toggle<cr>", desc = "Location List" },
       { "<leader>dQ", "<cmd>Trouble qflist toggle<cr>", desc = "Quickfix List" },
-      { "<leader>lt", "<cmd>Trouble lsp toggle focus=false win.position=right<cr>", desc = "LSP References (Trouble)" },
+      {
+        "<leader>lt",
+        "<cmd>Trouble lsp toggle focus=false win.position=right<cr>",
+        desc = "LSP References (Trouble)",
+      },
       { "<leader>lT", "<cmd>Trouble symbols toggle focus=false<cr>", desc = "Symbols (Trouble)" },
     },
   },
-
 }
