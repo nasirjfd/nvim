@@ -101,5 +101,25 @@ vim.keymap.set("t", "<C-j>", "<cmd>wincmd j<cr>", { desc = "Go Down" })
 vim.keymap.set("t", "<C-k>", "<cmd>wincmd k<cr>", { desc = "Go Up" })
 vim.keymap.set("t", "<C-l>", "<cmd>wincmd l<cr>", { desc = "Go Right" })
 
-vim.keymap.set({"n", "v"}, "m", "%")
+vim.keymap.set({ "n", "v" }, "m", "%")
 vim.keymap.set("n", "vp", "viwp")
+
+vim.keymap.set("n", "<leader>op", function()
+  vim.cmd("split")
+  require("dbee").open({
+    source = "Production",
+  })
+end)
+
+vim.keymap.set("n", "<leader>ga", function()
+  Snacks.terminal.open(
+    "cd /Users/nasirjd/Can/Develop/Shell/git-changes-fzf-lazygit/ && ./git-all-select.sh",
+    {
+      interactive = true,
+      win = {
+        position = "float",
+        border = "rounded",
+      },
+    }
+  )
+end, { desc = "Git all repos" })

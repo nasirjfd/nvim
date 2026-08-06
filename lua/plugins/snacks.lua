@@ -6,7 +6,7 @@ return {
   opts = {
     bigfile = { enabled = true },
     dashboard = { enabled = true },
-    explorer = { enabled = true, ignored = false },
+    explorer = { enabled = true, git_status = false },
     image = {
       enabled = true,
       doc = {
@@ -238,13 +238,13 @@ return {
     -- ════════════════════════════════════════════════════════════════════
     -- <leader>g = Git
     -- ════════════════════════════════════════════════════════════════════
-    {
-      "<leader>gg",
-      function()
-        Snacks.lazygit()
-      end,
-      desc = "Lazygit",
-    },
+    -- {
+    --   "<leader>gg",
+    --   function()
+    --     Snacks.lazygit()
+    --   end,
+    --   desc = "Lazygit",
+    -- },
     {
       "<leader>gl",
       function()

@@ -34,6 +34,7 @@ return {
         { "<leader>/", desc = "Grep" },
         { "<leader>,", desc = "Buffers" },
         { "<leader>.", desc = "Scratch" },
+        { "<leader>o", desc = "Data Bases" },
         { "<leader>e", desc = "Explorer" },
         { "<leader>q", desc = "Quit" },
         { "<leader>Q", desc = "Quit All" },
