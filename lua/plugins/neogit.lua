@@ -2,6 +2,7 @@ return {
   "NeogitOrg/neogit",
   lazy = true,
   dependencies = {
+    "nvim-lua/plenary.nvim",
     -- Only one of these is needed.
     "sindrets/diffview.nvim", -- optional
     "esmuellert/codediff.nvim", -- optional
@@ -16,6 +17,9 @@ return {
     "folke/snacks.nvim", -- optional
   },
   cmd = "Neogit",
+  opts = {
+    disable_commit_confirmation = true,
+  },
   keys = {
     { "<leader>gg", "<cmd>Neogit<cr>", desc = "Show Neogit UI" },
   },

@@ -123,3 +123,13 @@ vim.keymap.set("n", "<leader>ga", function()
     }
   )
 end, { desc = "Git all repos" })
+
+vim.keymap.set("n", "<leader>dc", "<cmd>DiffviewClose<CR>", { desc = "Close diff view" })
+
+vim.keymap.set("n", "]f", function()
+  require("diffview.actions").select_next_entry()
+end, { desc = "go to next file in diff view" })
+
+vim.keymap.set("n", "[f", function()
+  require("diffview.actions").select_prev_entry()
+end, { desc = "go to prev file in diff view" })

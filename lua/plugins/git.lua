@@ -6,7 +6,7 @@ return {
     config = function()
       require("gitsigns").setup({
         signs = {
-          add = { text = "┃" },
+          add = { text = "┃┃" },
           change = { text = "┃" },
           delete = { text = "_" },
           topdelete = { text = "‾" },
@@ -141,7 +141,39 @@ return {
     event = "VeryLazy",
     cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewToggleFiles", "DiffviewFocusFiles" },
   },
-  -- Git related plugins
+  {
+    "sindrets/diffview.nvim",
+    opts = {
+      keymaps = {
+        view = {
+          {
+            "n",
+            "<F7>",
+            function()
+              local before = vim.api.nvim_win_get_cursor(0)
+              vim.cmd.normal({ args = { "]c" }, bang = true })
+
+              if vim.api.nvim_win_get_cursor(0)[1] == before[1] then
+                require("diffview.actions").select_next_entry()
+              end
+            end,
+          },
+          {
+            "n",
+            "<F19>",
+            function()
+              local before = vim.api.nvim_win_get_cursor(0)
+              vim.cmd.normal({ args = { "[c" }, bang = true })
+
+              if vim.api.nvim_win_get_cursor(0)[1] == before[1] then
+                require("diffview.actions").select_prev_entry()
+              end
+            end,
+          },
+        },
+      },
+    },
+  },
   "tpope/vim-fugitive",
   "tpope/vim-rhubarb",
 }
