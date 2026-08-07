@@ -65,6 +65,15 @@ return {
     "folke/persistence.nvim",
     event = "BufReadPre",
     opts = {},
+    keys = {
+      {
+        "<F12>",
+        function()
+          require("persistence").load()
+        end,
+        desc = "Load session",
+      },
+    },
   },
   {
     "karb94/neoscroll.nvim",

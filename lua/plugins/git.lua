@@ -55,7 +55,7 @@ return {
           map("n", "]h", gs.next_hunk, "Next Hunk")
           map("n", "[h", gs.prev_hunk, "Prev Hunk")
           map("n", "<F7>", gs.next_hunk, "Next Hunk")
-          map("n", "<F7>", gs.prev_hunk, "Prev Hunk")
+          map("n", "<F19>", gs.prev_hunk, "Prev Hunk")
         end,
       })
     end,
@@ -154,20 +154,50 @@ return {
               vim.cmd.normal({ args = { "]c" }, bang = true })
 
               if vim.api.nvim_win_get_cursor(0)[1] == before[1] then
-                require("diffview.actions").select_next_entry()
+                local actions = require("diffview.actions")
+
+                actions.select_next_entry()
+
+                vim.schedule(function()
+                  actions.focus_files()
+                  actions.select_entry()
+                end)
               end
+            end,
+          },
+          {
+            "n",
+            "[c",
+            function()
+              local before = vim.api.nvim_win_get_cursor(0)
+              vim.cmd.normal({ args = { "[c" }, bang = true })
+
+              if vim.api.nvim_win_get_cursor(0)[1] == before[1] then
+                local actions = require("diffview.actions")
+
+                actions.select_prev_entry()
+
+                vim.schedule(function()
+                  actions.focus_files()
+                  actions.select_entry()
+                end)
+              end
+            end,
+          },
+        },
+        file_panel = {
+          {
+            "n",
+            "<F7>",
+            function()
+              vim.cmd.wincmd("p")
             end,
           },
           {
             "n",
             "<F19>",
             function()
-              local before = vim.api.nvim_win_get_cursor(0)
-              vim.cmd.normal({ args = { "[c" }, bang = true })
-
-              if vim.api.nvim_win_get_cursor(0)[1] == before[1] then
-                require("diffview.actions").select_prev_entry()
-              end
+              vim.cmd.wincmd("p")
             end,
           },
         },

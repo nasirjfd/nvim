@@ -128,3 +128,11 @@ vim.keymap.set("n", "[f", function()
 end, { desc = "go to prev file in diff view" })
 
 vim.keymap.set("n", "gh", vim.diagnostic.open_float)
+
+vim.keymap.set("n", "<leader>gp", function()
+  vim.ui.input({ prompt = "Commit message: " }, function(msg)
+    if msg then
+      vim.cmd("!git commit -m " .. vim.fn.shellescape(msg))
+    end
+  end)
+end)

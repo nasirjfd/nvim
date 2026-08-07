@@ -317,13 +317,13 @@ return {
       end,
       desc = "Issues (all)",
     },
-    {
-      "<leader>gp",
-      function()
-        Snacks.picker.gh_pr()
-      end,
-      desc = "Pull Requests",
-    },
+    -- {
+    --   "<leader>gp",
+    --   function()
+    --     Snacks.picker.gh_pr()
+    --   end,
+    --   desc = "Pull Requests",
+    -- },
     {
       "<leader>gP",
       function()
