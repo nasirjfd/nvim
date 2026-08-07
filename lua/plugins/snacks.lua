@@ -6,7 +6,7 @@ return {
   opts = {
     bigfile = { enabled = true },
     dashboard = { enabled = true },
-    explorer = { enabled = true, git_status = false },
+    explorer = { enabled = true },
     image = {
       enabled = true,
       doc = {
@@ -23,7 +23,7 @@ return {
     picker = {
       enabled = true,
       sources = {
-        files = { hidden = true },
+        files = { git_status = false, ignored = false, diagnostics = false },
         gh_issue = {},
         gh_pr = {},
       },

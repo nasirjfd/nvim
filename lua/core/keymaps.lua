@@ -133,3 +133,5 @@ end, { desc = "go to next file in diff view" })
 vim.keymap.set("n", "[f", function()
   require("diffview.actions").select_prev_entry()
 end, { desc = "go to prev file in diff view" })
+
+vim.keymap.set("n", "gh", vim.diagnostic.open_float)
