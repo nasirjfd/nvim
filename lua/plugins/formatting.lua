@@ -48,6 +48,9 @@ return {
             sh = { "shfmt" },
             bash = { "shfmt" },
 
+            -- SQL
+            sql = { "sqlfluff" },
+
             -- Other
             rust = { "rustfmt" },
         },

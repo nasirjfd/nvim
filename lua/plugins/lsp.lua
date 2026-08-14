@@ -1,4 +1,76 @@
 -- ════════════════════════════════════════════════════════════════════════════
+-- Goto Next/Prev Class/Method (LSP document symbols)
+-- Mirrors VSCode's mishkinf.goto-next-previous-member (shift+u / shift+s),
+-- rebound to ]m / [m since "S" is already Flash's treesitter jump here.
+-- ════════════════════════════════════════════════════════════════════════════
+local MEMBER_KINDS = {
+  [vim.lsp.protocol.SymbolKind.Class] = true,
+  [vim.lsp.protocol.SymbolKind.Method] = true,
+  [vim.lsp.protocol.SymbolKind.Constructor] = true,
+  [vim.lsp.protocol.SymbolKind.Function] = true,
+}
+
+local function collect_member_lines(bufnr)
+  local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
+  local ok, results = pcall(vim.lsp.buf_request_sync, bufnr, "textDocument/documentSymbol", params, 1000)
+  if not ok or not results then
+    return {}
+  end
+
+  local lines = {}
+  local function collect(symbols)
+    for _, sym in ipairs(symbols or {}) do
+      local range = sym.range or (sym.location and sym.location.range)
+      if range and MEMBER_KINDS[sym.kind] then
+        table.insert(lines, range.start.line)
+      end
+      if sym.children then
+        collect(sym.children)
+      end
+    end
+  end
+
+  for _, res in pairs(results) do
+    if res.result then
+      collect(res.result)
+    end
+  end
+
+  table.sort(lines)
+  return lines
+end
+
+local function goto_member(bufnr, direction)
+  local lines = collect_member_lines(bufnr)
+  if #lines == 0 then
+    vim.notify("No class/method/function symbols found", vim.log.levels.WARN)
+    return
+  end
+
+  local cur = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local target
+  if direction > 0 then
+    for _, line in ipairs(lines) do
+      if line > cur then
+        target = line
+        break
+      end
+    end
+    target = target or lines[1]
+  else
+    for i = #lines, 1, -1 do
+      if lines[i] < cur then
+        target = lines[i]
+        break
+      end
+    end
+    target = target or lines[#lines]
+  end
+
+  vim.api.nvim_win_set_cursor(0, { target + 1, 0 })
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
 -- LSP Keymaps (applied per-buffer on attach)
 -- ════════════════════════════════════════════════════════════════════════════
 local function setup_keymaps(bufnr)
@@ -21,6 +93,14 @@ local function setup_keymaps(bufnr)
   map("n", "]d", function()
     vim.diagnostic.jump({ count = 1 })
   end, "Next Diagnostic")
+
+  -- Goto next/prev class/method/function
+  map("n", "[m", function()
+    goto_member(bufnr, -1)
+  end, "Prev Class/Method")
+  map("n", "]m", function()
+    goto_member(bufnr, 1)
+  end, "Next Class/Method")
 
   -- <leader>c = Code
   map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, "Code Action")
@@ -155,6 +235,7 @@ return {
         "phpstan",
         "ruff",
         "mypy",
+        "sqlfluff",
         -- Formatters
         "stylua",
         "goimports",

@@ -10,6 +10,9 @@ vim.keymap.set({ "i", "x" }, "<C-s>", "<Esc><cmd>w<cr>", { desc = "Save File" })
 vim.keymap.set("n", "<leader>q", "<cmd>q<cr>", { desc = "Quit" })
 vim.keymap.set("n", "<leader>Q", "<cmd>qa<cr>", { desc = "Quit All" })
 
+-- Close Neovim entirely, prompting to save any unsaved changes
+vim.keymap.set("n", "<C-q>", "<cmd>confirm qa<cr>", { desc = "Close Neovim (confirm save)" })
+
 -- Clear search highlight
 vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<cr>", { desc = "Clear Highlight", silent = true })
 
@@ -54,8 +57,6 @@ vim.keymap.set("n", "*", "*zzzv", { desc = "Search Word (centered)" })
 vim.keymap.set("n", "#", "#zzzv", { desc = "Search Word Back (centered)" })
 
 -- Buffer navigation
-vim.keymap.set("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
-vim.keymap.set("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next Buffer" })
 vim.keymap.set("n", "[b", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
 vim.keymap.set("n", "]b", "<cmd>bnext<cr>", { desc = "Next Buffer" })
 

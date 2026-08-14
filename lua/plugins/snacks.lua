@@ -23,7 +23,13 @@ return {
     picker = {
       enabled = true,
       sources = {
-        files = { git_status = false, ignored = false, diagnostics = false },
+        files = {
+          git_status = false,
+          ignored = false,
+          diagnostics = false,
+          -- Rank recently-opened files to the top, even before typing anything.
+          matcher = { frecency = true, sort_empty = true },
+        },
         gh_issue = {},
         gh_pr = {},
       },

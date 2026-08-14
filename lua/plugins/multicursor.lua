@@ -32,5 +32,15 @@ return {
     end)
 
     set("n", "<c-leftmouse>", mc.handleMouse)
+
+    -- Escape clears multiple cursors first; falls through to normal <Esc>
+    -- behavior (clear search highlight) when there are none.
+    set("n", "<esc>", function()
+      if mc.hasCursors() then
+        mc.clearCursors()
+      else
+        vim.cmd("nohlsearch")
+      end
+    end, { desc = "Clear Cursors / Highlight" })
   end,
 }

@@ -1,6 +1,35 @@
 -- UI: Which-key, diagnostics display, notifications, and visual enhancements
 return {
   { "nvim-tree/nvim-web-devicons", lazy = true },
+
+  -- ════════════════════════════════════════════════════════════════════════════
+  -- Todo Comments (highlight TODO/FIXME/NOTE, matches wayou.vscode-todo-highlight)
+  -- ════════════════════════════════════════════════════════════════════════════
+  {
+    "folke/todo-comments.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
+    event = { "BufReadPost", "BufNewFile" },
+    opts = {
+      signs = false, -- keep the single-width signcolumn for gitsigns/diagnostics
+    },
+    keys = {
+      {
+        "]t",
+        function()
+          require("todo-comments").jump_next()
+        end,
+        desc = "Next Todo Comment",
+      },
+      {
+        "[t",
+        function()
+          require("todo-comments").jump_prev()
+        end,
+        desc = "Prev Todo Comment",
+      },
+      { "<leader>st", "<cmd>TodoQuickFix<cr>", desc = "Todo Comments (Quickfix)" },
+    },
+  },
   -- ════════════════════════════════════════════════════════════════════════════
   -- Which-key (keybinding help)
   -- ════════════════════════════════════════════════════════════════════════════
@@ -39,6 +68,7 @@ return {
         { "<leader>q", desc = "Quit" },
         { "<leader>Q", desc = "Quit All" },
         -- Main groups
+        { "<leader>a", group = "AI/Claude" },
         { "<leader>b", group = "Buffers" },
         { "<leader>c", group = "Code" },
         { "<leader>d", group = "Diagnostics" },

@@ -33,7 +33,8 @@ require("lazy").setup({ import = "plugins" }, {
   },
   checker = {
     enabled = true,
-    notify = false,
+    notify = true,
+    frequency = 3600 * 4, -- check for updates every 4 hours
   },
   change_detection = {
     enabled = true,
@@ -52,4 +53,36 @@ require("lazy").setup({ import = "plugins" }, {
       },
     },
   },
+})
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Keep plugins up to date automatically: sync once per day on startup,
+-- silently (no UI popup), throttled via a stamp file so it doesn't hit the
+-- network on every single launch.
+-- ════════════════════════════════════════════════════════════════════════════
+vim.api.nvim_create_autocmd("VimEnter", {
+  callback = function()
+    vim.defer_fn(function()
+      local stamp_file = vim.fn.stdpath("state") .. "/lazy-auto-update"
+      local last = 0
+      local f = io.open(stamp_file, "r")
+      if f then
+        last = tonumber(f:read("*a")) or 0
+        f:close()
+      end
+
+      local now = os.time()
+      if now - last < 24 * 60 * 60 then
+        return
+      end
+
+      require("lazy").sync({ show = false })
+
+      local wf = io.open(stamp_file, "w")
+      if wf then
+        wf:write(tostring(now))
+        wf:close()
+      end
+    end, 1000)
+  end,
 })
