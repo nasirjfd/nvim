@@ -75,7 +75,9 @@ vim.opt.splitright = true -- Open vertical splits to the right of current window
 -- ============================================================================
 -- Files
 -- ============================================================================
-vim.opt.fileencoding = "utf-8" -- File encoding for new files
+if vim.bo.modifiable then
+  vim.opt.fileencoding = "utf-8" -- File encoding for new files (skip on non-modifiable buffers, e.g. on config reload)
+end
 vim.opt.backup = false         -- Don't create backup files before overwriting
 vim.opt.writebackup = false    -- Don't create backup while editing
 vim.opt.swapfile = false       -- Don't create swap files
