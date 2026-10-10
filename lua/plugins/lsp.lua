@@ -108,9 +108,22 @@ local function setup_keymaps(bufnr)
   map("n", "<leader>cd", vim.diagnostic.open_float, "Line Diagnostic")
   map("n", "<leader>cv", "<cmd>vsplit | lua vim.lsp.buf.definition()<cr>", "Definition in Vsplit")
 
-  -- <leader>l = LSP (using native :lsp command from 0.12)
+  -- <leader>l = LSP
   map("n", "<leader>li", "<cmd>checkhealth vim.lsp<cr>", "LSP Info")
-  map("n", "<leader>lr", "<cmd>lsp restart<cr>", "LSP Restart")
+  map("n", "<leader>lr", function()
+    local clients = vim.lsp.get_clients({ bufnr = bufnr })
+    local names = {}
+    for _, client in ipairs(clients) do
+      names[client.name] = true
+    end
+
+    for name in pairs(names) do
+      vim.lsp.enable(name, false)
+      vim.defer_fn(function()
+        vim.lsp.enable(name, true)
+      end, 100)
+    end
+  end, "Restart LSP")
   map("n", "<leader>lh", function()
     vim.lsp.inlay_hint.enable(
       not vim.lsp.inlay_hint.is_enabled({ bufnr = bufnr }),
@@ -174,7 +187,7 @@ vim.diagnostic.config({
 })
 
 -- ════════════════════════════════════════════════════════════════════════════
--- LSP Server Configuration (native 0.12 API)
+-- LSP Server Configuration (native Neovim API)
 -- Server configs loaded from lsp/ directory, activated with vim.lsp.enable()
 -- ════════════════════════════════════════════════════════════════════════════
 vim.lsp.config("*", {

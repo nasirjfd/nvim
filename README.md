@@ -1,6 +1,6 @@
 # Neovim Configuration
 
-A minimal, fast Neovim configuration for Neovim 0.12+ with lazy-loading, LSP support, and intuitive keybindings.
+A minimal, fast Neovim configuration for Neovim 0.11+ with lazy-loading, LSP support, and intuitive keybindings.
 
 ---
 
@@ -10,7 +10,7 @@ A minimal, fast Neovim configuration for Neovim 0.12+ with lazy-loading, LSP sup
 
 ```bash
 # Core requirements
-brew install neovim    # v0.12+ required
+brew install neovim    # v0.11+ required
 brew install git
 brew install ripgrep   # Fast grep (used by picker)
 brew install fd        # Fast find (used by picker)
