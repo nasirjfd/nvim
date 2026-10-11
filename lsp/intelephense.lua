@@ -18,9 +18,16 @@ local function get_license()
 end
 
 local license = get_license()
+local intelephense = vim.fn.exepath("intelephense")
 
 return {
-  cmd = { "intelephense", "--stdio" },
+  -- Keep the language-server index between Neovim sessions instead of
+  -- rebuilding it whenever Intelephense is restarted.
+  cmd = {
+    intelephense ~= "" and intelephense or "intelephense",
+    "--stdio",
+    "--storage-path=" .. vim.fn.stdpath("cache") .. "/intelephense",
+  },
   filetypes = { "php", "blade" },
   -- Composer "path repository" monorepos (e.g. supernova-env-dev) nest
   -- independent git repos under vendor/<pkg>, each with its own
