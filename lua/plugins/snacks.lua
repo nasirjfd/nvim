@@ -49,7 +49,12 @@ return {
     {
       "<leader><space>",
       function()
-        Snacks.picker.files()
+        local cwd = vim.fn.getcwd()
+        Snacks.picker.files({
+          cwd = cwd,
+          -- Composer packages are ignored by the parent project's .gitignore.
+          ignored = vim.fn.fnamemodify(cwd, ":t") == "vendor",
+        })
       end,
       desc = "Find Files",
     },
