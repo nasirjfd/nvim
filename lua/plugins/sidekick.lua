@@ -20,10 +20,10 @@ return {
     {
       "<leader>as",
       function()
-        require("sidekick.cli").send({ msg = "{selection}" })
+        require("sidekick.cli").send({ msg = "{position}" })
       end,
       mode = "x",
-      desc = "Send Selection to Codex",
+      desc = "Send Selection Reference to Codex",
     },
   },
 }
