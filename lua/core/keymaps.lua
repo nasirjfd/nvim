@@ -130,6 +130,27 @@ end, { desc = "go to prev file in diff view" })
 
 vim.keymap.set("n", "gh", vim.diagnostic.open_float)
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- Reload Config
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- Re-sources options/keymaps in the running instance (no process restart, so
+-- no risk of the terminal-corruption mess a real "quit and relaunch" caused).
+-- Deliberately skips core.autocmds (autocmds defined without a group would
+-- pile up duplicates on repeated reloads) and core.lazy (re-running the
+-- plugin manager's setup() isn't meant to be called twice).
+vim.keymap.set("n", "<leader>rr", function()
+  for _, name in ipairs({ "core.options", "core.keymaps", "core.gui-keymaps" }) do
+    package.loaded[name] = nil
+    local ok, err = pcall(require, name)
+    if not ok then
+      vim.notify("Reload failed on " .. name .. ": " .. err, vim.log.levels.ERROR, { title = "Reload Config" })
+      return
+    end
+  end
+  vim.notify("Config reloaded", vim.log.levels.INFO, { title = "Reload Config" })
+end, { desc = "Reload Config" })
+
 vim.keymap.set("n", "<leader>gp", function()
   vim.ui.input({ prompt = "Commit message: " }, function(msg)
     if msg then
