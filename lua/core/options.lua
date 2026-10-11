@@ -107,3 +107,12 @@ vim.filetype.add({
         ["[jt]sconfig.*.json"] = "jsonc", -- Treat tsconfig/jsconfig files as JSONC (allows comments)
     },
 })
+-- GUI-launched Neovim may not inherit Homebrew's PATH, which prevents
+-- external tools such as ripgrep from being found by plugins.
+if vim.fn.has("mac") == 1 then
+  local homebrew_bin = "/opt/homebrew/bin"
+  local path = vim.env.PATH or ""
+  if vim.fn.isdirectory(homebrew_bin) == 1 and not path:find(homebrew_bin, 1, true) then
+    vim.env.PATH = homebrew_bin .. ":" .. path
+  end
+end

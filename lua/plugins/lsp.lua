@@ -225,8 +225,21 @@ return {
     lazy = false,
     dependencies = { "mason-org/mason.nvim" },
     opts = {
-      automatic_installation = true,
       automatic_enable = false,
+      ensure_installed = {
+        "lua_ls",
+        "gopls",
+        "zls",
+        "ts_ls",
+        "rust_analyzer",
+        "intelephense",
+        "bashls",
+        "pyright",
+        "cssls",
+        "html",
+        "jsonls",
+        "yamlls",
+      },
     },
   },
   {
@@ -237,7 +250,9 @@ return {
       ensure_installed = {
         -- Linters
         "eslint_d",
-        "luacheck",
+        { "luacheck", condition = function()
+          return vim.fn.executable("luarocks") == 1
+        end },
         "golangci-lint",
         "shellcheck",
         "markdownlint",
