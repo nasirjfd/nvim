@@ -226,20 +226,6 @@ return {
     dependencies = { "mason-org/mason.nvim" },
     opts = {
       automatic_enable = false,
-      ensure_installed = {
-        "lua_ls",
-        "gopls",
-        "zls",
-        "ts_ls",
-        "rust_analyzer",
-        "intelephense",
-        "bashls",
-        "pyright",
-        "cssls",
-        "html",
-        "jsonls",
-        "yamlls",
-      },
     },
   },
   {
@@ -248,6 +234,19 @@ return {
     dependencies = { "mason-org/mason.nvim" },
     opts = {
       ensure_installed = {
+        -- LSP servers
+        "lua-language-server",
+        "gopls",
+        "zls",
+        "typescript-language-server",
+        "rust-analyzer",
+        "intelephense",
+        "bash-language-server",
+        "pyright",
+        "css-lsp",
+        "html-lsp",
+        "json-lsp",
+        "yaml-language-server",
         -- Linters
         "eslint_d",
         { "luacheck", condition = function()
@@ -273,6 +272,8 @@ return {
         "shfmt",
         "pint",
       },
+      -- Avoid restarting the full install queue on every Neovim launch.
+      debounce_hours = 24,
     },
   },
 }
