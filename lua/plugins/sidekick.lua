@@ -8,6 +8,15 @@ return {
       function()
         require("sidekick.cli").toggle({ name = "opencode", focus = true })
       end,
+      mode = { "n", "t" },
+      desc = "Open OpenCode CLI",
+    },
+    {
+      "<D-M-b>",
+      function()
+        require("sidekick.cli").toggle({ name = "opencode", focus = true })
+      end,
+      mode = { "n", "t" },
       desc = "Open OpenCode CLI",
     },
     {
