@@ -68,7 +68,7 @@ return {
         { "<leader>q", desc = "Quit" },
         { "<leader>Q", desc = "Quit All" },
         -- Main groups
-        { "<leader>a", group = "AI/Codex" },
+        { "<leader>a", group = "AI/OpenCode" },
         { "<leader>b", group = "Buffers" },
         { "<leader>c", group = "Code" },
         { "<leader>d", group = "Diagnostics" },
