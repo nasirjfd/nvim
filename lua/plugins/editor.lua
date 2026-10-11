@@ -78,16 +78,19 @@ return {
   {
     "karb94/neoscroll.nvim",
     config = function()
-      require("neoscroll").setup()
-
       local neoscroll = require("neoscroll")
+      neoscroll.setup({
+        -- Keep animated key scrolling responsive; long easing animations feel
+        -- like the viewport is trailing behind repeated key presses.
+        duration_multiplier = 0.25,
+      })
 
       vim.keymap.set("n", "<C-u>", function()
-        neoscroll.ctrl_u({ duration = 50 })
+        neoscroll.ctrl_u({ duration = 20 })
       end)
 
       vim.keymap.set("n", "<C-d>", function()
-        neoscroll.ctrl_d({ duration = 50 })
+        neoscroll.ctrl_d({ duration = 20 })
       end)
     end,
   },

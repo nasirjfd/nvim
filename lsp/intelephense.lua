@@ -1,14 +1,33 @@
--- PHP language server with Intelephense license key
+-- PHP language server; a license key is optional.
 local function get_license()
-  local path = os.getenv("HOME") .. "/intelephense/license.txt"
-  local f = assert(io.open(path, "rb"))
+  local home = vim.env.HOME
+  if not home then
+    return nil
+  end
+
+  local path = vim.fs.joinpath(home, "intelephense", "license.txt")
+  local f = io.open(path, "rb")
+  if not f then
+    return nil
+  end
+
   local content = f:read("*a")
   f:close()
-  return string.gsub(content, "%s+", "")
+  local license = string.gsub(content, "%s+", "")
+  return license ~= "" and license or nil
 end
 
+local license = get_license()
+local intelephense = vim.fn.exepath("intelephense")
+
 return {
-  cmd = { "intelephense", "--stdio" },
+  -- Keep the language-server index between Neovim sessions instead of
+  -- rebuilding it whenever Intelephense is restarted.
+  cmd = {
+    intelephense ~= "" and intelephense or "intelephense",
+    "--stdio",
+    "--storage-path=" .. vim.fn.stdpath("cache") .. "/intelephense",
+  },
   filetypes = { "php", "blade" },
   -- Composer "path repository" monorepos (e.g. supernova-env-dev) nest
   -- independent git repos under vendor/<pkg>, each with its own
@@ -21,7 +40,12 @@ return {
     local outer = fname:match("^(.-)/vendor/") or fname
     on_dir(vim.fs.root(outer, { "composer.json", ".git" }))
   end,
-  init_options = {
-    licenceKey = get_license(),
+  -- Intelephense can otherwise ask Neovim to watch the entire 3 GB vendor
+  -- tree, exceeding the system's file watcher limit.
+  capabilities = {
+    workspace = {
+      didChangeWatchedFiles = { dynamicRegistration = false },
+    },
   },
+  init_options = license and { licenceKey = license } or nil,
 }

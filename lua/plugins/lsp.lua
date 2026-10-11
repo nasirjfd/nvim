@@ -75,7 +75,7 @@ end
 -- ════════════════════════════════════════════════════════════════════════════
 local function setup_keymaps(bufnr)
   local function map(mode, lhs, rhs, desc)
-    vim.keymap.set(mode, lhs, rhs, { buf = bufnr, desc = desc, silent = true })
+    vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc, silent = true })
   end
 
   -- Hover & Signature
