@@ -6,7 +6,21 @@ return {
     {
       "<leader>ac",
       function()
-        require("sidekick.cli").toggle({ name = "opencode", focus = true })
+        local State = require("sidekick.cli.state")
+        local states = State.get({ name = "opencode" })
+        local state = states[1]
+        if not state then
+          return
+        end
+
+        if state.attached and state.terminal then
+          state.terminal:toggle()
+          if state.terminal:is_open() and state.terminal:is_running() then
+            state.terminal:focus()
+          end
+        else
+          State.attach(state, { show = true, focus = true })
+        end
       end,
       mode = { "n", "t" },
       desc = "Open OpenCode CLI",
