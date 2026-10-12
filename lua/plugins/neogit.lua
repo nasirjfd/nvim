@@ -21,7 +21,13 @@ return {
     disable_commit_confirmation = true,
   },
   keys = {
-    { "<leader>gg", "<cmd>Neogit<cr>", desc = "Show Neogit UI" },
+    {
+      "<leader>gg",
+      function()
+        require("snacks").lazygit()
+      end,
+      desc = "Lazygit",
+    },
   },
   config = function()
     require("neogit").setup({
