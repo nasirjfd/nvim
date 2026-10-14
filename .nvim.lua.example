@@ -1,0 +1,5 @@
+local root = vim.fn.expand("~/Can/Develop/php/supernova-play/vendor")
+vim.lsp.config("intelephense", { root_dir = root })
+
+local lint = require("lint")
+lint.linters.phpstan.args = { "analyse", "--error-format=json", "--autoload-file=" .. root .. "/autoload.php", root }
