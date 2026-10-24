@@ -629,6 +629,16 @@ return {
         Snacks.toggle.indent():map("<leader>ui")
         Snacks.toggle.dim():map("<leader>ud")
 
+        Snacks.toggle({
+          name = "Autosave",
+          get = function()
+            return vim.g.autosave == true
+          end,
+          set = function(state)
+            vim.g.autosave = state
+          end,
+        }):map("<leader>uA")
+
         -- Show/search ignored (and hidden) files in the explorer and every file/grep picker
         Snacks.toggle({
           name = "Ignored Files",
