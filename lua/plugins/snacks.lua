@@ -91,8 +91,8 @@ return {
         local cwd = vim.fn.getcwd()
         Snacks.picker.files({
           cwd = cwd,
-          -- Composer packages are ignored by the parent project's .gitignore.
-          ignored = vim.g.show_ignored or vim.fn.fnamemodify(cwd, ":t") == "vendor",
+          -- Ignored files stay hidden until <a-i> in the picker or <leader>uI
+          ignored = vim.g.show_ignored == true,
           hidden = vim.g.show_ignored or false,
         })
       end,
