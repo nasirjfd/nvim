@@ -18,16 +18,26 @@ local function collect_member_lines(bufnr)
   end
 
   local lines = {}
-  local function collect(symbols)
+  -- Closures, callbacks and functions declared inside another function are not members
+  local CALLABLE = {
+    [vim.lsp.protocol.SymbolKind.Method] = true,
+    [vim.lsp.protocol.SymbolKind.Constructor] = true,
+    [vim.lsp.protocol.SymbolKind.Function] = true,
+  }
+  local function anonymous(name)
+    return name == "" or name:find("^[<(]") ~= nil or name:find("callback$") ~= nil
+  end
+
+  local function collect(symbols, inside_callable)
     for _, sym in ipairs(symbols or {}) do
       local range = sym.range or (sym.location and sym.location.range)
-      if range and MEMBER_KINDS[sym.kind] then
+      if range and MEMBER_KINDS[sym.kind] and not inside_callable and not anonymous(sym.name or "") then
         -- selectionRange points at the symbol's name (e.g. the method name, not `public function`)
         local name = sym.selectionRange or range
         table.insert(lines, { line = name.start.line, col = name.start.character })
       end
       if sym.children then
-        collect(sym.children)
+        collect(sym.children, inside_callable or CALLABLE[sym.kind] == true)
       end
     end
   end
