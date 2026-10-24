@@ -137,6 +137,9 @@ local function setup_keymaps(bufnr)
       end, 100)
     end
   end, "Restart LSP")
+  map("n", "<leader>lu", function()
+    require("symbol-usage").toggle()
+  end, "Toggle Usages Lens")
   map("n", "<leader>lh", function()
     vim.lsp.inlay_hint.enable(
       not vim.lsp.inlay_hint.is_enabled({ bufnr = bufnr }),
