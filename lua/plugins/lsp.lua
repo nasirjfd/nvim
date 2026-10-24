@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- Goto Next/Prev Class/Method (LSP document symbols)
 -- Mirrors VSCode's mishkinf.goto-next-previous-member (shift+u / shift+s),
--- rebound to ]m / [m since "S" is already Flash's treesitter jump here.
+-- also on ]m / [m. In normal mode "S" is taken from Flash's treesitter jump (still on x/o).
 -- ════════════════════════════════════════════════════════════════════════════
 local MEMBER_KINDS = {
   [vim.lsp.protocol.SymbolKind.Class] = true,
@@ -99,6 +99,12 @@ local function setup_keymaps(bufnr)
     goto_member(bufnr, -1)
   end, "Prev Class/Method")
   map("n", "]m", function()
+    goto_member(bufnr, 1)
+  end, "Next Class/Method")
+  map("n", "U", function()
+    goto_member(bufnr, -1)
+  end, "Prev Class/Method")
+  map("n", "S", function()
     goto_member(bufnr, 1)
   end, "Next Class/Method")
 
