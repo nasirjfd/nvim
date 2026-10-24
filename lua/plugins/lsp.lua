@@ -22,7 +22,9 @@ local function collect_member_lines(bufnr)
     for _, sym in ipairs(symbols or {}) do
       local range = sym.range or (sym.location and sym.location.range)
       if range and MEMBER_KINDS[sym.kind] then
-        table.insert(lines, { line = range.start.line, col = range.start.character })
+        -- selectionRange points at the symbol's name (e.g. the method name, not `public function`)
+        local name = sym.selectionRange or range
+        table.insert(lines, { line = name.start.line, col = name.start.character })
       end
       if sym.children then
         collect(sym.children)
@@ -69,7 +71,7 @@ local function goto_member(bufnr, direction)
     target = target or lines[#lines]
   end
 
-  -- LSP columns are UTF-16 offsets; put the cursor on the symbol's first character
+  -- LSP columns are UTF-16 offsets; put the cursor on the first character of the symbol's name
   local text = vim.api.nvim_buf_get_lines(bufnr, target.line, target.line + 1, false)[1] or ""
   local ok, col = pcall(vim.str_byteindex, text, "utf-16", target.col)
   vim.api.nvim_win_set_cursor(0, { target.line + 1, ok and col or 0 })
