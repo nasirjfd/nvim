@@ -260,6 +260,8 @@ return {
       diff = {
         -- ]c / [c (and <F7> / <F19>) hop into the next/prev file at a file's last/first hunk
         cycle_hunks_across_files = true,
+        -- <leader>hr discards the hunk immediately, without the "Discard hunk N?" prompt
+        confirm_discard_hunk = false,
       },
       keymaps = {
         view = {
@@ -271,21 +273,6 @@ return {
     },
     config = function(_, opts)
       require("codediff").setup(opts)
-
-      -- <leader>hr discards the hunk immediately: answer its "Discard hunk N?" prompt with "Discard"
-      local hunk = require("codediff.ui.view.actions.hunk")
-      local discard_hunk = hunk.discard_hunk
-      hunk.discard_hunk = function(...)
-        local confirm = vim.fn.confirm
-        vim.fn.confirm = function()
-          return 1
-        end
-        local ok, err = pcall(discard_hunk, ...)
-        vim.fn.confirm = confirm
-        if not ok then
-          error(err)
-        end
-      end
 
       local group = vim.api.nvim_create_augroup("UserCodeDiff", { clear = true })
 
