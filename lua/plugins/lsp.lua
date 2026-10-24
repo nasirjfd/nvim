@@ -70,7 +70,6 @@ local function goto_member(bufnr, direction)
         break
       end
     end
-    target = target or lines[1]
   else
     for i = #lines, 1, -1 do
       if lines[i].line < cur then
@@ -78,7 +77,10 @@ local function goto_member(bufnr, direction)
         break
       end
     end
-    target = target or lines[#lines]
+  end
+
+  if not target then
+    return -- already at the first/last symbol: stay there instead of wrapping around
   end
 
   -- LSP columns are UTF-16 offsets; put the cursor on the first character of the symbol's name
