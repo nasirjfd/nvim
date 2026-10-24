@@ -169,7 +169,7 @@ Parsers for: bash, c, css, go, html, javascript, json, latex, lua, markdown, php
 │       ├── colorschemes.lua # Themes
 │       ├── editor.lua       # Flash, mini.nvim, persistence
 │       ├── formatting.lua   # Conform.nvim (format on save)
-│       ├── git.lua          # Gitsigns, fugitive, diffview
+│       ├── git.lua          # Gitsigns, fugitive, codediff
 │       ├── linting.lua      # nvim-lint
 │       ├── lsp.lua          # Mason + LSP keymaps + diagnostic config
 │       ├── snacks.lua       # Picker, explorer, notifications
@@ -254,6 +254,7 @@ Parsers for: bash, c, css, go, html, javascript, json, latex, lua, markdown, php
 | `<leader>cr` | Rename symbol |
 | `<leader>cd` | Line diagnostic |
 | `<leader>cf` | Format |
+| `<D-l>` / `<leader>cx` | Copy Codex file/selection reference |
 | `<leader>cv` | Definition in vsplit |
 
 ### Diagnostics (`<leader>d`)
@@ -297,6 +298,19 @@ Parsers for: bash, c, css, go, html, javascript, json, latex, lua, markdown, php
 | `<leader>gS` | Stage buffer |
 | `<leader>gi` | GitHub issues |
 | `<leader>gp` | GitHub PRs |
+
+### CodeDiff (`<leader>gv`)
+
+VSCode-style live diff review via [codediff.nvim](https://github.com/esmuellert/codediff.nvim). Full command: `:CodeDiff`.
+
+| Key | Action |
+|-----|--------|
+| `<leader>gvv` | Working tree changes |
+| `<leader>gvs` | Staged changes |
+| `<leader>gvm` | Branch vs `main` (merge-base) |
+| `<leader>gvf` | Current file vs HEAD |
+| `<leader>gvh` | History (visual: commits touching selection) |
+| `<leader>gvH` | Current file history |
 
 ### Git Hunks (`<leader>gh`)
 

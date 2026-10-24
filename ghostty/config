@@ -21,6 +21,7 @@ keybind = super+shift+enter=toggle_split_zoom
 # Equalize all split sizes
 keybind = super+ctrl+equal=equalize_splits
 
+keybind = super+l=csi:99~
 
 # gtab managed include
 config-file = "/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"

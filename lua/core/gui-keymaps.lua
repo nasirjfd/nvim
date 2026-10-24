@@ -16,10 +16,18 @@ map("n", "<D-S-o>", function()
   Snacks.picker.files()
 end, { desc = "All Files" })
 
--- cmd+b -> toggle explorer (show/hide), matches workbench.action.toggleSidebarVisibility
+-- cmd+b -> toggle the sidebar (show/hide), matches workbench.action.toggleSidebarVisibility.
+-- In a codediff tab (diff, history or the multi-repo Source Control pane) it
+-- toggles that tab's own sidebar; anywhere else it toggles the file explorer.
 map("n", "<D-b>", function()
-  Snacks.explorer()
-end, { desc = "Toggle Explorer" })
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  local panel = lifecycle and lifecycle.get_panel_view(vim.api.nvim_get_current_tabpage())
+  if panel then
+    require("codediff.ui.explorer").toggle_visibility(panel)
+  else
+    Snacks.explorer()
+  end
+end, { desc = "Toggle Sidebar" })
 
 -- cmd+f4 -> close buffer
 map("n", "<D-F4>", function()

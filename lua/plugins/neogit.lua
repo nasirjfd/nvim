@@ -4,8 +4,7 @@ return {
   dependencies = {
     "nvim-lua/plenary.nvim",
     -- Only one of these is needed.
-    "sindrets/diffview.nvim", -- optional
-    "esmuellert/codediff.nvim", -- optional
+    "nasirjfd/multi-repo-code-diff", -- optional (fork of esmuellert/codediff.nvim, same module)
 
     -- For a custom log pager
     "m00qek/baleia.nvim", -- optional
@@ -32,8 +31,9 @@ return {
   config = function()
     require("neogit").setup({
       kind = "tab",
+      diff_viewer = "codediff",
       integrations = {
-        diffview = true,
+        codediff = true,
       },
     })
   end,

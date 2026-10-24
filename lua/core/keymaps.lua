@@ -95,6 +95,65 @@ vim.keymap.set("t", "<C-j>", "<cmd>wincmd j<cr>", { desc = "Go Down" })
 vim.keymap.set("t", "<C-k>", "<cmd>wincmd k<cr>", { desc = "Go Up" })
 vim.keymap.set("t", "<C-l>", "<cmd>wincmd l<cr>", { desc = "Go Right" })
 
+local function copy_codex_reference(selection)
+  local file = vim.fn.expand("%:p")
+  if file == "" or vim.bo.buftype ~= "" then
+    vim.notify("Current buffer has no file reference", vim.log.levels.WARN)
+    return
+  end
+
+  local reference_path = vim.fn.fnamemodify(file, ":.")
+  local reference
+  if selection then
+    local start_line = vim.fn.getpos("v")[2]
+    local end_line = vim.fn.line(".")
+    if start_line > end_line then
+      start_line, end_line = end_line, start_line
+    end
+    reference = string.format("File: @%s\nLines: %d-%d", reference_path, start_line, end_line)
+  else
+    reference = string.format("File: @%s\nLine: %d", reference_path, vim.fn.line("."))
+  end
+
+  local copied = pcall(vim.fn.setreg, "+", reference)
+  if vim.fn.has("mac") == 1 then
+    vim.fn.system({ "pbcopy" }, reference)
+    copied = vim.v.shell_error == 0
+  end
+
+  if copied then
+    vim.notify("Copied Codex reference: " .. reference)
+  else
+    vim.notify("Could not copy Codex reference", vim.log.levels.ERROR)
+  end
+end
+
+vim.keymap.set("n", "<leader>cx", function()
+  copy_codex_reference(false)
+end, { desc = "Copy Codex File Reference" })
+
+vim.keymap.set("x", "<leader>cx", function()
+  copy_codex_reference(true)
+end, { desc = "Copy Codex Selection Reference" })
+
+local ghostty_cmd_l = vim.api.nvim_replace_termcodes("<Esc>[99~", true, false, true)
+
+vim.keymap.set("n", "<D-l>", function()
+  copy_codex_reference(false)
+end, { desc = "Copy Codex File Reference" })
+
+vim.keymap.set("x", "<D-l>", function()
+  copy_codex_reference(true)
+end, { desc = "Copy Codex Selection Reference" })
+
+vim.keymap.set("n", ghostty_cmd_l, function()
+  copy_codex_reference(false)
+end, { desc = "Copy Codex File Reference" })
+
+vim.keymap.set("x", ghostty_cmd_l, function()
+  copy_codex_reference(true)
+end, { desc = "Copy Codex Selection Reference" })
+
 vim.keymap.set({ "n", "v" }, "m", "%")
 vim.keymap.set("n", "vp", "viwp")
 
@@ -117,16 +176,6 @@ vim.keymap.set("n", "<leader>ga", function()
     }
   )
 end, { desc = "Git all repos" })
-
-vim.keymap.set("n", "<leader>dc", "<cmd>DiffviewClose<CR>", { desc = "Close diff view" })
-
-vim.keymap.set("n", "]f", function()
-  require("diffview.actions").select_next_entry()
-end, { desc = "go to next file in diff view" })
-
-vim.keymap.set("n", "[f", function()
-  require("diffview.actions").select_prev_entry()
-end, { desc = "go to prev file in diff view" })
 
 vim.keymap.set("n", "gh", vim.diagnostic.open_float)
 

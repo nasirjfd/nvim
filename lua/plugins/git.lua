@@ -251,71 +251,91 @@ return {
     },
   },
   {
-    "sindrets/diffview.nvim",
-    event = "VeryLazy",
-    cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewToggleFiles", "DiffviewFocusFiles" },
-  },
-  {
-    "sindrets/diffview.nvim",
+    -- Fork of esmuellert/codediff.nvim with a multi-repo Source Control pane
+    -- (:CodeDiff scm) and a Git Graph (:CodeDiff graph). The native library is
+    -- still downloaded from the upstream release matching its VERSION file.
+    "nasirjfd/multi-repo-code-diff",
+    cmd = { "CodeDiff", "Codediff" },
     opts = {
+      diff = {
+        -- ]c / [c (and <F7> / <F19>) hop into the next/prev file at a file's last/first hunk
+        cycle_hunks_across_files = true,
+      },
       keymaps = {
         view = {
-          {
-            "n",
-            "<F7>",
-            function()
-              local before = vim.api.nvim_win_get_cursor(0)
-              vim.cmd.normal({ args = { "]c" }, bang = true })
-
-              if vim.api.nvim_win_get_cursor(0)[1] == before[1] then
-                local actions = require("diffview.actions")
-
-                actions.select_next_entry()
-
-                vim.schedule(function()
-                  actions.focus_files()
-                  actions.select_entry()
-                end)
-              end
-            end,
-          },
-          {
-            "n",
-            "[c",
-            function()
-              local before = vim.api.nvim_win_get_cursor(0)
-              vim.cmd.normal({ args = { "[c" }, bang = true })
-
-              if vim.api.nvim_win_get_cursor(0)[1] == before[1] then
-                local actions = require("diffview.actions")
-
-                actions.select_prev_entry()
-
-                vim.schedule(function()
-                  actions.focus_files()
-                  actions.select_entry()
-                end)
-              end
-            end,
-          },
-        },
-        file_panel = {
-          {
-            "n",
-            "<F7>",
-            function()
-              vim.cmd.wincmd("p")
-            end,
-          },
-          {
-            "n",
-            "<F19>",
-            function()
-              vim.cmd.wincmd("p")
-            end,
-          },
+          quit = { "q", "<leader>dc" },
+          next_hunk = { "]c", "<F7>" },
+          prev_hunk = { "[c", "<F19>" },
         },
       },
+    },
+    config = function(_, opts)
+      require("codediff").setup(opts)
+
+      -- <leader>hr discards the hunk immediately: answer its "Discard hunk N?" prompt with "Discard"
+      local hunk = require("codediff.ui.view.actions.hunk")
+      local discard_hunk = hunk.discard_hunk
+      hunk.discard_hunk = function(...)
+        local confirm = vim.fn.confirm
+        vim.fn.confirm = function()
+          return 1
+        end
+        local ok, err = pcall(discard_hunk, ...)
+        vim.fn.confirm = confirm
+        if not ok then
+          error(err)
+        end
+      end
+
+      local group = vim.api.nvim_create_augroup("UserCodeDiff", { clear = true })
+
+      -- Preview the file under the cursor as you move through the file list
+      -- (no <CR> needed).
+      local function preview_on_move(bufnr, panel)
+        local last
+        vim.api.nvim_create_autocmd("CursorMoved", {
+          group = group,
+          buffer = bufnr,
+          callback = function()
+            local view =
+              require("codediff.ui.lifecycle").get_panel_view(vim.api.nvim_get_current_tabpage())
+            local node = view and view.tree and view.tree:get_node()
+            local data = node and node.data
+            if not data or data == last then
+              return
+            end
+            -- Explorer file rows carry no `type`; groups, folders and repositories do.
+            local is_file = data.type == "file" or (panel == "explorer" and data.type == nil)
+            if is_file then
+              last = data
+              view.on_file_select(data)
+            end
+          end,
+        })
+      end
+
+      vim.api.nvim_create_autocmd("FileType", {
+        group = group,
+        pattern = { "codediff-explorer", "codediff-history" },
+        callback = function(args)
+          -- <F7> / <F19> in the file list jumps back to the diff pane
+          for _, lhs in ipairs({ "<F7>", "<F19>" }) do
+            vim.keymap.set("n", lhs, "<cmd>wincmd p<cr>", { buffer = args.buf })
+          end
+          preview_on_move(args.buf, (args.match:gsub("^codediff%-", "")))
+        end,
+      })
+    end,
+    keys = {
+      { "<leader>gvv", "<cmd>CodeDiff<cr>", desc = "Working Tree" },
+      { "<leader>gvr", "<cmd>CodeDiff scm<cr>", desc = "All Repositories" },
+      { "<leader>gvg", "<cmd>CodeDiff graph<cr>", desc = "Commit Graph" },
+      { "<leader>gvs", "<cmd>CodeDiff --staged<cr>", desc = "Staged" },
+      { "<leader>gvm", "<cmd>CodeDiff main...<cr>", desc = "Branch vs main" },
+      { "<leader>gvf", "<cmd>CodeDiff file HEAD<cr>", desc = "Current File vs HEAD" },
+      { "<leader>gvh", "<cmd>CodeDiff history<cr>", desc = "History" },
+      { "<leader>gvH", "<cmd>CodeDiff history %<cr>", desc = "File History" },
+      { "<leader>gvh", ":CodeDiff history<cr>", mode = "x", desc = "Selection History" },
     },
   },
   "tpope/vim-fugitive",

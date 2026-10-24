@@ -75,6 +75,7 @@ return {
         { "<leader>f", group = "Files" },
         { "<leader>g", group = "Git" },
         { "<leader>gh", group = "Hunks" },
+        { "<leader>gv", group = "CodeDiff" },
         { "<leader>l", group = "LSP" },
         { "<leader>m", group = "Markdown" },
         { "<leader>n", group = "Notifications" },
