@@ -61,6 +61,10 @@ return {
     notifier = { enabled = true, timeout = 3000 },
     picker = {
       enabled = true,
+      win = {
+        -- Close the picker on the first <Esc> instead of dropping to normal mode first
+        input = { keys = { ["<Esc>"] = { "close", mode = { "n", "i" } } } },
+      },
       sources = {
         files = {
           git_status = false,
