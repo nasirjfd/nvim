@@ -1,3 +1,34 @@
+-- Jump straight to an LSP location. Duplicate locations (the same spot reported twice) are
+-- collapsed; with several distinct ones, `first` jumps to the first and otherwise `fallback`
+-- opens the picker.
+local function lsp_goto(method, fallback, first)
+  vim.lsp.buf[method]({
+    on_list = function(res)
+      local seen, items = {}, {}
+      for _, item in ipairs(res.items) do
+        local key = item.filename .. ":" .. item.lnum
+        if not seen[key] then
+          seen[key] = true
+          items[#items + 1] = item
+        end
+      end
+      if #items == 0 then
+        return vim.notify("No " .. method .. " found", vim.log.levels.WARN)
+      end
+      if #items > 1 and not first then
+        return fallback()
+      end
+      local item = items[1]
+      vim.cmd("normal! m'")
+      if vim.api.nvim_buf_get_name(0) ~= item.filename then
+        vim.cmd.edit(vim.fn.fnameescape(item.filename))
+      end
+      vim.api.nvim_win_set_cursor(0, { item.lnum, item.col - 1 })
+      vim.cmd("normal! zz")
+    end,
+  })
+end
+
 return {
   "folke/snacks.nvim",
   priority = 1000,
@@ -565,7 +596,9 @@ return {
     {
       "gd",
       function()
-        Snacks.picker.lsp_definitions()
+        lsp_goto("definition", function()
+          Snacks.picker.lsp_definitions()
+        end, true)
       end,
       desc = "Definition",
     },
@@ -587,7 +620,9 @@ return {
     {
       "gi",
       function()
-        Snacks.picker.lsp_implementations()
+        lsp_goto("implementation", function()
+          Snacks.picker.lsp_implementations()
+        end)
       end,
       desc = "Implementation",
     },
