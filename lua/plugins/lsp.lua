@@ -159,6 +159,14 @@ vim.api.nvim_create_autocmd("LspAttach", {
 
     setup_keymaps(bufnr)
 
+    -- Inlay hints and code lens (reference/implementation counts) on by default
+    if client:supports_method("textDocument/inlayHint") then
+      vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+    end
+    if client:supports_method("textDocument/codeLens") then
+      vim.lsp.codelens.enable(true, { bufnr = bufnr })
+    end
+
     -- Document highlight on cursor hold
     if client.server_capabilities.documentHighlightProvider then
       local group = vim.api.nvim_create_augroup("LspDocumentHighlight_" .. bufnr, { clear = true })

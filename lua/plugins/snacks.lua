@@ -1,7 +1,8 @@
 -- Jump straight to an LSP location. Duplicate locations (the same spot reported twice) are
 -- collapsed; with several distinct ones, `first` jumps to the first and otherwise `fallback`
--- opens the picker.
-local function lsp_goto(method, fallback, first)
+-- opens the picker. `on_self` runs instead of jumping when the target is the cursor's own line
+-- (already on the definition).
+local function lsp_goto(method, fallback, first, on_self)
   vim.lsp.buf[method]({
     on_list = function(res)
       local seen, items = {}, {}
@@ -19,6 +20,13 @@ local function lsp_goto(method, fallback, first)
         return fallback()
       end
       local item = items[1]
+      if
+        on_self
+        and item.filename == vim.api.nvim_buf_get_name(0)
+        and item.lnum == vim.api.nvim_win_get_cursor(0)[1]
+      then
+        return on_self()
+      end
       vim.cmd("normal! m'")
       if vim.api.nvim_buf_get_name(0) ~= item.filename then
         vim.cmd.edit(vim.fn.fnameescape(item.filename))
@@ -596,9 +604,13 @@ return {
     {
       "gd",
       function()
+        -- On a usage: jump to the definition. Already on the definition: list its usages
+        -- (a single usage is opened directly).
         lsp_goto("definition", function()
           Snacks.picker.lsp_definitions()
-        end, true)
+        end, true, function()
+          Snacks.picker.lsp_references({ include_declaration = false })
+        end)
       end,
       desc = "Definition",
     },
