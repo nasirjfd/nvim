@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- Goto Next/Prev Class/Method (LSP document symbols)
--- Mirrors VSCode's mishkinf.goto-next-previous-member (shift+u / shift+s),
--- also on ]m / [m. In normal mode "S" is taken from Flash's treesitter jump (still on x/o).
+-- Mirrors VSCode's mishkinf.goto-next-previous-member (shift+u / shift+d),
+-- also on ]m / [m. "D" replaces the delete-to-end-of-line in normal mode.
 -- ════════════════════════════════════════════════════════════════════════════
 local MEMBER_KINDS = {
   [vim.lsp.protocol.SymbolKind.Class] = true,
@@ -22,7 +22,7 @@ local function collect_member_lines(bufnr)
     for _, sym in ipairs(symbols or {}) do
       local range = sym.range or (sym.location and sym.location.range)
       if range and MEMBER_KINDS[sym.kind] then
-        table.insert(lines, range.start.line)
+        table.insert(lines, { line = range.start.line, col = range.start.character })
       end
       if sym.children then
         collect(sym.children)
@@ -36,7 +36,9 @@ local function collect_member_lines(bufnr)
     end
   end
 
-  table.sort(lines)
+  table.sort(lines, function(a, b)
+    return a.line < b.line
+  end)
   return lines
 end
 
@@ -50,16 +52,16 @@ local function goto_member(bufnr, direction)
   local cur = vim.api.nvim_win_get_cursor(0)[1] - 1
   local target
   if direction > 0 then
-    for _, line in ipairs(lines) do
-      if line > cur then
-        target = line
+    for _, pos in ipairs(lines) do
+      if pos.line > cur then
+        target = pos
         break
       end
     end
     target = target or lines[1]
   else
     for i = #lines, 1, -1 do
-      if lines[i] < cur then
+      if lines[i].line < cur then
         target = lines[i]
         break
       end
@@ -67,7 +69,10 @@ local function goto_member(bufnr, direction)
     target = target or lines[#lines]
   end
 
-  vim.api.nvim_win_set_cursor(0, { target + 1, 0 })
+  -- LSP columns are UTF-16 offsets; put the cursor on the symbol's first character
+  local text = vim.api.nvim_buf_get_lines(bufnr, target.line, target.line + 1, false)[1] or ""
+  local ok, col = pcall(vim.str_byteindex, text, "utf-16", target.col)
+  vim.api.nvim_win_set_cursor(0, { target.line + 1, ok and col or 0 })
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -104,7 +109,7 @@ local function setup_keymaps(bufnr)
   map("n", "U", function()
     goto_member(bufnr, -1)
   end, "Prev Class/Method")
-  map("n", "S", function()
+  map("n", "D", function()
     goto_member(bufnr, 1)
   end, "Next Class/Method")
 
