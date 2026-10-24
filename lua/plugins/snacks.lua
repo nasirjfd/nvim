@@ -54,6 +54,7 @@ return {
           cwd = cwd,
           -- Composer packages are ignored by the parent project's .gitignore.
           ignored = vim.g.show_ignored or vim.fn.fnamemodify(cwd, ":t") == "vendor",
+          hidden = vim.g.show_ignored or false,
         })
       end,
       desc = "Find Files",
@@ -628,7 +629,7 @@ return {
         Snacks.toggle.indent():map("<leader>ui")
         Snacks.toggle.dim():map("<leader>ud")
 
-        -- Show/search ignored files in the explorer and every file/grep picker
+        -- Show/search ignored (and hidden) files in the explorer and every file/grep picker
         Snacks.toggle({
           name = "Ignored Files",
           get = function()
@@ -640,10 +641,12 @@ return {
             for _, source in ipairs({ "files", "grep", "grep_word", "grep_buffers", "explorer" }) do
               sources[source] = sources[source] or {}
               sources[source].ignored = state
+              sources[source].hidden = state
             end
             -- Apply to pickers that are already open (e.g. the explorer sidebar)
             for _, picker in ipairs(Snacks.picker.get()) do
               picker.opts.ignored = state
+              picker.opts.hidden = state
               picker:find()
             end
           end,
