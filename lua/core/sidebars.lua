@@ -4,9 +4,38 @@
 -- ============================================================================
 local group = vim.api.nvim_create_augroup("SidebarExclusive", { clear = true })
 
+local M = {}
+
+-- The last codediff sidebar of each tab. Opening a file over the diff panes ends the codediff
+-- session but leaves the sidebar on screen, so it is remembered here to keep toggling it.
+local panels = {}
+-- Tabs where the file explorer was opened last: <D-b> toggles that instead of the codediff sidebar.
+local explorer_pref = {}
+
 local function codediff_panel(tab)
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
-  return lifecycle and lifecycle.get_panel_view(tab)
+  local live = lifecycle and lifecycle.get_panel_view(tab)
+  if live then
+    panels[tab] = live
+    return live
+  end
+  local old = panels[tab]
+  if old and old.split and old.split.bufnr and vim.api.nvim_buf_is_valid(old.split.bufnr) then
+    return old
+  end
+end
+
+-- The codediff sidebar of `tab` after its session has ended (nil while the session is alive).
+function M.orphan_panel(tab)
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  if lifecycle and lifecycle.get_panel_view(tab) then
+    return nil
+  end
+  return codediff_panel(tab)
+end
+
+function M.prefers_explorer(tab)
+  return explorer_pref[tab] == true
 end
 
 local function panel_visible(panel)
@@ -40,6 +69,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       if not vim.api.nvim_tabpage_is_valid(tab) or #snacks_explorers(tab) == 0 then
         return
       end
+      explorer_pref[tab] = true
       local panel = codediff_panel(tab)
       if panel_visible(panel) then
         local previous = vim.api.nvim_get_current_win()
@@ -65,9 +95,13 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       if not vim.api.nvim_tabpage_is_valid(tab) then
         return
       end
+      explorer_pref[tab] = false
+      codediff_panel(tab)
       for _, picker in ipairs(snacks_explorers(tab)) do
         picker:close()
       end
     end)
   end,
 })
+
+return M

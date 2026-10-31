@@ -20,21 +20,20 @@ end, { desc = "All Files" })
 -- In a codediff tab (diff, history or the multi-repo Source Control pane) it
 -- toggles that tab's own sidebar; anywhere else it toggles the file explorer.
 map("n", "<D-b>", function()
+  local tab = vim.api.nvim_get_current_tabpage()
+  local sidebars = require("core.sidebars")
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
-  local panel = lifecycle and lifecycle.get_panel_view(vim.api.nvim_get_current_tabpage())
+  local panel = lifecycle and lifecycle.get_panel_view(tab)
   if panel then
     require("codediff.ui.explorer").toggle_visibility(panel)
     return
   end
   -- Opening a file over the diff panes ends the codediff session but leaves its side pane (changed
-  -- files, history, Source Control) on screen. Close that pane instead of stacking the explorer
-  -- next to it.
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
-    if ft == "codediff-explorer" or ft == "codediff-history" then
-      pcall(vim.api.nvim_win_close, win, true)
-      return
-    end
+  -- files, history, Source Control) on screen. Keep toggling that pane, not the file explorer, until
+  -- the explorer is opened on purpose (then <D-b> toggles the explorer).
+  local orphan = not sidebars.prefers_explorer(tab) and sidebars.orphan_panel(tab)
+  if orphan and pcall(require("codediff.ui.explorer").toggle_visibility, orphan) then
+    return
   end
   Snacks.explorer()
 end, { desc = "Toggle Sidebar" })
