@@ -220,8 +220,8 @@ return {
               SnacksPickerListTitle = { fg = colors.base, bg = colors.base },
 
               -- Additional picker elements
-              SnacksPickerDir = { fg = colors.blue },
-              SnacksPickerFile = { fg = colors.text },
+              SnacksPickerDir = { fg = colors.overlay0, bold = false },
+              SnacksPickerFile = { fg = colors.text, bold = true },
               SnacksPickerMatch = { fg = colors.peach, bold = true },
               SnacksPickerCursor = { bg = colors.surface0, fg = colors.text },
               SnacksPickerSelected = { bg = colors.surface0, fg = colors.text },
