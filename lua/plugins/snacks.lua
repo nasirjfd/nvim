@@ -156,6 +156,34 @@ return {
           -- Rank recently-opened files to the top, even before typing anything.
           matcher = { frecency = true, sort_empty = true },
         },
+        explorer = {
+          actions = {
+            -- Enter in the explorer's search box opens the first matching *file* and moves the cursor
+            -- into it (the matches list starts with their parent directories, so a plain confirm
+            -- would only expand a folder, and the cursor would stay in the explorer)
+            search_confirm = function(picker)
+              local item = picker:current()
+              if picker.input.filter.pattern ~= "" and (not item or item.dir) then
+                for i = 1, picker.list:count() do
+                  local it = picker.list:get(i)
+                  if it and not it.dir then
+                    item = it
+                    break
+                  end
+                end
+              end
+              if not item or item.dir then
+                return picker:action("confirm")
+              end
+              -- the explorer stays open after opening a file, so also move the cursor into the file
+              Snacks.picker.actions.jump(picker, item, { cmd = "edit" })
+              if vim.api.nvim_win_is_valid(picker.main) then
+                vim.api.nvim_set_current_win(picker.main)
+              end
+            end,
+          },
+          win = { input = { keys = { ["<CR>"] = { "search_confirm", mode = { "n", "i" } } } } },
+        },
         gh_issue = {},
         gh_pr = {},
       },
