@@ -75,6 +75,8 @@ return {
     notifier = { enabled = true, timeout = 3000, width = { min = 40, max = 0.6 }, height = { min = 1, max = 0.8 } }, -- wide and tall enough that a long message (git output, a commit message) shows whole
     picker = {
       enabled = true,
+      -- Every picker: list on top, preview below, dimmed backdrop behind the modal
+      layout = lsp_layout,
       actions = {
         -- Opening a file from a picker started in a codediff diff pane goes to a full window of
         -- another tab, so the diff (and the panel on its left) stays as it is.
