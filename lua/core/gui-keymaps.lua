@@ -24,9 +24,19 @@ map("n", "<D-b>", function()
   local panel = lifecycle and lifecycle.get_panel_view(vim.api.nvim_get_current_tabpage())
   if panel then
     require("codediff.ui.explorer").toggle_visibility(panel)
-  else
-    Snacks.explorer()
+    return
   end
+  -- Opening a file over the diff panes ends the codediff session but leaves its side pane (changed
+  -- files, history, Source Control) on screen. Close that pane instead of stacking the explorer
+  -- next to it.
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+    if ft == "codediff-explorer" or ft == "codediff-history" then
+      pcall(vim.api.nvim_win_close, win, true)
+      return
+    end
+  end
+  Snacks.explorer()
 end, { desc = "Toggle Sidebar" })
 
 -- cmd+shift+e -> the file explorer (workbench.view.explorer), always, also inside a codediff tab
