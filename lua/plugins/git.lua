@@ -71,33 +71,6 @@ local function pick_repo(action)
         action(item.file)
       end
     end,
-    win = {
-      input = {
-        keys = {
-          -- Open the selected repo in lazygit instead of Neogit
-          -- (looked up via Snacks.picker.get since this key bypasses the
-          -- picker-action wrapper and would otherwise receive the wrong object)
-          ["<c-l>"] = {
-            function()
-              local picker = Snacks.picker.get({})[1]
-              if not picker then
-                return
-              end
-              local item = picker:current()
-              picker:close()
-              if item then
-                Snacks.terminal.open("lazygit", {
-                  cwd = item.file,
-                  win = { position = "float", border = "rounded" },
-                })
-              end
-            end,
-            mode = { "n", "i" },
-            desc = "Open in LazyGit",
-          },
-        },
-      },
-    },
   })
 end
 
@@ -243,7 +216,7 @@ return {
         function()
           pick_repo(function(path)
             vim.cmd("cd " .. vim.fn.fnameescape(path))
-            require("neogit").open({ cwd = path })
+            vim.cmd("CodeDiff scm")
           end)
         end,
         desc = "Switch Repo",
@@ -314,6 +287,7 @@ return {
       })
     end,
     keys = {
+      { "<leader>gg", "<cmd>CodeDiff scm<cr>", desc = "Git (All Repositories)" },
       { "<leader>gvv", "<cmd>CodeDiff<cr>", desc = "Working Tree" },
       { "<leader>gvr", "<cmd>CodeDiff scm<cr>", desc = "All Repositories" },
       { "<leader>gvg", "<cmd>CodeDiff graph<cr>", desc = "Commit Graph" },

@@ -92,7 +92,7 @@ vim.opt.conceallevel = 0                                -- Show all text normall
 -- Other
 -- ============================================================================
 vim.opt.title = true              -- Set window title to filename
-vim.opt.guifont = "monospace:h17" -- Font for GUI Neovim (e.g., Neovide)
+vim.opt.guifont = "monospace:h14" -- Font for GUI Neovim (e.g., Neovide)
 
 -- ============================================================================
 -- Filetype Detection

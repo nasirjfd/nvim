@@ -29,6 +29,40 @@ map("n", "<D-b>", function()
   end
 end, { desc = "Toggle Sidebar" })
 
+-- cmd+shift+e -> the file explorer (workbench.view.explorer), always, also inside a codediff tab
+-- (cmd+b is the one that toggles that tab's own sidebar). It focuses the explorer of this tab, opening
+-- it when needed, and reveals the current file when the tab is an ordinary one.
+local function focus_explorer()
+  local current_tab = vim.api.nvim_get_current_tabpage()
+  local explorer
+  for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
+    local win = picker.list and picker.list.win and picker.list.win.win
+    if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == current_tab then
+      explorer = picker
+      break
+    end
+  end
+
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  local in_codediff = lifecycle and lifecycle.get_session(current_tab) ~= nil
+  local buf = vim.api.nvim_get_current_buf()
+  local ordinary = vim.bo[buf].buftype == "" and vim.api.nvim_buf_get_name(buf) ~= ""
+  if explorer then
+    explorer:focus("list")
+  elseif ordinary and not in_codediff then
+    explorer = Snacks.explorer.reveal()
+    if explorer then
+      explorer:focus("list")
+    end
+  else
+    Snacks.explorer.open()
+  end
+end
+
+map("n", "<D-S-e>", focus_explorer, { desc = "Focus Explorer" })
+-- Ghostty does not forward cmd+shift+e by itself; its config sends this sequence (keybind = super+shift+e=csi:98~)
+map("n", vim.api.nvim_replace_termcodes("<Esc>[98~", true, false, true), focus_explorer, { desc = "Focus Explorer" })
+
 -- cmd+f4 -> close buffer
 map("n", "<D-F4>", function()
   Snacks.bufdelete()
@@ -53,6 +87,8 @@ end, { desc = "Goto Symbol" })
 
 -- cmd+r cmd+r -> rename symbol
 map("n", "<D-r><D-r>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
+-- Ghostty does not forward cmd+r by itself; its config sends this sequence (keybind = super+r=csi:97~)
+map("n", vim.api.nvim_replace_termcodes("<Esc>[97~<Esc>[97~", true, false, true), vim.lsp.buf.rename, { desc = "Rename Symbol" })
 
 -- cmd+g -> goto line
 map("n", "<D-g>", function()
@@ -79,13 +115,7 @@ map("x", "<D-/>", function()
 end, { desc = "Comment Selection" })
 
 -- shift+cmd+g -> git panel
-map("n", "<D-S-g>", "<cmd>Neogit<cr>", { desc = "Git" })
-
--- cmd+shift+s -> DB client focus
-map("n", "<D-S-s>", function()
-  vim.cmd("split")
-  require("dbee").open({ source = "Production" })
-end, { desc = "Open DB Client" })
+map("n", "<D-S-g>", "<cmd>CodeDiff scm<cr>", { desc = "Git" })
 
 -- cmd+ctrl+j / cmd+ctrl+k -> insert cursor below/above (multicursor.nvim)
 map({ "n", "x" }, "<D-C-j>", function()

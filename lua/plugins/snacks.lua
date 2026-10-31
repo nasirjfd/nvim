@@ -1,3 +1,13 @@
+-- Called before a jump to a definition, reference or the like. In a codediff diff pane, go to the same
+-- file in a full window of another tab first, so the target opens there, whole, instead of replacing a
+-- pane of the diff.
+local function outside_diff()
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  if lifecycle and lifecycle.get_session(vim.api.nvim_get_current_tabpage()) then
+    require("codediff.ui.view.actions.panes").open_current_elsewhere()
+  end
+end
+
 -- Jump straight to an LSP location. Duplicate locations (the same spot reported twice) are
 -- collapsed; with several distinct ones, `first` jumps to the first and otherwise `fallback`
 -- opens the picker. `on_self` runs instead of jumping when the target is the cursor's own line
@@ -58,9 +68,28 @@ return {
     },
     indent = { enabled = false },
     input = { enabled = true },
-    notifier = { enabled = true, timeout = 3000 },
+    notifier = { enabled = true, timeout = 3000, width = { min = 40, max = 0.6 }, height = { min = 1, max = 0.8 } }, -- wide and tall enough that a long message (git output, a commit message) shows whole
     picker = {
       enabled = true,
+      actions = {
+        -- Opening a file from a picker started in a codediff diff pane goes to a full window of
+        -- another tab, so the diff (and the panel on its left) stays as it is.
+        confirm = function(picker, item, action)
+          local main = picker.main
+          if main and vim.api.nvim_win_is_valid(main) then
+            local lifecycle = package.loaded["codediff.ui.lifecycle"]
+            local session = lifecycle and lifecycle.get_session(vim.api.nvim_win_get_tabpage(main))
+            local buf = vim.api.nvim_win_get_buf(main)
+            if session and (buf == session.original_bufnr or buf == session.modified_bufnr or buf == session.result_bufnr) then
+              vim.api.nvim_set_current_win(main)
+              if require("codediff.ui.view.actions.panes").open_current_elsewhere() then
+                picker.main = vim.api.nvim_get_current_win()
+              end
+            end
+          end
+          Snacks.picker.actions.jump(picker, item, action)
+        end,
+      },
       win = {
         -- Close the picker on the first <Esc> instead of dropping to normal mode first
         input = { keys = { ["<Esc>"] = { "close", mode = { "n", "i" } } } },
@@ -608,6 +637,7 @@ return {
     {
       "gd",
       function()
+        outside_diff()
         -- On a usage: jump to the definition. Already on the definition: list its usages
         -- (a single usage is opened directly).
         lsp_goto("definition", function()
@@ -621,6 +651,7 @@ return {
     {
       "gD",
       function()
+        outside_diff()
         Snacks.picker.lsp_declarations()
       end,
       desc = "Declaration",
@@ -628,6 +659,7 @@ return {
     {
       "gr",
       function()
+        outside_diff()
         Snacks.picker.lsp_references()
       end,
       nowait = true,
@@ -636,6 +668,7 @@ return {
     {
       "gi",
       function()
+        outside_diff()
         lsp_goto("implementation", function()
           Snacks.picker.lsp_implementations()
         end)
@@ -645,6 +678,7 @@ return {
     {
       "gy",
       function()
+        outside_diff()
         Snacks.picker.lsp_type_definitions()
       end,
       desc = "Type Definition",

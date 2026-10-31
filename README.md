@@ -14,7 +14,6 @@ brew install neovim    # v0.11+ required
 brew install git
 brew install ripgrep   # Fast grep (used by picker)
 brew install fd        # Fast find (used by picker)
-brew install lazygit   # Git TUI
 brew install node      # Required for some LSPs and tools
 brew install npm       # Required for markdown-preview
 ```
@@ -283,7 +282,7 @@ Parsers for: bash, c, css, go, html, javascript, json, latex, lua, markdown, php
 
 | Key | Action |
 |-----|--------|
-| `<leader>gg` | Lazygit |
+| `<leader>gg` | Git (CodeDiff Source Control pane) |
 | `<leader>gs` | Status |
 | `<leader>gl` | Log |
 | `<leader>gL` | Log (line) |
