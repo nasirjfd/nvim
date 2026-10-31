@@ -98,7 +98,14 @@ return {
       },
       win = {
         -- Close the picker on the first <Esc> instead of dropping to normal mode first
-        input = { keys = { ["<Esc>"] = { "close", mode = { "n", "i" } } } },
+        -- <C-q> closes it too (snacks' default sends the results to the quickfix list and opens it)
+        input = {
+          keys = {
+            ["<Esc>"] = { "close", mode = { "n", "i" } },
+            ["<C-q>"] = { "close", mode = { "n", "i" } },
+          },
+        },
+        list = { keys = { ["<C-q>"] = "close" } },
       },
       sources = {
         -- LSP location lists: only file:line, the code is already in the preview; list on top, preview below
