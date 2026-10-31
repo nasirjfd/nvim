@@ -47,6 +47,10 @@ local function lsp_goto(method, fallback, first, on_self)
   })
 end
 
+-- List on top, preview below. The vertical preset has no backdrop, so turn it on to dim the code
+-- behind the picker.
+local lsp_layout = { preset = "vertical", layout = { backdrop = 60 } }
+
 return {
   "folke/snacks.nvim",
   priority = 1000,
@@ -96,11 +100,11 @@ return {
       },
       sources = {
         -- LSP location lists: only file:line, the code is already in the preview; list on top, preview below
-        lsp_references = { format = "filename", layout = "vertical" },
-        lsp_definitions = { format = "filename", layout = "vertical" },
-        lsp_declarations = { format = "filename", layout = "vertical" },
-        lsp_implementations = { format = "filename", layout = "vertical" },
-        lsp_type_definitions = { format = "filename", layout = "vertical" },
+        lsp_references = { format = "filename", layout = lsp_layout },
+        lsp_definitions = { format = "filename", layout = lsp_layout },
+        lsp_declarations = { format = "filename", layout = lsp_layout },
+        lsp_implementations = { format = "filename", layout = lsp_layout },
+        lsp_type_definitions = { format = "filename", layout = lsp_layout },
         files = {
           git_status = false,
           ignored = false,
