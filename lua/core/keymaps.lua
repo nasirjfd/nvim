@@ -157,13 +157,6 @@ end, { desc = "Copy Codex Selection Reference" })
 vim.keymap.set({ "n", "v" }, "m", "%")
 vim.keymap.set("n", "vp", "viwp")
 
-vim.keymap.set("n", "<leader>op", function()
-  vim.cmd("split")
-  require("dbee").open({
-    source = "Production",
-  })
-end)
-
 vim.keymap.set("n", "<leader>ga", function()
   Snacks.terminal.open(
     "cd /Users/nasirjd/Can/Develop/Shell/git-changes-fzf-lazygit/ && ./git-all-select.sh",

@@ -1,0 +1,42 @@
+{
+  "select all": {
+    "prefix": "sel",
+    "body": "SELECT * FROM ${1:table};",
+    "description": "SELECT * FROM table"
+  },
+  "select where": {
+    "prefix": "selw",
+    "body": "SELECT ${1:*}\nFROM ${2:table}\nWHERE ${3:condition};",
+    "description": "SELECT with WHERE"
+  },
+  "select limit": {
+    "prefix": "sell",
+    "body": "SELECT * FROM ${1:table} LIMIT ${2:100};",
+    "description": "SELECT * with LIMIT"
+  },
+  "select count": {
+    "prefix": "selc",
+    "body": "SELECT COUNT(*) FROM ${1:table}${2: WHERE ${3:condition}};",
+    "description": "COUNT rows"
+  },
+  "select join": {
+    "prefix": "selj",
+    "body": "SELECT ${1:*}\nFROM ${2:table} a\nJOIN ${3:other} b ON b.${4:a_id} = a.${5:id}\nWHERE ${6:1=1};",
+    "description": "SELECT with JOIN"
+  },
+  "insert": {
+    "prefix": "ins",
+    "body": "INSERT INTO ${1:table} (${2:columns})\nVALUES (${3:values});",
+    "description": "INSERT"
+  },
+  "update": {
+    "prefix": "upd",
+    "body": "UPDATE ${1:table}\nSET ${2:column} = ${3:value}\nWHERE ${4:condition};",
+    "description": "UPDATE"
+  },
+  "delete": {
+    "prefix": "del",
+    "body": "DELETE FROM ${1:table}\nWHERE ${2:condition};",
+    "description": "DELETE"
+  }
+}

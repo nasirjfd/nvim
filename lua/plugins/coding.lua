@@ -29,6 +29,15 @@ return {
         },
         keymap = {
           ["<C-f>"] = {},
+          -- Enter accepts the selected item in SQL buffers only
+          ["<CR>"] = {
+            function(cmp)
+              if vim.tbl_contains({ "sql", "mysql", "plsql" }, vim.bo.filetype) then
+                return cmp.accept()
+              end
+            end,
+            "fallback",
+          },
         },
         cmdline = {
           enabled = false,

@@ -118,3 +118,14 @@ if vim.fn.has("mac") == 1 then
     vim.env.PATH = homebrew_bin .. ":" .. path
   end
 end
+
+-- Statusline with current-line git blame (fed by gitsigns' current_line_blame)
+function _G.blame_status()
+  local d = vim.b.gitsigns_blame_line_dict
+  if not d or not d.author then
+    return ""
+  end
+  local date = os.date("%Y-%m-%d", tonumber(d.author_time))
+  return string.format("%s • %s • %s", d.author, date, (d.summary or ""):sub(1, 40))
+end
+vim.opt.statusline = "%f %m%r%=%{v:lua.blame_status()}  %l:%c "
