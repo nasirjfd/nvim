@@ -95,12 +95,12 @@ return {
         input = { keys = { ["<Esc>"] = { "close", mode = { "n", "i" } } } },
       },
       sources = {
-        -- LSP location lists: only file:line, the code is already shown in the preview pane
-        lsp_references = { format = "filename" },
-        lsp_definitions = { format = "filename" },
-        lsp_declarations = { format = "filename" },
-        lsp_implementations = { format = "filename" },
-        lsp_type_definitions = { format = "filename" },
+        -- LSP location lists: only file:line, the code is already in the preview; list on top, preview below
+        lsp_references = { format = "filename", layout = "vertical" },
+        lsp_definitions = { format = "filename", layout = "vertical" },
+        lsp_declarations = { format = "filename", layout = "vertical" },
+        lsp_implementations = { format = "filename", layout = "vertical" },
+        lsp_type_definitions = { format = "filename", layout = "vertical" },
         files = {
           git_status = false,
           ignored = false,
