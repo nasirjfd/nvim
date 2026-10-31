@@ -111,6 +111,8 @@ return {
           diagnostics = false,
           -- Rank recently-opened files to the top, even before typing anything.
           matcher = { frecency = true, sort_empty = true },
+          -- PhpStorm style: file name first (bright), directory after it (dimmed)
+          formatters = { file = { filename_first = true, truncate = "center" } },
         },
         gh_issue = {},
         gh_pr = {},
