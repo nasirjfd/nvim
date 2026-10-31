@@ -49,7 +49,23 @@ end
 
 -- List on top, preview below. The vertical preset has no backdrop, so turn it on to dim the code
 -- behind the picker.
-local lsp_layout = { preset = "vertical", layout = { backdrop = 60 } }
+local lsp_layout = {
+  layout = {
+    backdrop = 60,
+    row = 0.06, -- a little up from the center
+    width = 0.7,
+    min_width = 80,
+    height = 0.88,
+    min_height = 30,
+    box = "vertical",
+    border = true,
+    title = "{title} {live} {flags}",
+    title_pos = "center",
+    { win = "input", height = 1, border = "bottom" },
+    { win = "list", height = 8, border = "none" }, -- few results, the preview gets the rest
+    { win = "preview", title = "{preview}", border = "top" },
+  },
+}
 
 return {
   "folke/snacks.nvim",
