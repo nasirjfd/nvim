@@ -62,9 +62,22 @@ local lsp_layout = {
     title = "{title} {live} {flags}",
     title_pos = "center",
     { win = "input", height = 1, border = "bottom" },
-    { win = "list", height = 8, border = "none" }, -- few results, the preview gets the rest
+    { win = "list", height = 12, border = "none" }, -- few results, the preview gets the rest
     { win = "preview", title = "{preview}", border = "top" },
   },
+}
+
+local builtin_layouts = {
+  explorer = { preset = "sidebar", preview = false },
+  select = { preset = "select" },
+  command_history = { preset = "vscode" },
+  search_history = { preset = "vscode" },
+  icons = { preset = "vscode" },
+  spelling = { preset = "vscode" },
+  lines = { preset = "ivy", preview = "main" },
+  gh_reactions = { preset = "select", layout = { max_width = 50 } },
+  gh_labels = { preset = "select", layout = { max_width = 50 } },
+  gh_actions = { preset = "select", layout = { max_width = 50 } },
 }
 
 return {
@@ -91,8 +104,14 @@ return {
     notifier = { enabled = true, timeout = 3000, width = { min = 40, max = 0.6 }, height = { min = 1, max = 0.8 } }, -- wide and tall enough that a long message (git output, a commit message) shows whole
     picker = {
       enabled = true,
-      -- Every picker: list on top, preview below, dimmed backdrop behind the modal
-      layout = lsp_layout,
+      -- Every picker: list on top, preview below, dimmed backdrop behind the modal. Pickers that
+      -- are not file lists (explorer sidebar, select popups, vscode-style command lists) keep
+      -- their built-in layout.
+      -- PhpStorm style in every list: file name first (bright), directory after it (dimmed)
+      formatters = { file = { filename_first = true, truncate = "center" } },
+      layout = function(source)
+        return builtin_layouts[source] or lsp_layout
+      end,
       actions = {
         -- Opening a file from a picker started in a codediff diff pane goes to a full window of
         -- another tab, so the diff (and the panel on its left) stays as it is.
@@ -136,8 +155,6 @@ return {
           diagnostics = false,
           -- Rank recently-opened files to the top, even before typing anything.
           matcher = { frecency = true, sort_empty = true },
-          -- PhpStorm style: file name first (bright), directory after it (dimmed)
-          formatters = { file = { filename_first = true, truncate = "center" } },
         },
         gh_issue = {},
         gh_pr = {},
