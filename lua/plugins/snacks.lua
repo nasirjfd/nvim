@@ -180,6 +180,13 @@ return {
               if vim.api.nvim_win_is_valid(picker.main) then
                 vim.api.nvim_set_current_win(picker.main)
               end
+              -- clear the search, so the explorer shows the full tree again (with the file revealed)
+              vim.schedule(function()
+                if not picker.closed then
+                  picker.input:set("", "")
+                  picker:find()
+                end
+              end)
             end,
           },
           win = { input = { keys = { ["<CR>"] = { "search_confirm", mode = { "n", "i" } } } } },
