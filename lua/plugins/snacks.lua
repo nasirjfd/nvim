@@ -138,6 +138,13 @@ return {
           keys = {
             ["<Esc>"] = { "close", mode = { "n", "i" } },
             ["<C-q>"] = { "close", mode = { "n", "i" } },
+            -- Option+Backspace deletes the previous word
+            ["<M-BS>"] = {
+              function()
+                vim.api.nvim_feedkeys(vim.keycode("<C-w>"), "in", false)
+              end,
+              mode = { "i" },
+            },
           },
         },
         list = { keys = { ["<C-q>"] = "close" } },
