@@ -115,6 +115,26 @@ return {
       actions = {
         -- Opening a file from a picker started in a codediff diff pane goes to a full window of
         -- another tab, so the diff (and the panel on its left) stays as it is.
+        -- <Esc> closes the picker, unless a <BS> follows right away: some terminals deliver
+        -- Option+Backspace as <Esc><BS>, which should delete the previous word instead.
+        close_or_delete_word = function(picker)
+          vim.wait(30, function()
+            return vim.fn.getchar(1) ~= 0
+          end, 5)
+          if vim.fn.getchar(1) ~= 0 then
+            local key = vim.fn.getchar(0)
+            if type(key) == "string" and vim.fn.keytrans(key) == "<BS>" or key == 127 then
+              local col = vim.api.nvim_win_get_cursor(0)[2]
+              local before = vim.api.nvim_get_current_line():sub(1, col)
+              local kept = before:gsub("%s+$", ""):gsub("[%w_]+$", ""):gsub("[^%w_%s]+$", "")
+              vim.api.nvim_buf_set_text(0, 0, #kept, 0, col, {})
+              vim.api.nvim_win_set_cursor(0, { 1, #kept })
+              return
+            end
+            vim.api.nvim_feedkeys(type(key) == "number" and vim.fn.nr2char(key) or key, "t", false)
+          end
+          picker:close()
+        end,
         confirm = function(picker, item, action)
           local main = picker.main
           if main and vim.api.nvim_win_is_valid(main) then
@@ -136,15 +156,8 @@ return {
         -- <C-q> closes it too (snacks' default sends the results to the quickfix list and opens it)
         input = {
           keys = {
-            ["<Esc>"] = { "close", mode = { "n", "i" } },
+            ["<Esc>"] = { "close_or_delete_word", mode = { "n", "i" } },
             ["<C-q>"] = { "close", mode = { "n", "i" } },
-            -- Option+Backspace deletes the previous word
-            ["<M-BS>"] = {
-              function()
-                vim.api.nvim_feedkeys(vim.keycode("<C-w>"), "in", false)
-              end,
-              mode = { "i" },
-            },
           },
         },
         list = { keys = { ["<C-q>"] = "close" } },
