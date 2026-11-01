@@ -110,9 +110,9 @@ local function copy_codex_reference(selection)
     if start_line > end_line then
       start_line, end_line = end_line, start_line
     end
-    reference = string.format("File: @%s\nLines: %d-%d", reference_path, start_line, end_line)
+    reference = string.format("@%s\nLines: %d-%d", reference_path, start_line, end_line)
   else
-    reference = string.format("File: @%s\nLine: %d", reference_path, vim.fn.line("."))
+    reference = string.format("@%s\nLine: %d", reference_path, vim.fn.line("."))
   end
 
   local copied = pcall(vim.fn.setreg, "+", reference)
@@ -153,6 +153,19 @@ end, { desc = "Copy Codex File Reference" })
 vim.keymap.set("x", ghostty_cmd_l, function()
   copy_codex_reference(true)
 end, { desc = "Copy Codex Selection Reference" })
+
+-- cmd+shift+c: same reference as cmd+l (Ghostty sends this sequence: keybind = super+shift+c=csi:96~)
+local ghostty_cmd_shift_c = vim.api.nvim_replace_termcodes("<Esc>[96~", true, false, true)
+
+for _, lhs in ipairs({ "<D-S-c>", ghostty_cmd_shift_c }) do
+  vim.keymap.set("n", lhs, function()
+    copy_codex_reference(false)
+  end, { desc = "Copy Codex File Reference" })
+
+  vim.keymap.set("x", lhs, function()
+    copy_codex_reference(true)
+  end, { desc = "Copy Codex Selection Reference" })
+end
 
 vim.keymap.set({ "n", "v" }, "m", "%")
 vim.keymap.set("n", "vp", "viwp")
