@@ -114,14 +114,19 @@ map("n", "<D-h>", function()
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(":%s/", true, false, true), "n", false)
 end, { desc = "Find & Replace" })
 
--- cmd+/ -> comment line, then move down (multi-command binding in vscode)
-map("n", "<D-/>", function()
+-- cmd+/ -> comment line, then move down (like JetBrains)
+-- Ghostty does not forward cmd+/ by itself; its config sends this sequence (keybind = super+/=csi:95~)
+local function comment_line_down()
   require("Comment.api").toggle.linewise.current()
   vim.cmd("normal! j")
-end, { desc = "Comment Line + Down" })
-map("x", "<D-/>", function()
+end
+local function comment_selection()
   require("Comment.api").toggle.linewise(vim.fn.visualmode())
-end, { desc = "Comment Selection" })
+end
+for _, lhs in ipairs({ "<D-/>", vim.api.nvim_replace_termcodes("<Esc>[95~", true, false, true) }) do
+  map("n", lhs, comment_line_down, { desc = "Comment Line + Down" })
+  map("x", lhs, comment_selection, { desc = "Comment Selection" })
+end
 
 -- shift+cmd+g -> git panel
 map("n", "<D-S-g>", "<cmd>CodeDiff scm<cr>", { desc = "Git" })

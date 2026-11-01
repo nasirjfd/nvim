@@ -23,6 +23,7 @@ keybind = super+ctrl+equal=equalize_splits
 
 keybind = super+l=csi:99~
 keybind = super+shift+c=csi:96~
+keybind = super+slash=csi:95~
 
 # gtab managed include
 config-file = "/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
