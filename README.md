@@ -253,7 +253,7 @@ Parsers for: bash, c, css, go, html, javascript, json, latex, lua, markdown, php
 | `<leader>cr` | Rename symbol |
 | `<leader>cd` | Line diagnostic |
 | `<leader>cf` | Format |
-| `<D-l>` / `<leader>cx` | Copy Codex file/selection reference |
+| `<D-l>` / `<leader>cx` | Copy file/selection reference |
 | `<leader>cv` | Definition in vsplit |
 
 ### Diagnostics (`<leader>d`)
