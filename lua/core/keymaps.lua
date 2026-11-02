@@ -95,7 +95,7 @@ vim.keymap.set("t", "<C-j>", "<cmd>wincmd j<cr>", { desc = "Go Down" })
 vim.keymap.set("t", "<C-k>", "<cmd>wincmd k<cr>", { desc = "Go Up" })
 vim.keymap.set("t", "<C-l>", "<cmd>wincmd l<cr>", { desc = "Go Right" })
 
-local function copy_codex_reference(selection)
+local function copy_reference(selection)
   local file = vim.fn.expand("%:p")
   if file == "" or vim.bo.buftype ~= "" then
     vim.notify("Current buffer has no file reference", vim.log.levels.WARN)
@@ -122,49 +122,49 @@ local function copy_codex_reference(selection)
   end
 
   if copied then
-    vim.notify("Copied Codex reference: " .. reference)
+    vim.notify("Reference copied: " .. reference)
   else
-    vim.notify("Could not copy Codex reference", vim.log.levels.ERROR)
+    vim.notify("Could not copy reference", vim.log.levels.ERROR)
   end
 end
 
 vim.keymap.set("n", "<leader>cx", function()
-  copy_codex_reference(false)
-end, { desc = "Copy Codex File Reference" })
+  copy_reference(false)
+end, { desc = "Copy File Reference" })
 
 vim.keymap.set("x", "<leader>cx", function()
-  copy_codex_reference(true)
-end, { desc = "Copy Codex Selection Reference" })
+  copy_reference(true)
+end, { desc = "Copy Selection Reference" })
 
 local ghostty_cmd_l = vim.api.nvim_replace_termcodes("<Esc>[99~", true, false, true)
 
 vim.keymap.set("n", "<D-l>", function()
-  copy_codex_reference(false)
-end, { desc = "Copy Codex File Reference" })
+  copy_reference(false)
+end, { desc = "Copy File Reference" })
 
 vim.keymap.set("x", "<D-l>", function()
-  copy_codex_reference(true)
-end, { desc = "Copy Codex Selection Reference" })
+  copy_reference(true)
+end, { desc = "Copy Selection Reference" })
 
 vim.keymap.set("n", ghostty_cmd_l, function()
-  copy_codex_reference(false)
-end, { desc = "Copy Codex File Reference" })
+  copy_reference(false)
+end, { desc = "Copy File Reference" })
 
 vim.keymap.set("x", ghostty_cmd_l, function()
-  copy_codex_reference(true)
-end, { desc = "Copy Codex Selection Reference" })
+  copy_reference(true)
+end, { desc = "Copy Selection Reference" })
 
 -- cmd+shift+c: same reference as cmd+l (Ghostty sends this sequence: keybind = super+shift+c=csi:96~)
 local ghostty_cmd_shift_c = vim.api.nvim_replace_termcodes("<Esc>[96~", true, false, true)
 
 for _, lhs in ipairs({ "<D-S-c>", ghostty_cmd_shift_c }) do
   vim.keymap.set("n", lhs, function()
-    copy_codex_reference(false)
-  end, { desc = "Copy Codex File Reference" })
+    copy_reference(false)
+  end, { desc = "Copy File Reference" })
 
   vim.keymap.set("x", lhs, function()
-    copy_codex_reference(true)
-  end, { desc = "Copy Codex Selection Reference" })
+    copy_reference(true)
+  end, { desc = "Copy Selection Reference" })
 end
 
 vim.keymap.set({ "n", "v" }, "m", "%")
