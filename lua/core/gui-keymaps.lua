@@ -38,7 +38,7 @@ map("n", "<D-b>", function()
   Snacks.explorer()
 end, { desc = "Toggle Sidebar" })
 
--- cmd+shift+e -> the file explorer (workbench.view.explorer), always, also inside a codediff tab
+-- cmd+shift+e -> toggle the file explorer (workbench.view.explorer), always, also inside a codediff tab
 -- (cmd+b is the one that toggles that tab's own sidebar). It focuses the explorer of this tab, opening
 -- it when needed, and reveals the current file when the tab is an ordinary one.
 local function focus_explorer()
@@ -57,7 +57,15 @@ local function focus_explorer()
   local buf = vim.api.nvim_get_current_buf()
   local ordinary = vim.bo[buf].buftype == "" and vim.api.nvim_buf_get_name(buf) ~= ""
   if explorer then
-    explorer:focus("list")
+    -- Already focused: toggle it away instead of doing nothing.
+    local cur = vim.api.nvim_get_current_win()
+    local list_win = explorer.list and explorer.list.win and explorer.list.win.win
+    local input_win = explorer.input and explorer.input.win and explorer.input.win.win
+    if cur == list_win or cur == input_win then
+      explorer:close()
+    else
+      explorer:focus("list")
+    end
   elseif ordinary and not in_codediff then
     explorer = Snacks.explorer.reveal()
     if explorer then
@@ -68,9 +76,9 @@ local function focus_explorer()
   end
 end
 
-map("n", "<D-S-e>", focus_explorer, { desc = "Focus Explorer" })
+map("n", "<D-S-e>", focus_explorer, { desc = "Toggle Explorer" })
 -- Ghostty does not forward cmd+shift+e by itself; its config sends this sequence (keybind = super+shift+e=csi:98~)
-map("n", vim.api.nvim_replace_termcodes("<Esc>[98~", true, false, true), focus_explorer, { desc = "Focus Explorer" })
+map("n", vim.api.nvim_replace_termcodes("<Esc>[98~", true, false, true), focus_explorer, { desc = "Toggle Explorer" })
 
 -- cmd+f4 -> close buffer
 map("n", "<D-F4>", function()
@@ -129,7 +137,31 @@ for _, lhs in ipairs({ "<D-/>", vim.api.nvim_replace_termcodes("<Esc>[95~", true
 end
 
 -- shift+cmd+g -> git panel
-map("n", "<D-S-g>", "<cmd>CodeDiff scm<cr>", { desc = "Git" })
+-- Toggles: closes the Source Control tab when it is the current one, jumps to it when open elsewhere.
+local function toggle_git()
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  if not lifecycle then
+    vim.cmd("CodeDiff scm")
+    return
+  end
+  local function is_scm(tab)
+    local panel = lifecycle.get_panel(tab)
+    return panel and panel.data and panel.data.kind == "scm"
+  end
+  local current = vim.api.nvim_get_current_tabpage()
+  if is_scm(current) then
+    lifecycle.close(current)
+    return
+  end
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    if is_scm(tab) then
+      vim.api.nvim_set_current_tabpage(tab)
+      return
+    end
+  end
+  vim.cmd("CodeDiff scm")
+end
+map("n", "<D-S-g>", toggle_git, { desc = "Toggle Git" })
 
 -- cmd+ctrl+j / cmd+ctrl+k -> insert cursor below/above (multicursor.nvim)
 map({ "n", "x" }, "<D-C-j>", function()
