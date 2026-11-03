@@ -204,7 +204,8 @@ local function format_buffer_or_selection()
     end
   end)
 end
-for _, lhs in ipairs({ "<M-F>", "<M-S-f>", vim.api.nvim_replace_termcodes("<Esc>[91~", true, false, true) }) do
+local ghostty_shift_option_f = vim.api.nvim_replace_termcodes("<Esc>[91~", true, false, true)
+for _, lhs in ipairs({ "<M-F>", "<M-S-f>", ghostty_shift_option_f }) do
   map({ "n", "x" }, lhs, format_buffer_or_selection, { desc = "Format Selection / File" })
 end
 
