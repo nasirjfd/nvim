@@ -180,3 +180,26 @@ end, { desc = "Format Selection" })
 map("n", "<D-M-z>", function()
   require("gitsigns").reset_hunk()
 end, { desc = "Revert Hunk" })
+
+-- cmd+z / cmd+shift+z -> undo / redo (Ghostty sends them as CSI 94~ / 93~, see ghostty/config).
+-- In a working-tree diff tab they undo in the file being compared from any pane, side panel included.
+local function undo_or_redo(redo)
+  return function()
+    local tab = vim.api.nvim_get_current_tabpage()
+    local lifecycle = package.loaded["codediff.ui.lifecycle"]
+    local session = lifecycle and lifecycle.get_session(tab)
+    if session and session.git_root and session.modified_revision == nil and not session.merge then
+      require("codediff.ui.view.actions.hunk").undo(tab, redo)
+    else
+      vim.cmd(redo and "normal! \x12" or "normal! u")
+    end
+  end
+end
+for _, lhs in ipairs({ "<D-z>", vim.api.nvim_replace_termcodes("<Esc>[94~", true, false, true) }) do
+  map("n", lhs, undo_or_redo(false), { desc = "Undo" })
+  map("i", lhs, "<C-o>u", { desc = "Undo" })
+end
+for _, lhs in ipairs({ "<D-S-z>", vim.api.nvim_replace_termcodes("<Esc>[93~", true, false, true) }) do
+  map("n", lhs, undo_or_redo(true), { desc = "Redo" })
+  map("i", lhs, "<C-o><C-r>", { desc = "Redo" })
+end
