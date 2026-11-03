@@ -16,6 +16,11 @@ vim.keymap.set("n", "<C-q>", "<cmd>confirm qa<cr>", { desc = "Close Neovim (conf
 -- Clear search highlight
 vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<cr>", { desc = "Clear Highlight", silent = true })
 
+-- <Esc> in visual mode only ends the selection, with the cursor left where it is. The Ghostty
+-- Cmd sequences mapped in visual mode (<Esc>[95~, <Esc>[96~, <Esc>[99~) start with <Esc>, so
+-- without nowait a lone <Esc> waits for the rest of one; a full sequence still matches first.
+vim.keymap.set("x", "<Esc>", "<Esc>", { desc = "End Selection", nowait = true })
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- Window Navigation (no prefix for speed)
 -- ════════════════════════════════════════════════════════════════════════════
