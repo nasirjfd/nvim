@@ -209,3 +209,20 @@ for _, lhs in ipairs({ "<D-S-z>", vim.api.nvim_replace_termcodes("<Esc>[93~", tr
   map("n", lhs, undo_or_redo(true), { desc = "Redo" })
   map("i", lhs, "<C-o><C-r>", { desc = "Redo" })
 end
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Keep these last. The Ghostty sequences above (and the Cmd+L / Cmd+Shift+C ones in
+-- core/keymaps.lua) start with <Esc>, so a lone <Esc> would wait for the rest of one. A nowait
+-- <Esc> acts at once, but Neovim only honors nowait when it is defined after the longer <Esc>…
+-- mappings; a full sequence, which the terminal sends in one burst, still matches first.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- Option+Backspace deletes the previous word in insert mode, like macOS text fields. The terminal
+-- delivers it as <M-BS>, or as <Esc><BS> when the two bytes are split (defined before the nowait
+-- <Esc> for the same reason).
+map("i", "<M-BS>", "<C-w>", { desc = "Delete Previous Word" })
+map("i", "<Esc><BS>", "<C-w>", { desc = "Delete Previous Word" })
+
+-- <Esc> just leaves visual / insert mode, with the cursor left where it is
+map("x", "<Esc>", "<Esc>", { desc = "End Selection", nowait = true })
+map("i", "<Esc>", "<Esc>", { desc = "Leave Insert Mode", nowait = true })
