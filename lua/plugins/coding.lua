@@ -29,15 +29,11 @@ return {
         },
         keymap = {
           ["<C-f>"] = {},
-          -- Enter accepts the selected item in SQL buffers only
-          ["<CR>"] = {
-            function(cmp)
-              if vim.tbl_contains({ "sql", "mysql", "plsql" }, vim.bo.filetype) then
-                return cmp.accept()
-              end
-            end,
-            "fallback",
-          },
+          -- Ctrl+j / Ctrl+k move down / up in the menu; Enter accepts the selected item.
+          -- With the menu closed they all fall back to their usual insert-mode behavior.
+          ["<C-j>"] = { "select_next", "fallback" },
+          ["<C-k>"] = { "select_prev", "fallback" },
+          ["<CR>"] = { "accept", "fallback" },
         },
         cmdline = {
           enabled = false,
