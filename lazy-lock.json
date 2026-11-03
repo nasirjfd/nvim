@@ -20,7 +20,7 @@
   "mason.nvim": { "branch": "main", "commit": "2a6940af80375532e5e9e7c1f2fc6319a1b7a69d" },
   "mini.icons": { "branch": "main", "commit": "eab3e692d796d78ea6ffc978d8a380ff26fcf4e3" },
   "mini.nvim": { "branch": "main", "commit": "6d5a29e86a7352739506c28e0bc50fe214b5216f" },
-  "multi-repo-code-diff": { "branch": "main", "commit": "2479aa7c69b601d4c0e436aa0366648817d4ae6a" },
+  "multi-repo-code-diff": { "branch": "main", "commit": "99eab555cc519cc6836ee8873dd96a8c85ff2076" },
   "multicursor.nvim": { "branch": "1.0", "commit": "c574bfc1f7e63dfea3e64b8453c9f7c660127238" },
   "neoscroll.nvim": { "branch": "master", "commit": "c8d29979cb0cb3a2437a8e0ae683fd82f340d3b8" },
   "nordic.nvim": { "branch": "main", "commit": "9fb62116b891184049c50ca6ffb0d3bc100a1a6e" },
