@@ -6,6 +6,12 @@
 -- ============================================================================
 local map = vim.keymap.set
 
+-- cmd+s -> save, staying in the current mode (insert/visual too)
+-- Ghostty does not forward cmd+s by itself; its config sends this sequence (keybind = super+s=csi:92~)
+for _, lhs in ipairs({ "<D-s>", vim.api.nvim_replace_termcodes("<Esc>[92~", true, false, true) }) do
+  map({ "n", "i", "x" }, lhs, "<cmd>write<cr>", { desc = "Save File" })
+end
+
 -- cmd+e -> recent files
 map("n", "<D-e>", function()
   Snacks.picker.recent()
