@@ -27,6 +27,7 @@ keybind = super+slash=csi:95~
 keybind = super+z=csi:94~
 keybind = super+shift+z=csi:93~
 keybind = super+s=csi:92~
+keybind = alt+shift+f=csi:91~
 
 # gtab managed include
 config-file = "/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"

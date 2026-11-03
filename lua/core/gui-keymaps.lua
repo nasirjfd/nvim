@@ -182,6 +182,32 @@ map("x", "<D-M-l>", function()
   require("conform").format({ async = true })
 end, { desc = "Format Selection" })
 
+-- shift+option+f -> format the selection (visual mode) or the whole file (normal mode), like VS Code.
+-- Ghostty types a character for option+shift+f, so its config sends this sequence instead
+-- (keybind = alt+shift+f=csi:91~); <M-F> / <M-S-f> cover GUIs and option-as-alt terminals.
+local function format_buffer_or_selection()
+  local range
+  local mode = vim.api.nvim_get_mode().mode
+  if mode == "v" or mode == "V" or mode == "\22" then
+    -- Whole selected lines, ending past the last character: conform's own visual range stops one
+    -- character short, so stylua/prettier skip the last statement as only partly selected.
+    local first, last = vim.fn.line("v"), vim.fn.line(".")
+    if first > last then
+      first, last = last, first
+    end
+    range = { start = { first, 0 }, ["end"] = { last, #vim.fn.getline(last) } }
+    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+  end
+  require("conform").format({ async = true, range = range }, function(err)
+    if err then
+      vim.notify(err, vim.log.levels.WARN, { title = "Format" })
+    end
+  end)
+end
+for _, lhs in ipairs({ "<M-F>", "<M-S-f>", vim.api.nvim_replace_termcodes("<Esc>[91~", true, false, true) }) do
+  map({ "n", "x" }, lhs, format_buffer_or_selection, { desc = "Format Selection / File" })
+end
+
 -- alt+cmd+z -> revert/reset hunk
 map("n", "<D-M-z>", function()
   require("gitsigns").reset_hunk()
