@@ -80,6 +80,42 @@ local builtin_layouts = {
   gh_actions = { preset = "select", layout = { max_width = 50 } },
 }
 
+-- A key typed during a smooth scroll (e.g. `zz` then `j`) would be undone: when the glide ends,
+-- snacks.scroll restores the view it planned, cursor included. So finish the glide first: on any
+-- typed key, run the running scroll animation's last step right away. (Registered here rather
+-- than in the spec's `init`, which snacks-explorer-nested-git.lua's `init` replaces.)
+vim.api.nvim_create_autocmd("VimEnter", {
+  once = true,
+  callback = function()
+    local ok, animate = pcall(require, "snacks.animate")
+    if not ok then
+      return
+    end
+    local scrolls = {} ---@type table<string, {anim: snacks.animate.Animation, cb: function, to: number}>
+    local animate_add = animate.add
+    animate.add = function(from, to, cb, anim_opts)
+      local anim = animate_add(from, to, cb, anim_opts)
+      local id = anim_opts and anim_opts.id
+      if type(id) == "string" and id:find("^scroll") then
+        scrolls[id] = { anim = anim, cb = cb, to = to }
+      end
+      return anim
+    end
+    vim.on_key(function(_, typed)
+      if not typed or typed == "" then
+        return -- keys the animation itself runs
+      end
+      for id, s in pairs(scrolls) do
+        scrolls[id] = nil
+        if s.anim.steps then -- still running
+          s.anim:stop()
+          pcall(s.cb, s.to, { anim = s.anim, prev = s.to, done = true })
+        end
+      end
+    end, vim.api.nvim_create_namespace("finish_scroll_on_key"))
+  end,
+})
+
 return {
   "folke/snacks.nvim",
   priority = 1000,
