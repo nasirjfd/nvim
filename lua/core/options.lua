@@ -148,9 +148,34 @@ vim.opt.laststatus = 0
 vim.opt.statusline = "%f %m%r%=%{v:lua.blame_status()}  %l:%c "
 vim.opt.rulerformat = "%90(%=%{v:lua.blame_status()}  %l:%c%)"
 
--- Terminal title: the file path from the project root (Neovim's cwd), or the project name for
--- special buffers (explorer, pickers, terminals)
+-- Terminal title: the file path from the project root (Neovim's cwd). In a diff tab
+-- (multi-repo-code-diff) it is the file being compared, whichever pane has focus; for other
+-- special buffers (explorer, pickers, terminals) it is the project name.
+local function diff_title()
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  if lifecycle then
+    local original, modified = lifecycle.get_paths(vim.api.nvim_get_current_tabpage())
+    for _, path in ipairs({ modified, original }) do
+      if path and path.absolute and path.absolute ~= "" then
+        return vim.fn.fnamemodify(path.absolute, ":~:.")
+      end
+    end
+  end
+  local name = vim.api.nvim_buf_get_name(0)
+  local virtual_file = package.loaded["codediff.core.virtual_file"]
+  if virtual_file and vim.startswith(name, "codediff://") then
+    local root, _, file = virtual_file.parse_url(name)
+    if root and file then
+      return vim.fn.fnamemodify(root .. "/" .. file, ":~:.")
+    end
+  end
+end
+
 function _G.title_string()
+  local diff = diff_title()
+  if diff then
+    return diff
+  end
   local name = vim.api.nvim_buf_get_name(0)
   if name == "" or vim.bo.buftype ~= "" then
     return vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
