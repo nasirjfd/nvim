@@ -21,13 +21,23 @@ keybind = super+shift+enter=toggle_split_zoom
 # Equalize all split sizes
 keybind = super+ctrl+equal=equalize_splits
 
-keybind = super+l=csi:99~
-keybind = super+shift+c=csi:96~
-keybind = super+slash=csi:95~
-keybind = super+z=csi:94~
-keybind = super+shift+z=csi:93~
-keybind = super+s=csi:92~
-keybind = alt+shift+f=csi:91~
+# Keys for Neovim that Ghostty would otherwise keep or turn into text. Each sends the kitty
+# keyboard encoding of the key (CSI <codepoint>;<1 + shift 1, alt 2, ctrl 4, super 8>u), which
+# Neovim reads as the real <D-…>/<M-…> key. Made-up codes like csi:99~ are dropped by Neovim 0.12.
+keybind = super+l=csi:108;9u
+keybind = super+shift+c=csi:99;10u
+keybind = super+slash=csi:47;9u
+keybind = super+z=csi:122;9u
+keybind = super+shift+z=csi:122;10u
+keybind = super+s=csi:115;9u
+keybind = super+r=csi:114;9u
+keybind = super+shift+e=csi:101;10u
+keybind = alt+shift+f=csi:102;4u
+keybind = alt+j=csi:106;3u
+keybind = alt+k=csi:107;3u
+# Cmd+C copies Ghostty's own selection when there is one (the shell, Shift+drag); otherwise the
+# key goes to the app, where Neovim gets <D-c> and copies its visual selection.
+keybind = super+c=performable:copy_to_clipboard
 
 # gtab managed include
 config-file = "/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"

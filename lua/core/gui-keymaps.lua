@@ -3,14 +3,20 @@
 -- memory. These only fire under a client that forwards the Cmd modifier
 -- (Neovide, or a terminal like Kitty/Ghostty/WezTerm configured to send it);
 -- in a plain terminal they're inert, so this file is safe to keep either way.
+--
+-- Ghostty: keys it doesn't forward on its own are bound in ghostty/config to send the kitty
+-- keyboard encoding (e.g. super+s=csi:115;9u), which Neovim reads as the real <D-…>/<M-…> key.
+-- Don't use made-up codes like csi:92~ — Neovim 0.12 silently drops unknown CSI ~ sequences.
 -- ============================================================================
 local map = vim.keymap.set
 
 -- cmd+s -> save, staying in the current mode (insert/visual too)
--- Ghostty does not forward cmd+s by itself; its config sends this sequence (keybind = super+s=csi:92~)
-for _, lhs in ipairs({ "<D-s>", vim.api.nvim_replace_termcodes("<Esc>[92~", true, false, true) }) do
-  map({ "n", "i", "x" }, lhs, "<cmd>write<cr>", { desc = "Save File" })
-end
+map({ "n", "i", "x" }, "<D-s>", "<cmd>write<cr>", { desc = "Save File" })
+
+-- cmd+c -> copy the selection to the system clipboard and keep it selected, like VS Code; with
+-- nothing selected it copies the current line
+map("x", "<D-c>", '"+ygv', { desc = "Copy Selection" })
+map("n", "<D-c>", '"+yy', { desc = "Copy Line" })
 
 -- cmd+e -> recent files
 map("n", "<D-e>", function()
@@ -83,8 +89,6 @@ local function focus_explorer()
 end
 
 map("n", "<D-S-e>", focus_explorer, { desc = "Toggle Explorer" })
--- Ghostty does not forward cmd+shift+e by itself; its config sends this sequence (keybind = super+shift+e=csi:98~)
-map("n", vim.api.nvim_replace_termcodes("<Esc>[98~", true, false, true), focus_explorer, { desc = "Toggle Explorer" })
 
 -- cmd+f4 -> close buffer
 map("n", "<D-F4>", function()
@@ -110,8 +114,6 @@ end, { desc = "Goto Symbol" })
 
 -- cmd+r cmd+r -> rename symbol
 map("n", "<D-r><D-r>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
--- Ghostty does not forward cmd+r by itself; its config sends this sequence (keybind = super+r=csi:97~)
-map("n", vim.api.nvim_replace_termcodes("<Esc>[97~<Esc>[97~", true, false, true), vim.lsp.buf.rename, { desc = "Rename Symbol" })
 
 -- cmd+g -> goto line
 map("n", "<D-g>", function()
@@ -129,7 +131,6 @@ map("n", "<D-h>", function()
 end, { desc = "Find & Replace" })
 
 -- cmd+/ -> comment line, then move down (like JetBrains)
--- Ghostty does not forward cmd+/ by itself; its config sends this sequence (keybind = super+/=csi:95~)
 local function comment_line_down()
   require("Comment.api").toggle.linewise.current()
   vim.cmd("normal! j")
@@ -137,10 +138,8 @@ end
 local function comment_selection()
   require("Comment.api").toggle.linewise(vim.fn.visualmode())
 end
-for _, lhs in ipairs({ "<D-/>", vim.api.nvim_replace_termcodes("<Esc>[95~", true, false, true) }) do
-  map("n", lhs, comment_line_down, { desc = "Comment Line + Down" })
-  map("x", lhs, comment_selection, { desc = "Comment Selection" })
-end
+map("n", "<D-/>", comment_line_down, { desc = "Comment Line + Down" })
+map("x", "<D-/>", comment_selection, { desc = "Comment Selection" })
 
 -- shift+cmd+g -> git panel
 -- Toggles: closes the Source Control tab when it is the current one, jumps to it when open elsewhere.
@@ -183,8 +182,8 @@ map("x", "<D-M-l>", function()
 end, { desc = "Format Selection" })
 
 -- shift+option+f -> format the selection (visual mode) or the whole file (normal mode), like VS Code.
--- Ghostty types a character for option+shift+f, so its config sends this sequence instead
--- (keybind = alt+shift+f=csi:91~); <M-F> / <M-S-f> cover GUIs and option-as-alt terminals.
+-- Ghostty types a character for option+shift+f, so its config sends the key as alt+shift+f
+-- instead (keybind = alt+shift+f=csi:102;4u), which Neovim reads as <M-F>.
 local function format_buffer_or_selection()
   local range
   local mode = vim.api.nvim_get_mode().mode
@@ -204,17 +203,14 @@ local function format_buffer_or_selection()
     end
   end)
 end
-local ghostty_shift_option_f = vim.api.nvim_replace_termcodes("<Esc>[91~", true, false, true)
-for _, lhs in ipairs({ "<M-F>", "<M-S-f>", ghostty_shift_option_f }) do
-  map({ "n", "x" }, lhs, format_buffer_or_selection, { desc = "Format Selection / File" })
-end
+map({ "n", "x" }, "<M-F>", format_buffer_or_selection, { desc = "Format Selection / File" })
 
 -- alt+cmd+z -> revert/reset hunk
 map("n", "<D-M-z>", function()
   require("gitsigns").reset_hunk()
 end, { desc = "Revert Hunk" })
 
--- cmd+z / cmd+shift+z -> undo / redo (Ghostty sends them as CSI 94~ / 93~, see ghostty/config).
+-- cmd+z / cmd+shift+z -> undo / redo
 -- In a working-tree diff tab they undo in the file being compared from any pane, side panel included.
 local function undo_or_redo(redo)
   return function()
@@ -228,25 +224,19 @@ local function undo_or_redo(redo)
     end
   end
 end
-for _, lhs in ipairs({ "<D-z>", vim.api.nvim_replace_termcodes("<Esc>[94~", true, false, true) }) do
-  map("n", lhs, undo_or_redo(false), { desc = "Undo" })
-  map("i", lhs, "<C-o>u", { desc = "Undo" })
-end
-for _, lhs in ipairs({ "<D-S-z>", vim.api.nvim_replace_termcodes("<Esc>[93~", true, false, true) }) do
-  map("n", lhs, undo_or_redo(true), { desc = "Redo" })
-  map("i", lhs, "<C-o><C-r>", { desc = "Redo" })
-end
+map("n", "<D-z>", undo_or_redo(false), { desc = "Undo" })
+map("i", "<D-z>", "<C-o>u", { desc = "Undo" })
+map("n", "<D-S-z>", undo_or_redo(true), { desc = "Redo" })
+map("i", "<D-S-z>", "<C-o><C-r>", { desc = "Redo" })
 
 -- ════════════════════════════════════════════════════════════════════════════
--- Keep these last. The Ghostty sequences above (and the Cmd+L / Cmd+Shift+C ones in
--- core/keymaps.lua) start with <Esc>, so a lone <Esc> would wait for the rest of one. A nowait
--- <Esc> acts at once, but Neovim only honors nowait when it is defined after the longer <Esc>…
--- mappings; a full sequence, which the terminal sends in one burst, still matches first.
+-- Keep these last. <Esc><BS> below starts with <Esc>, so a lone <Esc> would wait for a possible
+-- <BS>. A nowait <Esc> acts at once, but Neovim only honors nowait when it is defined after the
+-- longer <Esc>… mappings; <Esc><BS> sent in one burst by the terminal still matches first.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- Option+Backspace deletes the previous word in insert mode, like macOS text fields. The terminal
--- delivers it as <M-BS>, or as <Esc><BS> when the two bytes are split (defined before the nowait
--- <Esc> for the same reason).
+-- delivers it as <M-BS>, or as <Esc><BS> when the two bytes are split.
 map("i", "<M-BS>", "<C-w>", { desc = "Delete Previous Word" })
 map("i", "<Esc><BS>", "<C-w>", { desc = "Delete Previous Word" })
 

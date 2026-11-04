@@ -17,7 +17,7 @@ vim.keymap.set("n", "<C-q>", "<cmd>confirm qa<cr>", { desc = "Close Neovim (conf
 vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<cr>", { desc = "Clear Highlight", silent = true })
 
 -- The nowait <Esc> mappings for visual and insert mode (and Option+Backspace) are at the end of
--- core/gui-keymaps.lua: they must be defined after every <Esc>-prefixed Ghostty sequence.
+-- core/gui-keymaps.lua: they must be defined after every <Esc>-prefixed mapping (<Esc><BS>).
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- Window Navigation (no prefix for speed)
@@ -139,28 +139,9 @@ vim.keymap.set("x", "<leader>cx", function()
   copy_reference(true)
 end, { desc = "Copy Selection Reference" })
 
-local ghostty_cmd_l = vim.api.nvim_replace_termcodes("<Esc>[99~", true, false, true)
-
-vim.keymap.set("n", "<D-l>", function()
-  copy_reference(false)
-end, { desc = "Copy File Reference" })
-
-vim.keymap.set("x", "<D-l>", function()
-  copy_reference(true)
-end, { desc = "Copy Selection Reference" })
-
-vim.keymap.set("n", ghostty_cmd_l, function()
-  copy_reference(false)
-end, { desc = "Copy File Reference" })
-
-vim.keymap.set("x", ghostty_cmd_l, function()
-  copy_reference(true)
-end, { desc = "Copy Selection Reference" })
-
--- cmd+shift+c: same reference as cmd+l (Ghostty sends this sequence: keybind = super+shift+c=csi:96~)
-local ghostty_cmd_shift_c = vim.api.nvim_replace_termcodes("<Esc>[96~", true, false, true)
-
-for _, lhs in ipairs({ "<D-S-c>", ghostty_cmd_shift_c }) do
+-- cmd+l and cmd+shift+c copy the reference. Ghostty sends them in the kitty keyboard format
+-- (ghostty/config: super+l=csi:108;9u, super+shift+c=csi:99;10u), which Neovim reads as <D-…>.
+for _, lhs in ipairs({ "<D-l>", "<D-S-c>" }) do
   vim.keymap.set("n", lhs, function()
     copy_reference(false)
   end, { desc = "Copy File Reference" })
@@ -169,6 +150,32 @@ for _, lhs in ipairs({ "<D-S-c>", ghostty_cmd_shift_c }) do
     copy_reference(true)
   end, { desc = "Copy Selection Reference" })
 end
+
+-- Option+j / Option+k expand / shrink the selection by syntax node, like VS Code's
+-- Shift+Alt+Right/Left. This is what Neovim's default visual `an` / `in` do (treesitter node,
+-- else LSP selection range), remembering the path so shrinking returns to the node you expanded
+-- from. mini.ai takes over `an` / `in` ("around/inside next"), so call the same functions directly.
+-- Ghostty sends these keys as alt+j/k (ghostty/config: alt+j=csi:106;3u, alt+k=csi:107;3u);
+-- Option alone would type ∆ / ˚.
+local function select_node(parent)
+  if vim.treesitter.get_parser(nil, nil, { error = false }) then
+    local select = require("vim.treesitter._select")
+    if parent then
+      select.select_parent(vim.v.count1)
+    else
+      select.select_child(vim.v.count1)
+    end
+  else
+    vim.lsp.buf.selection_range(parent and vim.v.count1 or -vim.v.count1)
+  end
+end
+vim.keymap.set("n", "<M-j>", "v<M-j>", { remap = true, desc = "Expand Selection" })
+vim.keymap.set("x", "<M-j>", function()
+  select_node(true)
+end, { desc = "Expand Selection" })
+vim.keymap.set("x", "<M-k>", function()
+  select_node(false)
+end, { desc = "Shrink Selection" })
 
 vim.keymap.set({ "n", "v" }, "m", "%")
 vim.keymap.set("n", "vp", "viwp")
