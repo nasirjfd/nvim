@@ -40,4 +40,4 @@ keybind = alt+k=csi:107;3u
 keybind = super+c=performable:copy_to_clipboard
 
 # gtab managed include
-config-file = "/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
+config-file = ?"/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
