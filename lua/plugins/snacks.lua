@@ -217,7 +217,16 @@ return {
     },
     quickfile = { enabled = true },
     scope = { enabled = true },
-    scroll = { enabled = false },
+    -- Keyboard scrolls and jumps (Ctrl+d/u, G, search, gd, …) land almost at once and settle with a
+    -- short ease-out. Each frame moves as many lines as the curve needs in one redraw, and a new
+    -- press restarts from where the view is, so it never trails behind. Trackpad/mouse scrolling
+    -- is not animated (see mousescroll in core/options.lua).
+    scroll = {
+      enabled = true,
+      animate = { duration = { step = 6, total = 110 }, easing = "outCubic" },
+      -- presses within 100ms of the last one (holding a key) get an even shorter glide
+      animate_repeat = { delay = 100, duration = { step = 3, total = 40 }, easing = "outCubic" },
+    },
     statuscolumn = { enabled = true },
     words = { enabled = true },
     styles = { notification = {} },

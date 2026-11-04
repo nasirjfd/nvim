@@ -22,6 +22,7 @@ vim.g.loaded_ruby_provider = 0    -- Disable Ruby provider
 -- Editor Behavior
 -- ============================================================================
 vim.opt.mouse = "a"                                 -- Enable mouse support in all modes
+vim.opt.mousescroll = "ver:1,hor:2"                 -- Trackpad follows the fingers line by line
 vim.opt.clipboard = "unnamedplus"                   -- Use system clipboard for all yank/paste operations
 vim.opt.undofile = true                             -- Persist undo history to disk between sessions
 vim.opt.undodir = vim.fn.stdpath("data") .. "/undo" -- Directory to store undo files
