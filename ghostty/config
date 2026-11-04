@@ -37,7 +37,7 @@ keybind = alt+j=csi:106;3u
 keybind = alt+k=csi:107;3u
 # Cmd+C copies Ghostty's own selection when there is one (the shell, Shift+drag); otherwise the
 # key goes to the app, where Neovim gets <D-c> and copies its visual selection.
-keybind = super+c=performable:copy_to_clipboard
+keybind = performable:super+c=copy_to_clipboard
 
 # gtab managed include
 config-file = ?"/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
