@@ -151,7 +151,7 @@ for _, lhs in ipairs({ "<D-l>", "<D-S-c>" }) do
   end, { desc = "Copy Selection Reference" })
 end
 
--- Option+j / Option+k expand / shrink the selection by syntax node, like VS Code's
+-- Option+k / Option+j expand / shrink the selection by syntax node, like VS Code's
 -- Shift+Alt+Right/Left. This is what Neovim's default visual `an` / `in` do (treesitter node,
 -- else LSP selection range), remembering the path so shrinking returns to the node you expanded
 -- from. mini.ai takes over `an` / `in` ("around/inside next"), so call the same functions directly.
@@ -169,11 +169,11 @@ local function select_node(parent)
     vim.lsp.buf.selection_range(parent and vim.v.count1 or -vim.v.count1)
   end
 end
-vim.keymap.set("n", "<M-j>", "v<M-j>", { remap = true, desc = "Expand Selection" })
-vim.keymap.set("x", "<M-j>", function()
+vim.keymap.set("n", "<M-k>", "v<M-k>", { remap = true, desc = "Expand Selection" })
+vim.keymap.set("x", "<M-k>", function()
   select_node(true)
 end, { desc = "Expand Selection" })
-vim.keymap.set("x", "<M-k>", function()
+vim.keymap.set("x", "<M-j>", function()
   select_node(false)
 end, { desc = "Shrink Selection" })
 
