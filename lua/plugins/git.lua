@@ -110,7 +110,22 @@ return {
           delay = 200,
           ignore_whitespace = false,
         },
-        current_line_blame_formatter = "<author>, <author_time:%Y-%m-%d> - <summary>",
+        -- Called on every blame update, right before gitsigns stores the blame in
+        -- vim.b.gitsigns_blame_line_dict: redraw afterwards so the blame in the ruler
+        -- (see core/options.lua) follows the cursor.
+        -- The returned text is only used as virtual text, which is off.
+        current_line_blame_formatter = function(_, info)
+          vim.schedule(function()
+            vim.cmd("redrawstatus")
+          end)
+          local date = os.date("%Y-%m-%d", tonumber(info.author_time))
+          return {
+            {
+              ("%s, %s - %s"):format(info.author, date, info.summary or ""),
+              "GitSignsCurrentLineBlame",
+            },
+          }
+        end,
         sign_priority = 6,
         status_formatter = nil,
         update_debounce = 200,

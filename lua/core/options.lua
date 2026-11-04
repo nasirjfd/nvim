@@ -119,13 +119,41 @@ if vim.fn.has("mac") == 1 then
   end
 end
 
--- Statusline with current-line git blame (fed by gitsigns' current_line_blame)
+-- Current-line git blame (fed by gitsigns' current_line_blame). Neovim gives the ruler at most
+-- about half the screen width, so it shortens to fit: the summary first, then the date goes.
 function _G.blame_status()
   local d = vim.b.gitsigns_blame_line_dict
   if not d or not d.author then
     return ""
   end
+  local position = ("  %d:%d"):format(vim.fn.line("."), vim.fn.col("."))
+  local room = math.min(90, math.floor(vim.o.columns / 2)) - #position - 1
+  local author = vim.fn.strcharpart(d.author, 0, math.max(room, 1))
   local date = os.date("%Y-%m-%d", tonumber(d.author_time))
-  return string.format("%s • %s • %s", d.author, date, (d.summary or ""):sub(1, 40))
+  local summary_room = math.min(40, room - vim.fn.strwidth(author .. " • " .. date .. " • "))
+  if summary_room >= 10 then
+    local summary = vim.fn.strcharpart(d.summary or "", 0, summary_room)
+    return ("%s • %s • %s"):format(author, date, summary)
+  elseif room >= vim.fn.strwidth(author .. " • " .. date) then
+    return author .. " • " .. date
+  end
+  return author
 end
+
+-- No status line under the window: the blame and line:col go to the right of the command line
+-- (the ruler), and the file name goes to the terminal title. A status line still appears
+-- between stacked splits, showing the file name there.
+vim.opt.laststatus = 0
 vim.opt.statusline = "%f %m%r%=%{v:lua.blame_status()}  %l:%c "
+vim.opt.rulerformat = "%90(%=%{v:lua.blame_status()}  %l:%c%)"
+
+-- Terminal title: the file path from the project root (Neovim's cwd), or the project name for
+-- special buffers (explorer, pickers, terminals)
+function _G.title_string()
+  local name = vim.api.nvim_buf_get_name(0)
+  if name == "" or vim.bo.buftype ~= "" then
+    return vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
+  end
+  return vim.fn.fnamemodify(name, ":~:.") .. (vim.bo.modified and " ●" or "")
+end
+vim.opt.titlestring = "%{v:lua.title_string()}"
