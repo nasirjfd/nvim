@@ -57,15 +57,10 @@ return {
         default_format_opts = {
             lsp_format = "fallback",
         },
-        format_on_save = function(bufnr)
-            -- No auto-format in the supernova-env-dev sample project
-            local name = vim.api.nvim_buf_get_name(bufnr)
-            local skip = vim.fn.expand("~/can/develop/php/supernova-env-dev") .. "/"
-            if name:sub(1, #skip) == skip then
-                return nil
-            end
-            return { timeout_ms = 500, lsp_format = "fallback" }
-        end,
+        format_on_save = {
+            timeout_ms = 500,
+            lsp_format = "fallback",
+        },
     },
     init = function()
         vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
