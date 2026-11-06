@@ -208,6 +208,16 @@ return {
         lsp_declarations = { format = "filename", layout = lsp_layout },
         lsp_implementations = { format = "filename", layout = lsp_layout },
         lsp_type_definitions = { format = "filename", layout = lsp_layout },
+        -- Recent files: v:oldfiles also keeps directories (the explorer and `nvim .` open them as
+        -- buffers), which showed up as a row without a file name
+        recent = {
+          transform = function(item)
+            local file = item.file
+            if type(file) ~= "string" or file == "" or file:sub(-1) == "/" or vim.fn.isdirectory(file) == 1 then
+              return false
+            end
+          end,
+        },
         files = {
           git_status = false,
           ignored = false,
