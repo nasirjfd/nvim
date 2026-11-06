@@ -259,6 +259,17 @@ return {
     -- is not animated (see mousescroll in core/options.lua).
     scroll = {
       enabled = true,
+      -- No glide while a picker is open: its preview jumps between files and lines as the selection
+      -- moves (LSP references, grep...), and animating that only gets in the way.
+      filter = function(buf)
+        if vim.g.snacks_scroll == false or vim.b[buf].snacks_scroll == false or vim.bo[buf].buftype == "terminal" then
+          return false
+        end
+        local ok, pickers = pcall(function()
+          return Snacks.picker.get()
+        end)
+        return not (ok and pickers and #pickers > 0)
+      end,
       animate = { duration = { step = 6, total = 110 }, easing = "outCubic" },
       -- presses within 100ms of the last one (holding a key) get an even shorter glide
       animate_repeat = { delay = 100, duration = { step = 3, total = 40 }, easing = "outCubic" },
