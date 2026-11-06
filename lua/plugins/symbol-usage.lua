@@ -62,17 +62,17 @@ return {
     -- The line is reserved as soon as the symbols are known, with a blank placeholder that the
     -- count later replaces in place, so counts arriving never push the text down.
     request_pending_text = { { " ", "SymbolUsageText" } },
-    -- Same as the default format, but "impls" only appears when there are some
+    -- Icons instead of words (eye = usages, sitemap = implementations); implementations only when there are some
     text_format = function(symbol)
       local fragments = {}
       if symbol.references then
-        table.insert(fragments, symbol.references .. "u")
+        table.insert(fragments, ("\u{f06e} %d"):format(symbol.references)) -- eye: usages
       end
       if symbol.implementation and symbol.implementation > 0 then
-        table.insert(fragments, symbol.implementation .. "i")
+        table.insert(fragments, ("\u{f0e8} %d"):format(symbol.implementation)) -- sitemap: implementations
       end
       local stacked = symbol.stacked_count > 0 and (" | +%s"):format(symbol.stacked_count) or ""
-      return table.concat(fragments, " ") .. stacked
+      return table.concat(fragments, "  ") .. stacked
     end,
     -- Intelephense lists a method as an implementation of itself, so every method showed
     -- "1 impls". Drop the location the request was made from.
