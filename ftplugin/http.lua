@@ -19,6 +19,11 @@ local function with_progress(fn)
       0,
       100,
       vim.schedule_wrap(function()
+        -- two ticks can be queued behind a blocked UI (a long message waiting for a key): the
+        -- second one must not close the timer again
+        if timer:is_closing() then
+          return
+        end
         local elapsed = (vim.uv.hrtime() - started) / 1e9
         local finished = #db.global_update().responses > before
         local busy = not finished and elapsed < 120

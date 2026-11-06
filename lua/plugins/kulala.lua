@@ -25,7 +25,14 @@ return {
       global_keymaps = false, -- our keys live in ftplugin/http.lua (buffer-local)
       default_env = "dev", -- environment name in http-client.env.json
       lsp = { enable = true },
-      ui = { display_mode = "split", split_direction = "vertical" },
+      ui = {
+        display_mode = "split",
+        split_direction = "vertical",
+        -- client.log() in a script is shown in the result's Script Output tab. In a terminal Kulala
+        -- also `print`s it, and a long value (response.json) filled the screen with a -- More --
+        -- prompt that had to be dismissed after every request.
+        disable_script_print_output = true,
+      },
     },
   },
 }
