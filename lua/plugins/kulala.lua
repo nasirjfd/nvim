@@ -8,6 +8,19 @@ return {
     -- v5.3.4 is the last curl-based, token-free release; drop the pin if you get a token.
     commit = "6656c9d332735ca6a27725e0fb45a1715c4372d9", -- tag v5.3.4
     ft = { "http", "rest" },
+    init = function()
+      -- Show the whole response in the result window instead of collapsed (indent) folds
+      vim.api.nvim_create_autocmd("BufWinEnter", {
+        group = vim.api.nvim_create_augroup("KulalaNoFold", { clear = true }),
+        callback = function(args)
+          if vim.api.nvim_buf_get_name(args.buf):match("^kulala://ui") then
+            for _, win in ipairs(vim.fn.win_findbuf(args.buf)) do
+              vim.wo[win].foldenable = false
+            end
+          end
+        end,
+      })
+    end,
     opts = {
       global_keymaps = false, -- our keys live in ftplugin/http.lua (buffer-local)
       default_env = "dev", -- environment name in http-client.env.json
