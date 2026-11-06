@@ -86,7 +86,23 @@ local function goto_member(bufnr, direction)
   -- LSP columns are UTF-16 offsets; put the cursor on the first character of the symbol's name
   local text = vim.api.nvim_buf_get_lines(bufnr, target.line, target.line + 1, false)[1] or ""
   local ok, col = pcall(vim.str_byteindex, text, "utf-16", target.col)
+  -- A target that is already on screen is not scrolled to. One that is off screen is put in the
+  -- middle at once, instead of Neovim's minimal scroll (which leaves it on the window's edge, with
+  -- its usage line cut off) followed by the smooth-scroll animation catching up.
+  local visible = target.line + 1 >= vim.fn.line("w0") and target.line + 1 <= vim.fn.line("w$")
+  local previous = vim.b[bufnr].snacks_scroll
+  if not visible then
+    vim.b[bufnr].snacks_scroll = false
+  end
   vim.api.nvim_win_set_cursor(0, { target.line + 1, ok and col or 0 })
+  if not visible then
+    vim.cmd("normal! zz")
+    vim.defer_fn(function()
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        vim.b[bufnr].snacks_scroll = previous
+      end
+    end, 150)
+  end
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
