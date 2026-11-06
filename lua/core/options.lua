@@ -92,7 +92,7 @@ vim.opt.conceallevel = 0                                -- Show all text normall
 -- ============================================================================
 -- Other
 -- ============================================================================
-vim.opt.title = true              -- Set window title to filename
+vim.opt.title = false             -- File name is shown in the ruler (right of the command line) instead
 vim.opt.guifont = "monospace:h14" -- Font for GUI Neovim (e.g., Neovide)
 
 -- ============================================================================
@@ -122,13 +122,13 @@ end
 
 -- Current-line git blame (fed by gitsigns' current_line_blame). Neovim gives the ruler at most
 -- about half the screen width, so it shortens to fit: the summary first, then the date goes.
-function _G.blame_status()
+function _G.blame_status(room)
   local d = vim.b.gitsigns_blame_line_dict
   if not d or not d.author then
     return ""
   end
   local position = ("  %d:%d"):format(vim.fn.line("."), vim.fn.col("."))
-  local room = math.min(90, math.floor(vim.o.columns / 2)) - #position - 1
+  room = room or (math.min(90, math.floor(vim.o.columns / 2)) - #position - 1)
   local author = vim.fn.strcharpart(d.author, 0, math.max(room, 1))
   local date = os.date("%Y-%m-%d", tonumber(d.author_time))
   local summary_room = math.min(40, room - vim.fn.strwidth(author .. " • " .. date .. " • "))
@@ -141,12 +141,12 @@ function _G.blame_status()
   return author
 end
 
--- No status line under the window: the blame and line:col go to the right of the command line
--- (the ruler), and the file name goes to the terminal title. A status line still appears
--- between stacked splits, showing the file name there.
+-- No status line under the window: the file name, blame and line:col go to the right of the
+-- command line (the ruler), which Neovim hides while a command is being typed. A status line still
+-- appears between stacked splits, showing the file name there.
 vim.opt.laststatus = 0
 vim.opt.statusline = "%f %m%r%=%{v:lua.blame_status()}  %l:%c "
-vim.opt.rulerformat = "%90(%=%{v:lua.blame_status()}  %l:%c%)"
+vim.opt.rulerformat = "%90(%=%{v:lua.ruler_status()}%)"
 
 -- Terminal title: the file path from the project root (Neovim's cwd). In a diff tab
 -- (multi-repo-code-diff) it is the file being compared, whichever pane has focus; for other
@@ -183,3 +183,26 @@ function _G.title_string()
   return vim.fn.fnamemodify(name, ":~:.") .. (vim.bo.modified and " ●" or "")
 end
 vim.opt.titlestring = "%{v:lua.title_string()}"
+
+-- The ruler: blame, then the file name (always shown, cut from the left when too long), then
+-- line:col. The blame gets whatever room the file name leaves, and goes when there is none.
+function _G.ruler_status()
+  local position = ("%d:%d"):format(vim.fn.line("."), vim.fn.col("."))
+  local total = math.min(90, math.floor(vim.o.columns / 2)) - 1
+  local file = title_string()
+  local file_room = total - #position - 2
+  if vim.fn.strwidth(file) > file_room then
+    file = "…" .. vim.fn.strcharpart(file, vim.fn.strchars(file) - math.max(file_room - 1, 1))
+  end
+  local blame_room = total - #position - 2 - vim.fn.strwidth(file) - 2
+  local parts = {}
+  if blame_room >= 8 then
+    local blame = _G.blame_status(blame_room)
+    if blame ~= "" then
+      parts[#parts + 1] = blame
+    end
+  end
+  parts[#parts + 1] = file
+  parts[#parts + 1] = position
+  return table.concat(parts, "  ")
+end
