@@ -50,7 +50,11 @@ local function command(opts)
     args[#args + 1] = "--no-ignore"
   end
   vim.list_extend(args, opts.args or {})
-  return args
+  -- fd walks directories in parallel and lists files in a different order every time: sorted (by an
+  -- external process, no cost to the editor), two scans of an unchanged folder are identical, so a
+  -- refresh only reloads the open picker when something really changed.
+  local quoted = vim.tbl_map(vim.fn.shellescape, args)
+  return { "sh", "-c", table.concat(quoted, " ") .. " | LC_ALL=C sort" }
 end
 
 local function evict()
