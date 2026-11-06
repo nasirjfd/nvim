@@ -1,0 +1,45 @@
+onboarding = false
+
+[ui]
+status_indicators = "dots"
+pane_borders = "off"
+pane_outer_borders = false
+pane_gaps = false
+pane_scrollbars = false
+sidebar_start_collapsed = true
+sidebar_collapsed_mode = "hidden"
+hide_tab_bar_when_single_tab = true
+
+[theme]
+name = "catppuccin"
+auto_switch = false
+
+[keys]
+prefix = "ctrl+,"
+split_vertical = "cmd+d"
+split_horizontal = "cmd+shift+d"
+focus_pane_left = "cmd+alt+h"
+focus_pane_down = "cmd+alt+j"
+focus_pane_up = "cmd+alt+k"
+focus_pane_right = "cmd+alt+l"
+resize_pane_left = "cmd+ctrl+shift+h"
+resize_pane_down = "cmd+ctrl+shift+j"
+resize_pane_up = "cmd+ctrl+shift+k"
+resize_pane_right = "cmd+ctrl+shift+l"
+zoom = ""   # handled by zen.sh below so borders hide while zoomed
+
+[[keys.command]]
+key = "cmd+shift+enter"
+type = "shell"
+command = "~/.config/herdr/zen.sh"
+
+[ui.toast]
+delivery = "system"
+
+[ui.sound]
+enabled = true
+
+[[keys.command]]
+key = "prefix+z"
+type = "shell"
+command = "~/.config/herdr/zen.sh"
