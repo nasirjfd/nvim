@@ -47,3 +47,11 @@ The user's herdr (terminal workspace manager) setup is versioned in `herdr/` so 
 - Whenever you change anything in `~/.config/herdr/` or `~/.config/ghostty/herdr-passthrough.conf`, copy the changed files back into `herdr/`, then commit and push to `main` in the same turn. Update `install.sh`/`README.md` if the file set changes.
 - Nvim-side pieces (`lua/core/herdr-ref.lua`, the `<D-l>` mapping in `lua/core/keymaps.lua`) live here too; `<leader>al` / `cmd+l` send `@file#Lx-y` to the herdr pane labelled `claude` via `send-ref.sh`.
 - Commit messages: one short line, never any `Co-Authored-By` or Claude attribution.
+
+## Project-local `.nvim.lua` files are synced here
+
+Machine-local `.nvim.lua` files of projects (e.g. `supernova-env-dev/vendor/.nvim.lua`) are copied into `local-projects/` (see its README) so other machines get them.
+
+- Whenever you change one of those `.nvim.lua` files, copy it into `local-projects/`, then commit and push to `main` in the same turn. Add new projects to the table in `local-projects/README.md`.
+- Editing a `.nvim.lua` changes its exrc trust hash: re-trust it (`nvim --headless -u NONE -c "edit <file>" -c trust -c qa`) before running nvim there, or the trust prompt eats keystrokes sent by tmux tests (and they can end up typed into the open file).
+
