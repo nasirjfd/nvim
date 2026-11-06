@@ -15,6 +15,7 @@ return {
     opts = {
       global_keymaps = true, -- <leader>R… inside http/rest buffers (see lua/kulala/config/keymaps.lua)
       global_keymaps_prefix = "<leader>R",
+      default_env = "dev", -- environment name in http-client.env.json
       lsp = { enable = true },
       ui = { display_mode = "split", split_direction = "vertical" },
     },
