@@ -145,8 +145,20 @@ return {
           -- Navigation
           map("n", "]h", gs.next_hunk, "Next Hunk")
           map("n", "[h", gs.prev_hunk, "Prev Hunk")
-          map("n", "<F7>", gs.next_hunk, "Next Hunk")
-          map("n", "<F19>", gs.prev_hunk, "Prev Hunk")
+          -- <F7> / <F19> are also the diff view's next/prev hunk keys. In a diff tab the real file's
+          -- buffer is attached to gitsigns too, and this buffer-local map would win over the diff
+          -- view's and move only the focused pane, so there they go to the diff view instead.
+          local function hunk_key(direction)
+            return function()
+              local lifecycle = package.loaded["codediff.ui.lifecycle"]
+              if lifecycle and lifecycle.get_session(vim.api.nvim_get_current_tabpage()) then
+                return require("codediff")[direction .. "_hunk"]()
+              end
+              return gs[direction .. "_hunk"]()
+            end
+          end
+          map("n", "<F7>", hunk_key("next"), "Next Hunk")
+          map("n", "<F19>", hunk_key("prev"), "Prev Hunk")
         end,
       })
     end,
