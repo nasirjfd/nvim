@@ -136,6 +136,9 @@ local function comment_line_down()
   vim.cmd("normal! j")
 end
 local function comment_selection()
+  -- The '< and '> marks are only set once Visual mode is left, so leave it first; otherwise the
+  -- previous selection's lines were commented (or "E16: Invalid range")
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
   require("Comment.api").toggle.linewise(vim.fn.visualmode())
 end
 map("n", "<D-/>", comment_line_down, { desc = "Comment Line + Down" })
