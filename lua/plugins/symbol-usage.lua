@@ -30,7 +30,7 @@ local function refresh_diff_buffers()
   end)
 end
 
--- The counts are the comment colour faded towards the background (keep 55% of it)
+-- The counts are the comment colour faded towards the background (keep 35% of it)
 local function fade()
   local comment = vim.api.nvim_get_hl(0, { name = "Comment", link = false })
   local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
@@ -40,7 +40,7 @@ local function fade()
   local bg = normal.bg or 0x000000
   local function mix(shift)
     local a, b = bit.band(bit.rshift(comment.fg, shift), 0xff), bit.band(bit.rshift(bg, shift), 0xff)
-    return math.floor(a * 0.55 + b * 0.45)
+    return math.floor(a * 0.35 + b * 0.65)
   end
   vim.api.nvim_set_hl(0, "SymbolUsageText", { fg = bit.lshift(mix(16), 16) + bit.lshift(mix(8), 8) + mix(0) })
 end
