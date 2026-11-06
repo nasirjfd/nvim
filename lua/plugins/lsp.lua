@@ -91,7 +91,7 @@ local function goto_member(bufnr, direction)
   local ok, col = pcall(vim.str_byteindex, text, "utf-16", target.col)
   -- A target that is already on screen is not scrolled to. One that is off screen is put in the
   -- middle (Neovim's minimal scroll would leave it on the window's edge, with its usage line cut
-  -- off) with a short glide of about 50 ms that ends exactly there. snacks.nvim's own smooth scroll
+  -- off) with a short glide of about 100 ms that ends exactly there. snacks.nvim's own smooth scroll
   -- wobbles around the target for ~100 ms, so it is skipped for this jump.
   local win = vim.api.nvim_get_current_win()
   local visible = target.line + 1 >= vim.fn.line("w0") and target.line + 1 <= vim.fn.line("w$")
@@ -109,7 +109,7 @@ local function goto_member(bufnr, direction)
   local final = vim.fn.winsaveview()
   vim.fn.winrestview(start)
   local height = vim.api.nvim_win_get_height(win)
-  local frames, frame = 5, 0
+  local frames, frame = 10, 0
   local timer = vim.uv.new_timer()
   member_glide = function()
     member_glide = nil
