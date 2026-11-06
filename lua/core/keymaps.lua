@@ -141,7 +141,25 @@ end, { desc = "Copy Selection Reference" })
 
 -- cmd+l and cmd+shift+c copy the reference. Ghostty sends them in the kitty keyboard format
 -- (ghostty/config: super+l=csi:108;9u, super+shift+c=csi:99;10u), which Neovim reads as <D-…>.
-for _, lhs in ipairs({ "<D-l>", "<D-S-c>" }) do
+-- Inside herdr, cmd+l instead sends the @file#L reference to the pane labelled "claude"
+-- (lua/core/herdr-ref.lua); cmd+shift+c keeps copying to the clipboard.
+vim.keymap.set("n", "<D-l>", function()
+  if vim.env.HERDR_PANE_ID then
+    require("core.herdr-ref").send(false)
+  else
+    copy_reference(false)
+  end
+end, { desc = "Send/Copy File Reference" })
+vim.keymap.set("x", "<D-l>", function()
+  if vim.env.HERDR_PANE_ID then
+    require("core.herdr-ref").send(true)
+    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
+  else
+    copy_reference(true)
+  end
+end, { desc = "Send/Copy Selection Reference" })
+
+for _, lhs in ipairs({ "<D-S-c>" }) do
   vim.keymap.set("n", lhs, function()
     copy_reference(false)
   end, { desc = "Copy File Reference" })
