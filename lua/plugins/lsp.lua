@@ -10,6 +10,9 @@ local MEMBER_KINDS = {
   [vim.lsp.protocol.SymbolKind.Function] = true,
 }
 
+-- the running glide of a symbol jump, as a function that ends it at once
+local member_glide
+
 local function collect_member_lines(bufnr)
   local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
   local ok, results = pcall(vim.lsp.buf_request_sync, bufnr, "textDocument/documentSymbol", params, 1000)
@@ -87,22 +90,63 @@ local function goto_member(bufnr, direction)
   local text = vim.api.nvim_buf_get_lines(bufnr, target.line, target.line + 1, false)[1] or ""
   local ok, col = pcall(vim.str_byteindex, text, "utf-16", target.col)
   -- A target that is already on screen is not scrolled to. One that is off screen is put in the
-  -- middle at once, instead of Neovim's minimal scroll (which leaves it on the window's edge, with
-  -- its usage line cut off) followed by the smooth-scroll animation catching up.
+  -- middle (Neovim's minimal scroll would leave it on the window's edge, with its usage line cut
+  -- off) with a short glide of about 50 ms that ends exactly there. snacks.nvim's own smooth scroll
+  -- wobbles around the target for ~100 ms, so it is skipped for this jump.
+  local win = vim.api.nvim_get_current_win()
   local visible = target.line + 1 >= vim.fn.line("w0") and target.line + 1 <= vim.fn.line("w$")
-  local previous = vim.b[bufnr].snacks_scroll
-  if not visible then
-    vim.b[bufnr].snacks_scroll = false
+  if member_glide then
+    member_glide()
   end
+  if visible then
+    vim.api.nvim_win_set_cursor(0, { target.line + 1, ok and col or 0 })
+    return
+  end
+  local start = vim.fn.winsaveview()
+  vim.b[bufnr].snacks_scroll = false
   vim.api.nvim_win_set_cursor(0, { target.line + 1, ok and col or 0 })
-  if not visible then
-    vim.cmd("normal! zz")
-    vim.defer_fn(function()
-      if vim.api.nvim_buf_is_valid(bufnr) then
-        vim.b[bufnr].snacks_scroll = previous
+  vim.cmd("normal! zz")
+  local final = vim.fn.winsaveview()
+  vim.fn.winrestview(start)
+  local height = vim.api.nvim_win_get_height(win)
+  local frames, frame = 5, 0
+  local timer = vim.uv.new_timer()
+  member_glide = function()
+    member_glide = nil
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_call(win, function()
+          vim.fn.winrestview(final)
+        end)
       end
-    end, 150)
+      vim.defer_fn(function()
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          vim.b[bufnr].snacks_scroll = nil
+        end
+      end, 100)
+    end
   end
+  timer:start(
+    10,
+    10,
+    vim.schedule_wrap(function()
+      if not member_glide then
+        return
+      end
+      frame = frame + 1
+      if frame >= frames then
+        return member_glide()
+      end
+      local t = 1 - (1 - frame / frames) ^ 3 -- outCubic
+      local top = math.floor(start.topline + (final.topline - start.topline) * t + 0.5)
+      local line = math.min(math.max(final.lnum, top), top + height - 1)
+      vim.api.nvim_win_call(win, function()
+        vim.fn.winrestview({ topline = top, lnum = line, col = final.col, topfill = 0 })
+      end)
+    end)
+  )
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
