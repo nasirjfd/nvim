@@ -439,3 +439,23 @@ vim.keymap.set("n", "<leader>gp", function()
     end
   end)
 end)
+
+-- Pasting (cmd+v, a terminal paste) over a Visual selection replaces the text and nothing else: the
+-- replaced text must not end up in the system clipboard, as it does in Neovim (it deletes the
+-- selection into the unnamed register, which 'clipboard' = "unnamedplus" mirrors to the clipboard).
+-- The delete goes to the unnamed register only, with 'clipboard' emptied for that moment.
+local paste = vim.paste
+vim.paste = function(lines, phase)
+  local mode = vim.api.nvim_get_mode().mode
+  if phase <= 1 and mode:find("^[vV\22sS\19]") then
+    local saved = vim.o.clipboard
+    vim.o.clipboard = ""
+    local ok, result = pcall(paste, lines, phase)
+    vim.o.clipboard = saved
+    if not ok then
+      error(result)
+    end
+    return result
+  end
+  return paste(lines, phase)
+end
