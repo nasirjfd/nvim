@@ -57,10 +57,13 @@ return {
         default_format_opts = {
             lsp_format = "fallback",
         },
-        format_on_save = {
-            timeout_ms = 500,
-            lsp_format = "fallback",
-        },
+        format_on_save = function(bufnr)
+            -- Kulala's LSP formatter rewrites .http files (adds HTTP/1.1, drops comments) and blocks on save
+            if vim.bo[bufnr].filetype == "http" then
+                return nil
+            end
+            return { timeout_ms = 500, lsp_format = "fallback" }
+        end,
     },
     init = function()
         vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
