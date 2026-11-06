@@ -82,15 +82,13 @@ return {
     text_format = function(symbol)
       local fragments = {}
       if symbol.references then
-        local usage = symbol.references == 1 and "usage" or "usages"
-        table.insert(fragments, ("%s %s"):format(symbol.references == 0 and "no" or symbol.references, usage))
+        table.insert(fragments, symbol.references .. "u")
       end
       if symbol.implementation and symbol.implementation > 0 then
-        local impl = symbol.implementation == 1 and "implementation" or "implementations"
-        table.insert(fragments, ("%s %s"):format(symbol.implementation, impl))
+        table.insert(fragments, symbol.implementation .. "i")
       end
       local stacked = symbol.stacked_count > 0 and (" | +%s"):format(symbol.stacked_count) or ""
-      return table.concat(fragments, ", ") .. stacked
+      return table.concat(fragments, " ") .. stacked
     end,
     -- Intelephense lists a method as an implementation of itself, so every method showed
     -- "1 impls". Drop the location the request was made from.
