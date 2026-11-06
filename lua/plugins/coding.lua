@@ -16,7 +16,25 @@ return {
         },
         sources = {
           default = { "lazydev", "lsp", "path", "buffer", "snippets" },
+          -- Lua scripts in .http files ({% -- lua … %}): Kulala's Lua API (core/kulala-lua.lua)
+          per_filetype = { http = { "kulala_lua", "lsp", "path", "buffer", "snippets" } },
           providers = {
+            kulala_lua = {
+              name = "Kulala Lua",
+              module = "core.kulala-lua",
+              score_offset = 100,
+            },
+            -- Inside a Lua script block Kulala's server only adds noise (JavaScript-style snippets such
+            -- as `response.json()`, header names), so the Lua source above answers alone there.
+            lsp = {
+              transform_items = function(_, items)
+                local ok, kulala = pcall(require, "core.kulala-lua")
+                if vim.bo.filetype == "http" and ok and kulala.in_lua_block(0, vim.api.nvim_win_get_cursor(0)[1]) then
+                  return {}
+                end
+                return items
+              end,
+            },
             lazydev = {
               name = "LazyDev",
               module = "lazydev.integrations.blink",
