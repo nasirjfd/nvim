@@ -446,6 +446,19 @@ end)
 -- The delete goes to the unnamed register only, with 'clipboard' emptied for that moment.
 local paste = vim.paste
 vim.paste = function(lines, phase)
+  -- Cmd+V in the explorer sidebar pastes the copied files (asking for a name when needed), it does
+  -- not insert text (see explorer_paste_named in plugins/snacks.lua)
+  if vim.bo.filetype == "snacks_picker_list" and _G.Snacks and phase <= 1 then
+    local current = vim.api.nvim_get_current_win()
+    for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
+      if picker.list and picker.list.win and picker.list.win.win == current then
+        vim.schedule(function()
+          picker:action("explorer_paste_named")
+        end)
+        return true
+      end
+    end
+  end
   local mode = vim.api.nvim_get_mode().mode
   if phase <= 1 and mode:find("^[vV\22sS\19]") then
     local saved = vim.o.clipboard

@@ -227,6 +227,51 @@ return {
         },
         explorer = {
           actions = {
+            -- Cmd+V in the explorer: paste the copied files into the directory under the cursor. A
+            -- file pasted into the folder it came from (or onto a name that exists) asks for the new
+            -- name first, with the current name filled in, like JetBrains.
+            explorer_paste_named = function(picker)
+              local Tree = require("snacks.explorer.tree")
+              local Actions = require("snacks.explorer.actions")
+              local files = vim.tbl_filter(function(file)
+                return file ~= "" and (vim.fn.filereadable(file) == 1 or vim.fn.isdirectory(file) == 1)
+              end, vim.split(vim.fn.getreg("+") or "", "\n", { plain = true }))
+              if #files == 0 then
+                return Snacks.notify.warn("Nothing copied: copy a file in the explorer with Cmd+C first")
+              end
+              local dir = vim.fs.normalize(picker:dir())
+              local last
+              local function finish()
+                Tree:refresh(dir)
+                Tree:open(dir)
+                Actions.update(picker, { target = last or dir })
+              end
+              local function paste(index)
+                local from = files[index]
+                if not from then
+                  return finish()
+                end
+                from = vim.fs.normalize(from)
+                local name = vim.fn.fnamemodify(from, ":t")
+                local function copy(new_name)
+                  last = dir .. "/" .. new_name
+                  Snacks.picker.util.copy_path(from, last)
+                  paste(index + 1)
+                end
+                if vim.fs.dirname(from) == dir or vim.uv.fs_stat(dir .. "/" .. name) then
+                  Snacks.input({ prompt = "Paste as", default = name }, function(value)
+                    value = value and vim.trim(value)
+                    if not value or value == "" then
+                      return finish()
+                    end
+                    copy(value)
+                  end)
+                else
+                  copy(name)
+                end
+              end
+              paste(1)
+            end,
             -- Enter in the explorer's search box opens the first matching *file* and moves the cursor
             -- into it (the matches list starts with their parent directories, so a plain confirm
             -- would only expand a folder, and the cursor would stay in the explorer)
@@ -258,7 +303,15 @@ return {
               end)
             end,
           },
-          win = { input = { keys = { ["<CR>"] = { "search_confirm", mode = { "n", "i" } } } } },
+          win = {
+            input = { keys = { ["<CR>"] = { "search_confirm", mode = { "n", "i" } } } },
+            list = {
+              keys = {
+                ["<D-c>"] = { "explorer_yank", mode = { "n", "x" } },
+                ["<D-v>"] = "explorer_paste_named",
+              },
+            },
+          },
         },
         gh_issue = {},
         gh_pr = {},
