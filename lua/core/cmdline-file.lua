@@ -62,13 +62,24 @@ end
 
 function M.setup()
   local group = vim.api.nvim_create_augroup("CmdlineFile", { clear = true })
+  -- Only events that can change the name or the row: nothing runs per cursor move or keystroke.
   vim.api.nvim_create_autocmd(
-    { "BufEnter", "WinEnter", "TabEnter", "BufModifiedSet", "BufFilePost", "DirChanged", "VimResized", "CursorMoved", "TextChanged", "InsertLeave" },
+    { "BufEnter", "WinEnter", "TabEnter", "BufModifiedSet", "BufFilePost", "DirChanged", "VimResized", "InsertLeave" },
     { group = group, callback = vim.schedule_wrap(render) }
   )
-  vim.api.nvim_create_autocmd("CmdlineEnter", { group = group, callback = hide })
-  -- Stay hidden after a command so its message ("written", an :echo) can be read; the next cursor
-  -- move brings the name back.
+  vim.api.nvim_create_autocmd("CmdlineEnter", {
+    group = group,
+    callback = function()
+      hide()
+      -- Stay hidden after a command so its message ("written", an :echo) can be read; the first
+      -- cursor move afterwards brings the name back, and the listener removes itself.
+      vim.api.nvim_create_autocmd("CursorMoved", {
+        group = group,
+        once = true,
+        callback = vim.schedule_wrap(render),
+      })
+    end,
+  })
   vim.schedule(render)
 end
 
