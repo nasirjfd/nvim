@@ -187,13 +187,103 @@ local function select_node(parent)
     vim.lsp.buf.selection_range(parent and vim.v.count1 or -vim.v.count1)
   end
 end
+
+-- Like JetBrains, the cursor stays where it was while the selection grows and shrinks around it:
+-- Visual mode has to keep the cursor on one end of the selection, so it is the end nearest to where
+-- it started, the window does not scroll while that end is on screen, and leaving with <Esc> puts the
+-- cursor back exactly where it was before the first expansion.
+local origin ---@type {buf: number, pos: number[]}?
+-- Selections left behind by expanding, so shrinking walks back through exactly the same ones
+local history = {} ---@type {first: number[], last: number[]}[]
+local expected ---@type {first: number[], last: number[]}? the selection the last resize produced
+
+local function before(a, b) -- position a is before position b ({line, col})
+  return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
+end
+
+local function selection()
+  local anchor, cursor = vim.fn.getpos("v"), vim.fn.getpos(".")
+  local from, to = { anchor[2], anchor[3] - 1 }, { cursor[2], cursor[3] - 1 }
+  if before(to, from) then
+    from, to = to, from
+  end
+  return { first = from, last = to }
+end
+
+local function same(a, b)
+  return a and b and a.first[1] == b.first[1] and a.first[2] == b.first[2] and a.last[1] == b.last[1] and a.last[2] == b.last[2]
+end
+
+--- Select first..last with the cursor on the end nearest to where the resizing started.
+local function select_range(range)
+  local first, last = range.first, range.last
+  local function gap(p)
+    return math.abs(p[1] - origin.pos[1]) * 1000 + math.abs(p[2] - origin.pos[2])
+  end
+  local at_first = gap(first) < gap(last)
+  local from, to = unpack(at_first and { last, first } or { first, last })
+  if vim.fn.mode():match("^[vV\22]") then
+    vim.cmd("normal! \27")
+  end
+  vim.api.nvim_win_set_cursor(0, from)
+  vim.cmd("normal! v")
+  vim.api.nvim_win_set_cursor(0, to)
+  expected = range
+end
+
+local function resize_selection(parent)
+  local buf = vim.api.nvim_get_current_buf()
+  if not origin or origin.buf ~= buf then
+    origin = { buf = buf, pos = vim.api.nvim_win_get_cursor(0) }
+    history, expected = {}, nil
+  end
+  local view = vim.fn.winsaveview()
+  local current = selection()
+  if parent then
+    select_node(true)
+    local grown = selection()
+    if not same(grown, current) then
+      table.insert(history, current)
+    end
+    select_range(grown)
+  elseif #history > 0 and same(current, expected) then
+    select_range(table.remove(history)) -- back to what it was before the last expansion
+  else
+    select_node(false)
+    select_range(selection())
+  end
+  local line = vim.fn.line(".")
+  if line >= view.topline and line <= view.topline + vim.api.nvim_win_get_height(0) - 1 then
+    vim.fn.winrestview({ topline = view.topline, leftcol = view.leftcol })
+  end
+end
+
 vim.keymap.set("n", "<M-k>", "v<M-k>", { remap = true, desc = "Expand Selection" })
 vim.keymap.set("x", "<M-k>", function()
-  select_node(true)
+  resize_selection(true)
 end, { desc = "Expand Selection" })
 vim.keymap.set("x", "<M-j>", function()
-  select_node(false)
+  resize_selection(false)
 end, { desc = "Shrink Selection" })
+vim.keymap.set("x", "<Esc>", function()
+  local saved = origin
+  origin, history, expected = nil, {}, nil
+  vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+  if saved and saved.buf == vim.api.nvim_get_current_buf() then
+    pcall(vim.api.nvim_win_set_cursor, 0, saved.pos)
+  end
+end, { desc = "End Selection", nowait = true })
+-- Any other way out of Visual mode (an operator, a new selection) forgets the origin
+vim.api.nvim_create_autocmd("ModeChanged", {
+  pattern = "[vV\22]*:[^vV\22]*",
+  callback = function()
+    vim.schedule(function()
+      if not vim.fn.mode():match("^[vV\22]") then
+        origin, history, expected = nil, {}, nil
+      end
+    end)
+  end,
+})
 
 vim.keymap.set({ "n", "v" }, "m", "%")
 vim.keymap.set("n", "vp", "viwp")
