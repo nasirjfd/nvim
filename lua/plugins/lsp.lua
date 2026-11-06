@@ -13,13 +13,13 @@ local MEMBER_KINDS = {
 -- the running glide of a symbol jump, as a function that ends it at once
 local member_glide
 
-local function collect_member_lines(bufnr)
-  local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
-  local ok, results = pcall(vim.lsp.buf_request_sync, bufnr, "textDocument/documentSymbol", params, 1000)
-  if not ok or not results then
-    return {}
-  end
+-- Where the members are. Asking the language server blocks until it answers (a full second while it
+-- is still starting), so a jump never waits for it: the answer is cached per buffer version, fetched
+-- in the background, and until it is there treesitter finds the members (PHP) at once.
+local member_cache = {} -- bufnr -> { tick = changedtick, lines = {...} }
+local member_pending = {} -- bufnr -> changedtick of a request in flight
 
+local function members_from_symbols(results)
   local lines = {}
   -- Closures, callbacks and functions declared inside another function are not members
   local CALLABLE = {
@@ -37,7 +37,7 @@ local function collect_member_lines(bufnr)
       if range and MEMBER_KINDS[sym.kind] and not inside_callable and not anonymous(sym.name or "") then
         -- selectionRange points at the symbol's name (e.g. the method name, not `public function`)
         local name = sym.selectionRange or range
-        table.insert(lines, { line = name.start.line, col = name.start.character })
+        table.insert(lines, { line = name.start.line, col = name.start.character, utf16 = true })
       end
       if sym.children then
         collect(sym.children, inside_callable or CALLABLE[sym.kind] == true)
@@ -57,8 +57,95 @@ local function collect_member_lines(bufnr)
   return lines
 end
 
-local function goto_member(bufnr, direction)
-  local lines = collect_member_lines(bufnr)
+local TS_MEMBERS = {
+  class_declaration = false,
+  trait_declaration = false,
+  method_declaration = true,
+  function_definition = true,
+}
+
+local function members_from_treesitter(bufnr)
+  if vim.bo[bufnr].filetype ~= "php" then
+    return nil
+  end
+  local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+  if not ok or not parser then
+    return nil
+  end
+  local lines = {}
+  local function walk(node, inside_callable)
+    local type = node:type()
+    local callable = TS_MEMBERS[type]
+    if callable ~= nil and not inside_callable then
+      local name = node:field("name")[1]
+      if name then
+        local row, col = name:start()
+        table.insert(lines, { line = row, col = col })
+      end
+    end
+    for child in node:iter_children() do
+      if child:named() then
+        walk(child, inside_callable or callable == true)
+      end
+    end
+  end
+  for _, tree in ipairs(parser:parse()) do
+    walk(tree:root(), false)
+  end
+  table.sort(lines, function(a, b)
+    return a.line < b.line
+  end)
+  return lines
+end
+
+--- Members of the buffer for a jump, without waiting. `on_late(lines)` runs if there is nothing to
+--- go on yet (no treesitter, no cached answer) and the language server answers later.
+local function collect_member_lines(bufnr, on_late)
+  local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  local cached = member_cache[bufnr]
+  if cached and cached.tick == tick then
+    return cached.lines
+  end
+  if member_pending[bufnr] ~= tick and #vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/documentSymbol" }) > 0 then
+    member_pending[bufnr] = tick
+    local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
+    vim.lsp.buf_request_all(bufnr, "textDocument/documentSymbol", params, function(results)
+      member_pending[bufnr] = nil
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        local lines = members_from_symbols(results or {})
+        if #lines > 0 then
+          member_cache[bufnr] = { tick = tick, lines = lines }
+        end
+        if on_late then
+          on_late(lines)
+        end
+      end
+    end)
+  end
+  local from_syntax = members_from_treesitter(bufnr)
+  if from_syntax and #from_syntax > 0 then
+    return from_syntax
+  end
+  return cached and cached.lines or nil
+end
+
+local goto_member
+function goto_member(bufnr, direction, late)
+  -- A glide still running holds the cursor on a line it passes: end it first, so the next jump
+  -- starts from where the previous one was going
+  if member_glide then
+    member_glide()
+  end
+  local waiting = false
+  local lines = collect_member_lines(bufnr, function()
+    if waiting and not late and vim.api.nvim_get_current_buf() == bufnr then
+      goto_member(bufnr, direction, true)
+    end
+  end)
+  if not lines then
+    waiting = true -- the language server will answer and the jump is made then
+    return
+  end
   if #lines == 0 then
     vim.notify("No class/method/function symbols found", vim.log.levels.WARN)
     return
@@ -88,16 +175,16 @@ local function goto_member(bufnr, direction)
 
   -- LSP columns are UTF-16 offsets; put the cursor on the first character of the symbol's name
   local text = vim.api.nvim_buf_get_lines(bufnr, target.line, target.line + 1, false)[1] or ""
-  local ok, col = pcall(vim.str_byteindex, text, "utf-16", target.col)
+  local ok, col = true, target.col
+  if target.utf16 then
+    ok, col = pcall(vim.str_byteindex, text, "utf-16", target.col)
+  end
   -- A target that is already on screen is not scrolled to. One that is off screen is put in the
   -- middle (Neovim's minimal scroll would leave it on the window's edge, with its usage line cut
   -- off) with a short glide of about 100 ms that ends exactly there. snacks.nvim's own smooth scroll
   -- wobbles around the target for ~100 ms, so it is skipped for this jump.
   local win = vim.api.nvim_get_current_win()
   local visible = target.line + 1 >= vim.fn.line("w0") and target.line + 1 <= vim.fn.line("w$")
-  if member_glide then
-    member_glide()
-  end
   if visible then
     vim.api.nvim_win_set_cursor(0, { target.line + 1, ok and col or 0 })
     return
@@ -148,6 +235,20 @@ local function goto_member(bufnr, direction)
     end)
   )
 end
+
+-- The jump keys work from the moment a PHP file opens (treesitter finds the members), not only after
+-- the language server has attached: before that, S is "substitute line" (it enters insert mode and
+-- loads the completion plugins, a long stall) and U is "undo line".
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "php",
+  callback = function(args)
+    for lhs, direction in pairs({ ["[m"] = -1, ["]m"] = 1, U = -1, S = 1 }) do
+      vim.keymap.set("n", lhs, function()
+        goto_member(args.buf, direction)
+      end, { buffer = args.buf, silent = true, desc = "Prev/Next Class/Method" })
+    end
+  end,
+})
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- LSP Keymaps (applied per-buffer on attach)
