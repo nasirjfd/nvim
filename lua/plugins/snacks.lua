@@ -259,13 +259,22 @@ return {
                   paste(index + 1)
                 end
                 if vim.fs.dirname(from) == dir or vim.uv.fs_stat(dir .. "/" .. name) then
-                  Snacks.input({ prompt = "Paste as", default = name }, function(value)
+                  local input = Snacks.input({ prompt = "Paste as", default = name }, function(value)
                     value = value and vim.trim(value)
                     if not value or value == "" then
                       return finish()
                     end
                     copy(value)
                   end)
+                  -- cursor before the extension, so the name can be typed over (as in JetBrains)
+                  local stem = name:match("^(.+)%.[^.]+$")
+                  if stem and input and input.win then
+                    vim.schedule(function()
+                      if vim.api.nvim_win_is_valid(input.win) then
+                        pcall(vim.api.nvim_win_set_cursor, input.win, { 1, #stem })
+                      end
+                    end)
+                  end
                 else
                   copy(name)
                 end
