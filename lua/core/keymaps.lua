@@ -285,6 +285,79 @@ vim.api.nvim_create_autocmd("ModeChanged", {
   end,
 })
 
+-- The mouse wheel scrolls around a Visual selection without touching it, like JetBrains. In Vim the
+-- cursor has to stay on screen, so scrolling past the selection's end drags the end along and the
+-- selection grows with every tick. So the first wheel tick leaves Visual mode and draws the selection
+-- as a highlight instead; the cursor is then free to follow the scroll. The next key that is not the
+-- wheel puts the real selection back first (so `y`, `d`, <Esc>, <M-k>… act on it), a click just ends it.
+local frozen ---@type {buf: number, mode: string, anchor: number[], cursor: number[], mark: number}?
+local freeze_ns = vim.api.nvim_create_namespace("visual_scroll_freeze")
+
+local function thaw(restore)
+  local state = frozen
+  if not state then
+    return
+  end
+  frozen = nil
+  pcall(vim.api.nvim_buf_clear_namespace, state.buf, freeze_ns, 0, -1)
+  if restore and vim.api.nvim_get_current_buf() == state.buf then
+    pcall(function()
+      vim.api.nvim_win_set_cursor(0, state.anchor)
+      vim.cmd("normal! " .. state.mode)
+      vim.api.nvim_win_set_cursor(0, state.cursor)
+    end)
+  end
+end
+
+local function wheel_in_visual(key)
+  return function()
+    local mode = vim.fn.mode()
+    if mode == "v" or mode == "V" then
+      local buf = vim.api.nvim_get_current_buf()
+      local a, c = vim.fn.getpos("v"), vim.fn.getpos(".")
+      local anchor, cursor = { a[2], a[3] - 1 }, { c[2], c[3] - 1 }
+      local first, last = anchor, cursor
+      if before(cursor, anchor) then
+        first, last = cursor, anchor
+      end
+      vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+      for line = first[1], last[1] do
+        local text = vim.api.nvim_buf_get_lines(buf, line - 1, line, false)[1] or ""
+        local from = (mode == "v" and line == first[1]) and first[2] or 0
+        local to = (mode == "v" and line == last[1]) and math.min(last[2] + 1, #text) or #text
+        vim.api.nvim_buf_set_extmark(buf, freeze_ns, line - 1, from, {
+          end_row = line - 1,
+          end_col = math.max(to, from),
+          hl_group = "Visual",
+          hl_eol = not (mode == "v" and line == last[1]),
+          priority = 200,
+        })
+      end
+      frozen = { buf = buf, mode = mode, anchor = anchor, cursor = cursor }
+    end
+    vim.api.nvim_feedkeys(vim.keycode(key), "n", false)
+  end
+end
+
+for _, key in ipairs({ "<ScrollWheelDown>", "<ScrollWheelUp>" }) do
+  vim.keymap.set("x", key, wheel_in_visual(key), { desc = "Scroll without changing the selection" })
+end
+
+vim.on_key(function(_, typed)
+  if not frozen or not typed or typed == "" then
+    return
+  end
+  local name = vim.fn.keytrans(typed)
+  if name:find("^<ScrollWheel") or name:find("^<MouseMove") then
+    return
+  end
+  if name:find("Mouse>") or name:find("^<%d?-?[%u]?%l*Mouse") then
+    thaw(false)
+  else
+    thaw(true)
+  end
+end)
+
 vim.keymap.set({ "n", "v" }, "m", "%")
 vim.keymap.set("n", "vp", "viwp")
 
