@@ -286,18 +286,8 @@ return {
     {
       "<leader><space>",
       function()
-        local cwd = vim.fn.getcwd()
-        -- A cwd ignored by its parent repo (e.g. vendor/) would list nothing, so skip the parent's
-        -- ignore files there; its own .gitignore files still apply.
-        local cwd_ignored = vim.system({ "git", "check-ignore", "-q", "." }, { cwd = cwd }):wait().code
-          == 0
-        Snacks.picker.files({
-          cwd = cwd,
-          -- Ignored files stay hidden until <a-i> in the picker or <leader>uI
-          ignored = vim.g.show_ignored == true,
-          hidden = vim.g.show_ignored or false,
-          args = cwd_ignored and { "--no-ignore-parent" } or nil,
-        })
+        -- Opens from a cached file list (see core/file-cache.lua)
+        Snacks.picker.files(require("core.file-cache").opts())
       end,
       desc = "Find Files",
     },
