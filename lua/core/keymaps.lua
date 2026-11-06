@@ -292,6 +292,24 @@ vim.api.nvim_create_autocmd("ModeChanged", {
 -- wheel puts the real selection back first (so `y`, `d`, <Esc>, <M-k>… act on it), a click just ends it.
 local frozen ---@type {buf: number, mode: string, anchor: number[], cursor: number[], mark: number}?
 local freeze_ns = vim.api.nvim_create_namespace("visual_scroll_freeze")
+local saved_guicursor ---@type string?
+
+-- The real cursor follows the scroll while the selection is only drawn, so it is hidden and a drawn
+-- one stays on the selection's own cursor position instead (it may be scrolled out of sight).
+local function hide_cursor()
+  if saved_guicursor == nil then
+    saved_guicursor = vim.o.guicursor
+    vim.api.nvim_set_hl(0, "VisualScrollHiddenCursor", { blend = 100, nocombine = true })
+    vim.o.guicursor = "a:VisualScrollHiddenCursor"
+  end
+end
+
+local function show_cursor()
+  if saved_guicursor ~= nil then
+    vim.o.guicursor = saved_guicursor
+    saved_guicursor = nil
+  end
+end
 
 local function thaw(restore)
   local state = frozen
@@ -299,6 +317,7 @@ local function thaw(restore)
     return
   end
   frozen = nil
+  show_cursor()
   pcall(vim.api.nvim_buf_clear_namespace, state.buf, freeze_ns, 0, -1)
   if restore and vim.api.nvim_get_current_buf() == state.buf then
     pcall(function()
@@ -333,6 +352,22 @@ local function wheel_in_visual(key)
           priority = 200,
         })
       end
+      local text = vim.api.nvim_buf_get_lines(buf, cursor[1] - 1, cursor[1], false)[1] or ""
+      if cursor[2] < #text then
+        vim.api.nvim_buf_set_extmark(buf, freeze_ns, cursor[1] - 1, cursor[2], {
+          end_row = cursor[1] - 1,
+          end_col = cursor[2] + #(vim.fn.strcharpart(text:sub(cursor[2] + 1), 0, 1)),
+          hl_group = "Cursor",
+          priority = 300,
+        })
+      else
+        vim.api.nvim_buf_set_extmark(buf, freeze_ns, cursor[1] - 1, cursor[2], {
+          virt_text = { { " ", "Cursor" } },
+          virt_text_pos = "overlay",
+          priority = 300,
+        })
+      end
+      hide_cursor()
       frozen = { buf = buf, mode = mode, anchor = anchor, cursor = cursor }
     end
     vim.api.nvim_feedkeys(vim.keycode(key), "n", false)
