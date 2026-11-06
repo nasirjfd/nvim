@@ -1,8 +1,7 @@
 -- Usage/implementation counts above classes, interfaces, functions and methods.
 -- Language servers like Intelephense send no code lens, so this plugin asks for
 -- references/implementations itself. Toggle with <leader>lu.
--- A line above a method exists in one pane only, so in a diff it would push the right pane a row
--- below the left one. Buffers shown in a diff get the count at the end of the line instead.
+-- No lens in a diff view: it is noise there, and a line above a method exists in one pane only.
 local function in_diff(bufnr)
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   if not lifecycle then
@@ -16,21 +15,6 @@ local function in_diff(bufnr)
   return false
 end
 
-local function patch_position()
-  local utils = require("symbol-usage.utils")
-  if utils._diff_aware then
-    return
-  end
-  utils._diff_aware = true
-  local make = utils.make_extmark_opts
-  utils.make_extmark_opts = function(text, opts, line, bufnr, id)
-    if opts.vt_position == "above" and in_diff(bufnr) then
-      opts = vim.tbl_extend("force", opts, { vt_position = "end_of_line" })
-    end
-    return make(text, opts, line, bufnr, id)
-  end
-end
-
 local function refresh_diff_buffers()
   vim.schedule(function()
     local buf = require("symbol-usage.buf")
@@ -38,7 +22,9 @@ local function refresh_diff_buffers()
     for bufnr in pairs(state.buffers or {}) do
       if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) and #vim.fn.win_findbuf(bufnr) > 0 then
         buf.clear_buffer(bufnr)
-        buf.attach_buffer(bufnr)
+        if not in_diff(bufnr) then
+          buf.attach_buffer(bufnr)
+        end
       end
     end
   end)
@@ -57,11 +43,9 @@ return {
       end,
     })
   end,
-  config = function(_, opts)
-    require("symbol-usage").setup(opts)
-    patch_position()
-  end,
+
   opts = {
+    disable = { cond = { in_diff } },
     vt_position = "above",
     kinds = {
       vim.lsp.protocol.SymbolKind.Class,
