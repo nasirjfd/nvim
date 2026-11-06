@@ -2,10 +2,10 @@ onboarding = false
 
 [ui]
 status_indicators = "dots"
-pane_borders = "off"
-pane_outer_borders = false
-pane_gaps = false
-pane_scrollbars = false
+pane_borders = "auto"
+pane_outer_borders = true
+pane_gaps = true
+pane_scrollbars = true
 sidebar_start_collapsed = true
 sidebar_collapsed_mode = "hidden"
 hide_tab_bar_when_single_tab = true
