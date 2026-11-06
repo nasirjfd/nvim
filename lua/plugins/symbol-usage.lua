@@ -178,11 +178,11 @@ return {
     -- The line is reserved as soon as the symbols are known, with a blank placeholder that the
     -- count later replaces in place, so counts arriving never push the text down.
     request_pending_text = { { " ", "SymbolUsageText" } },
-    -- "N use", and "N impl" when there are implementations
+    -- "N usage", and "N impl" when there are implementations
     text_format = function(symbol)
       local fragments = {}
       if symbol.references then
-        table.insert(fragments, ("%d use"):format(symbol.references))
+        table.insert(fragments, ("%d usage"):format(symbol.references))
       end
       if symbol.implementation and symbol.implementation > 0 then
         table.insert(fragments, ("%d impl"):format(symbol.implementation))
