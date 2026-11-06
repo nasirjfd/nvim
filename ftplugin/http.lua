@@ -149,3 +149,19 @@ vim.keymap.set("n", "gd", function()
     end)
   end
 end, { buffer = true, silent = true, desc = "Go to variable definition" })
+
+-- Fold by request: `zM` collapses every request to its name + method + URL, `zo` / `za` open one,
+-- `zR` opens all. `\z` toggles between all collapsed and all open. Starts open.
+vim.opt_local.foldmethod = "expr"
+vim.opt_local.foldexpr = "v:lua.require'core.http-fold'.expr(v:lnum)"
+vim.opt_local.foldtext = "v:lua.require'core.http-fold'.text()"
+vim.opt_local.foldlevel = 99
+vim.opt_local.foldenable = true
+vim.opt_local.fillchars:append({ fold = " " })
+vim.keymap.set("n", "\\z", function()
+  if vim.wo.foldlevel == 0 then
+    vim.cmd("normal! zR")
+  else
+    vim.cmd("normal! zM")
+  end
+end, { buffer = true, silent = true, desc = "Collapse / expand all requests" })
