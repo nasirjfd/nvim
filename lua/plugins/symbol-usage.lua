@@ -62,14 +62,14 @@ return {
     -- The line is reserved as soon as the symbols are known, with a blank placeholder that the
     -- count later replaces in place, so counts arriving never push the text down.
     request_pending_text = { { " ", "SymbolUsageText" } },
-    -- Icons instead of words (eye = usages, sitemap = implementations); implementations only when there are some
+    -- Just the number of usages, and "→ N" for implementations when there are some
     text_format = function(symbol)
       local fragments = {}
       if symbol.references then
-        table.insert(fragments, ("\u{f06e} %d"):format(symbol.references)) -- eye: usages
+        table.insert(fragments, tostring(symbol.references))
       end
       if symbol.implementation and symbol.implementation > 0 then
-        table.insert(fragments, ("\u{f0e8} %d"):format(symbol.implementation)) -- sitemap: implementations
+        table.insert(fragments, ("→ %d"):format(symbol.implementation))
       end
       local stacked = symbol.stacked_count > 0 and (" | +%s"):format(symbol.stacked_count) or ""
       return table.concat(fragments, "  ") .. stacked
