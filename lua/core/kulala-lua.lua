@@ -226,6 +226,39 @@ local function members(bufnr, lnum, path)
   return items
 end
 
+--- Variables scripts define: `client.global.Name = …` / `client.global.set("Name", …)` anywhere in the
+--- document, plus whatever is stored by requests already run (Kulala keeps them in a JSON file).
+local function script_variables(bufnr)
+  local found, seen = {}, {}
+  local function add(name, doc)
+    if not seen[name] then
+      seen[name] = true
+      found[#found + 1] = { name = name, doc = doc }
+    elseif doc and not seen[name] == true then
+      seen[name] = true
+    end
+  end
+  local stored = {}
+  pcall(function()
+    local path = require("kulala.utils.fs").get_global_scripts_variables_file_path()
+    stored = require("kulala.utils.fs").read_json(path) or {}
+  end)
+  for _, name in ipairs(names_in_buffer(bufnr, "client%.global%.([%a_][%w_]*)%s*=[^=]")) do
+    local value = stored[name]
+    add(name, "set by a script" .. (value ~= nil and (" — now: " .. vim.inspect(value)) or ""))
+  end
+  for _, name in ipairs(names_in_buffer(bufnr, "client%.global%.set%(%s*[\"']([%w_%.%-]+)[\"']")) do
+    local value = stored[name]
+    add(name, "set by a script" .. (value ~= nil and (" — now: " .. vim.inspect(value)) or ""))
+  end
+  for name, value in pairs(stored) do
+    if type(name) == "string" and name:find("^%a") then
+      add(name, "stored by an earlier request — now: " .. vim.inspect(value))
+    end
+  end
+  return found
+end
+
 -- blink.cmp source
 local Source = {}
 Source.__index = Source
@@ -235,7 +268,7 @@ function Source.new()
 end
 
 function Source:enabled()
-  return vim.bo.filetype == "http" and M.in_lua_block(0, vim.api.nvim_win_get_cursor(0)[1])
+  return vim.bo.filetype == "http"
 end
 
 function Source:get_trigger_characters()
@@ -246,6 +279,22 @@ function Source:get_completions(ctx, callback)
   local bufnr = ctx.bufnr
   local lnum = ctx.cursor[1]
   local before = ctx.line:sub(1, ctx.cursor[2])
+  if not M.in_lua_block(bufnr, lnum) then
+    -- {{name}} in a URL, header or body: the variables scripts define (Kulala's own list has the
+    -- document, environment and request names, not these)
+    local items = {}
+    if before:find("{{%s*[%w_%.%-]*$") then
+      for _, variable in ipairs(script_variables(bufnr)) do
+        items[#items + 1] = {
+          label = variable.name,
+          kind = Kind.Variable,
+          labelDetails = { description = "script" },
+          documentation = { kind = "plaintext", value = variable.doc },
+        }
+      end
+    end
+    return callback({ items = items, is_incomplete_forward = false, is_incomplete_backward = false })
+  end
   local path = before:match("([%a_][%w_%.]*)%.[%w_]*$")
   local items = {}
   if path then
