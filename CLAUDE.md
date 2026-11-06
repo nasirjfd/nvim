@@ -38,3 +38,12 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 - `lazy-lock.json` records plugin versions and changes as a result of syncs. Keep it consistent with intentional spec changes; inspect diffs to it rather than reverting them as noise.
 - `exrc` is enabled: project-local `.nvim.lua` files execute on open. This repo's own `.nvim.lua` is a machine-specific override (template: `.nvim.lua.example`) — treat such files as executable config.
 - `ghostty/config` is the Ghostty terminal config, tracked here but unrelated to Neovim loading.
+
+## Herdr setup lives in this repo
+
+The user's herdr (terminal workspace manager) setup is versioned in `herdr/` so it is identical on every machine: `config.toml`, `zen.sh`, `send-ref.sh`, `ghostty-passthrough.conf`, `install.sh`, `README.md`.
+
+- This repo is the source of truth. On a new machine, pull and run `herdr/install.sh` (copies into `~/.config/herdr`, wires the Ghostty include, reloads herdr).
+- Whenever you change anything in `~/.config/herdr/` or `~/.config/ghostty/herdr-passthrough.conf`, copy the changed files back into `herdr/`, then commit and push to `main` in the same turn. Update `install.sh`/`README.md` if the file set changes.
+- Nvim-side pieces (`lua/core/herdr-ref.lua`, the `<D-l>` mapping in `lua/core/keymaps.lua`) live here too; `<leader>al` / `cmd+l` send `@file#Lx-y` to the herdr pane labelled `claude` via `send-ref.sh`.
+- Commit messages: one short line, never any `Co-Authored-By` or Claude attribution.
