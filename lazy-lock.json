@@ -21,7 +21,7 @@
   "mason.nvim": { "branch": "main", "commit": "2a6940af80375532e5e9e7c1f2fc6319a1b7a69d" },
   "mini.icons": { "branch": "main", "commit": "eab3e692d796d78ea6ffc978d8a380ff26fcf4e3" },
   "mini.nvim": { "branch": "main", "commit": "9b132c10d34675315327a7d58cc6684cb4e8faf2" },
-  "multi-repo-code-diff": { "branch": "main", "commit": "c0dca3c354dfa21292d91c46db7554077f078f82" },
+  "multi-repo-code-diff": { "branch": "main", "commit": "7b7a12994571202bc651c01fdbc84cd2d41a204b" },
   "multicursor.nvim": { "branch": "1.0", "commit": "c574bfc1f7e63dfea3e64b8453c9f7c660127238" },
   "nordic.nvim": { "branch": "main", "commit": "9fb62116b891184049c50ca6ffb0d3bc100a1a6e" },
   "nui.nvim": { "branch": "main", "commit": "10fc361835c856ba4233ef5ea135b919bf3dce97" },
