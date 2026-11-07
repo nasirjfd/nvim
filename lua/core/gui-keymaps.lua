@@ -222,7 +222,13 @@ local function undo_or_redo(redo)
     local session = lifecycle and lifecycle.get_session(tab)
     if session and session.git_root and session.modified_revision == nil and not session.merge then
       require("codediff.ui.view.actions.hunk").undo(tab, redo)
-    else
+    elseif session and session.merge and session.result_win and vim.api.nvim_win_is_valid(session.result_win) then
+      -- the merge view: the side columns are read-only, undo goes to the Result column
+      vim.api.nvim_win_call(session.result_win, function()
+        pcall(vim.cmd, redo and "silent normal! \x12" or "silent normal! u")
+      end)
+      require("codediff.ui.conflict").refresh(session)
+    elseif vim.bo.modifiable then
       vim.cmd(redo and "normal! \x12" or "normal! u")
     end
   end
