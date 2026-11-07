@@ -45,3 +45,8 @@ config-file = ?"/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
 # Option+Backspace deletes the previous word everywhere (shell, Neovim insert/command line, pickers):
 # sent as Ctrl+W directly, so it never arrives as a split <Esc> + <BS> that closes pickers
 keybind = alt+backspace=text:\x17
+
+# Persian / Arabic: Geeza Pro has every letter form (the default fallback draws blobs for the presentation forms)
+font-codepoint-map = U+0600-U+06FF=Geeza Pro
+font-codepoint-map = U+FB50-U+FDFF=Geeza Pro
+font-codepoint-map = U+FE70-U+FEFF=Geeza Pro
