@@ -1,6 +1,6 @@
 -- Persian / Arabic script in a terminal that cannot shape or reorder it.
 -- The terminal draws every letter in its isolated form, left to right. This module draws, on lines
--- other than the cursor line, the shaped letters (initial/medial/final forms, lam-alef ligatures) in
+-- other than the insert-mode cursor line, the shaped letters (initial/medial/final forms, lam-alef ligatures) in
 -- visual right-to-left order on top of the text. The buffer is never changed: the cursor line, yanks,
 -- search and files all keep the logical text. Toggle with :PersianShaping.
 local M = {}
@@ -282,8 +282,8 @@ function M.setup()
       if not line or not M.has_persian(line) then
         return
       end
-      -- the cursor line stays raw: that is the text you edit
-      if vim.api.nvim_get_current_win() == winid and vim.api.nvim_win_get_cursor(winid)[1] == row + 1 then
+      -- while typing, the cursor line stays raw: that is the text you edit
+      if vim.api.nvim_get_current_win() == winid and vim.fn.mode():sub(1, 1) == "i" and vim.api.nvim_win_get_cursor(winid)[1] == row + 1 then
         return
       end
       for _, run in ipairs(runs_of(line)) do
@@ -319,9 +319,9 @@ function M.setup()
     end,
   })
 
-  -- the cursor line is drawn raw: redraw when the cursor changes line
+  -- the cursor line is drawn raw in insert mode: redraw it when the mode or line changes
   local last = {}
-  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+  vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMovedI" }, {
     callback = function()
       if not enabled then
         return
@@ -330,9 +330,7 @@ function M.setup()
       local row = vim.api.nvim_win_get_cursor(win)[1] - 1
       local prev = last[win]
       last[win] = row
-      if prev and prev ~= row then
-        pcall(vim.api.nvim__redraw, { win = win, range = { math.min(prev, row), math.max(prev, row) + 1 } })
-      end
+      pcall(vim.api.nvim__redraw, { win = win, range = { math.min(prev or row, row), math.max(prev or row, row) + 1 } })
     end,
   })
 
