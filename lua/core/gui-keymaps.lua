@@ -242,6 +242,8 @@ map("i", "<D-S-z>", "<C-o><C-r>", { desc = "Redo" })
 -- delivers it as <M-BS>, or as <Esc><BS> when the two bytes are split.
 map("i", "<M-BS>", "<C-w>", { desc = "Delete Previous Word" })
 map("i", "<Esc><BS>", "<C-w>", { desc = "Delete Previous Word" })
+map("c", "<M-BS>", "<C-w>", { desc = "Delete Previous Word" })
+map("c", "<Esc><BS>", "<C-w>", { desc = "Delete Previous Word" })
 
 -- <Esc> just leaves insert mode, with the cursor left where it is (the one for visual mode is in
 -- keymaps.lua: after resizing a selection with Option+j/k it also restores the cursor)

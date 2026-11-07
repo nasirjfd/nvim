@@ -41,3 +41,7 @@ keybind = performable:super+c=copy_to_clipboard
 
 # gtab managed include
 config-file = ?"/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
+
+# Option+Backspace deletes the previous word everywhere (shell, Neovim insert/command line, pickers):
+# sent as Ctrl+W directly, so it never arrives as a split <Esc> + <BS> that closes pickers
+keybind = alt+backspace=text:\x17
