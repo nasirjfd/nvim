@@ -7,6 +7,6 @@ require("core.external-changes")
 require("core.sidebars")
 require("core.herdr-ref")
 require("core.cmdline-file")
-require("core.persian").setup()
+-- require("core.persian").setup() -- off: it broke typing in pickers
 require("core.file-cache").setup()
 require("core.lazy")
