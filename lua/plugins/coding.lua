@@ -52,6 +52,8 @@ return {
           ["<C-j>"] = { "select_next", "fallback" },
           ["<C-k>"] = { "select_prev", "fallback" },
           ["<CR>"] = { "accept", "fallback" },
+          -- Tab accepts the selected item like Enter does; with the menu closed it jumps through snippets
+          ["<Tab>"] = { "accept", "snippet_forward", "fallback" },
         },
         cmdline = {
           enabled = false,
