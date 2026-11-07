@@ -26,6 +26,15 @@ vim.opt.mousescroll = "ver:1,hor:2"                 -- Trackpad follows the fing
 vim.opt.clipboard = "unnamedplus"                   -- Use system clipboard for all yank/paste operations
 vim.opt.undofile = true                             -- Persist undo history to disk between sessions
 vim.opt.undodir = vim.fn.stdpath("data") .. "/undo" -- Directory to store undo files
+-- A directory buffer (`nvim .`) has no undo history: reading one fails with E823 ("Not an undo file: .../undo/.")
+vim.api.nvim_create_autocmd({ "BufReadPre", "BufNewFile" }, {
+  group = vim.api.nvim_create_augroup("NoUndoForDirectories", { clear = true }),
+  callback = function(args)
+    if args.match ~= "" and vim.fn.isdirectory(args.match) == 1 then
+      vim.bo[args.buf].undofile = false
+    end
+  end,
+})
 vim.opt.updatetime = 100                            -- Time in ms before CursorHold event triggers (affects plugins)
 vim.opt.timeoutlen = 1000                           -- Time in ms to wait for a mapped key sequence to complete
 vim.opt.confirm = true                              -- Prompt for confirmation instead of failing on unsaved changes

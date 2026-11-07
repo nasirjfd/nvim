@@ -180,6 +180,12 @@ vim.api.nvim_create_autocmd("VimEnter", {
               return
             end
             local picker = Snacks.explorer.open({ cwd = ev.file })
+            -- The directory buffer must never be (re)loaded: with 'undofile' that tries to read an
+            -- undo file named after the directory (E823 "Not an undo file: .../undo/." in UIEnter).
+            pcall(function()
+              vim.bo[ev.buf].undofile = false
+              vim.api.nvim_buf_set_name(ev.buf, "")
+            end)
             Snacks.bufdelete.delete(ev.buf)
             if picker then
               vim.schedule(function()
