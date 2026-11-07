@@ -262,8 +262,6 @@ return {
                   local input = Snacks.input({
                     prompt = "Paste as",
                     default = name,
-                    -- Enter must also confirm while the name is selected (Select mode)
-                    win = { keys = { ["<CR>"] = { "confirm", mode = { "n", "i", "s" } } } },
                   }, function(value)
                     value = value and vim.trim(value)
                     if not value or value == "" then
@@ -279,6 +277,10 @@ return {
                       if not vim.api.nvim_win_is_valid(input.win) then
                         return
                       end
+                      -- Enter must also confirm while the name is selected (Select mode)
+                      vim.keymap.set("s", "<CR>", function()
+                        input:execute("confirm")
+                      end, { buffer = input.buf })
                       vim.api.nvim_win_call(input.win, function()
                         vim.cmd("stopinsert")
                         vim.api.nvim_win_set_cursor(0, { 1, 0 })
