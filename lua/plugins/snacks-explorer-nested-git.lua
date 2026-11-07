@@ -105,7 +105,11 @@ return {
                 for _, list in pairs(nested) do
                   vim.list_extend(merged, list)
                 end
-                if _update(cwd, merged) and on_update then
+                local changed = _update(cwd, merged)
+                -- the status of `cwd` is in: the explorer can show its first, already filtered, list
+                _G.explorer_git_ready = _G.explorer_git_ready or {}
+                _G.explorer_git_ready[vim.fs.normalize(cwd)] = true
+                if changed and on_update then
                   on_update()
                 end
               end)

@@ -119,19 +119,42 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end,
 })
 
--- The explorer learns which entries git ignores from an asynchronous `git status`, so the first
--- time it opened it listed everything (ignored folders, build output) for a moment and then dropped
--- them. Running that status ahead of time, at startup and after every directory change, means the
--- first list is already the right one.
+-- The explorer learns which entries git ignores from an asynchronous `git status`, so it used to
+-- list everything (ignored folders, build output) for a moment and only then drop them, which looked
+-- like the first `h` / `l` "fixing" the list. Two things prevent that: the status is fetched ahead of
+-- time (at startup and after every directory change), and if it is still not in when the explorer
+-- opens, opening waits for it (at most 1.5 s) so the very first list is the right one.
 vim.api.nvim_create_autocmd({ "VimEnter", "DirChanged" }, {
   group = vim.api.nvim_create_augroup("ExplorerGitWarm", { clear = true }),
-  callback = function()
-    vim.defer_fn(function()
+  callback = function(ev)
+    vim.schedule(function()
       local ok, git = pcall(require, "snacks.explorer.git")
       if ok then
         pcall(git.update, vim.fn.getcwd(), { untracked = true })
       end
-    end, 500)
+      if ev.event == "VimEnter" then
+        -- after the nested-repo patch (snacks-explorer-nested-git.lua) has wrapped the git module
+        vim.schedule(function()
+          local ok_explorer, explorer = pcall(require, "snacks.explorer")
+          if not ok_explorer or explorer._waits_for_git then
+            return
+          end
+          explorer._waits_for_git = true
+          local open = explorer.open
+          explorer.open = function(opts)
+            local cwd = vim.fs.normalize((opts and opts.cwd) or vim.fn.getcwd())
+            _G.explorer_git_ready = _G.explorer_git_ready or {}
+            if not _G.explorer_git_ready[cwd] then
+              pcall(require("snacks.explorer.git").update, cwd, { untracked = true })
+              vim.wait(1500, function()
+                return _G.explorer_git_ready[cwd] == true
+              end, 10)
+            end
+            return open(opts)
+          end
+        end)
+      end
+    end)
   end,
 })
 
