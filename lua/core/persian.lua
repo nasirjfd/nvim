@@ -282,20 +282,31 @@ function M.setup()
       if not line or not M.has_persian(line) then
         return
       end
-      -- while typing, the cursor line stays raw: that is the text you edit
-      if vim.api.nvim_get_current_win() == winid and vim.fn.mode():sub(1, 1) == "i" and vim.api.nvim_win_get_cursor(winid)[1] == row + 1 then
-        return
+      -- Insert mode on this line: a run the caret is inside stays raw (that is what you edit); a run
+      -- the caret is right behind is shaped, with a drawn caret at its left end (where the next
+      -- letter of right-to-left text appears) because the terminal cursor cannot go there.
+      local caret
+      if vim.api.nvim_get_current_win() == winid and vim.fn.mode():sub(1, 1) == "i"
+        and vim.api.nvim_win_get_cursor(winid)[1] == row + 1 then
+        caret = vim.api.nvim_win_get_cursor(winid)[2]
       end
       for _, run in ipairs(runs_of(line)) do
-        for _, z in ipairs(run.zwnj) do
-          vim.api.nvim_buf_set_extmark(bufnr, ns, row, z[1], { end_col = z[2], conceal = "", ephemeral = true })
+        if not (caret and caret >= run.col and caret < run.end_col) then
+          for _, z in ipairs(run.zwnj) do
+            vim.api.nvim_buf_set_extmark(bufnr, ns, row, z[1], { end_col = z[2], conceal = "", ephemeral = true })
+          end
+          local text = { { run.text, "" } }
+          if caret == run.end_col then
+            local first = vim.fn.strcharpart(run.text, 0, 1)
+            text = { { first, "PersianCaret" }, { vim.fn.strcharpart(run.text, 1), "" } }
+          end
+          vim.api.nvim_buf_set_extmark(bufnr, ns, row, run.col, {
+            virt_text = text,
+            virt_text_pos = "overlay",
+            hl_mode = "combine",
+            ephemeral = true,
+          })
         end
-        vim.api.nvim_buf_set_extmark(bufnr, ns, row, run.col, {
-          virt_text = { { run.text, "" } },
-          virt_text_pos = "overlay",
-          hl_mode = "combine",
-          ephemeral = true,
-        })
       end
     end,
   })
@@ -320,12 +331,39 @@ function M.setup()
   })
 
   -- the cursor line is drawn raw in insert mode: redraw it when the mode or line changes
+  vim.api.nvim_set_hl(0, "PersianCaret", { reverse = true })
+  vim.api.nvim_set_hl(0, "PersianCaretHide", { blend = 100, nocombine = true })
+  local saved_cursor = vim.o.guicursor
+  local hidden = false
+  local function sync_cursor()
+    local want = false
+    if enabled and vim.fn.mode():sub(1, 1) == "i" then
+      local line = vim.api.nvim_get_current_line()
+      if M.has_persian(line) then
+        local col = vim.api.nvim_win_get_cursor(0)[2]
+        for _, run in ipairs(runs_of(line)) do
+          if run.end_col == col then
+            want = true
+          end
+        end
+      end
+    end
+    if want and not hidden then
+      saved_cursor = vim.o.guicursor
+      vim.o.guicursor = "a:PersianCaretHide"
+      hidden = true
+    elseif not want and hidden then
+      vim.o.guicursor = saved_cursor
+      hidden = false
+    end
+  end
   local last = {}
-  vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMovedI" }, {
+  vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMovedI", "TextChangedI", "InsertEnter", "InsertLeave" }, {
     callback = function()
       if not enabled then
         return
       end
+      sync_cursor()
       local win = vim.api.nvim_get_current_win()
       local row = vim.api.nvim_win_get_cursor(win)[1] - 1
       local prev = last[win]
