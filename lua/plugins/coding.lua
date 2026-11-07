@@ -103,7 +103,7 @@ return {
         "html", "javascript", "json", "latex", "lua", "luadoc", "luap",
         "markdown", "markdown_inline", "php", "phpdoc", "proto", "python", "query",
         "regex", "rust", "scss", "svelte", "swift", "terraform",
-        "tsx", "typescript", "vim", "vimdoc", "vue", "yaml", "zig",
+        "tsx", "twig", "typescript", "vim", "vimdoc", "vue", "yaml", "zig",
       }
       require("nvim-treesitter").install(parsers)
 
