@@ -409,7 +409,16 @@ vim.keymap.set("n", "<leader>ga", function()
   )
 end, { desc = "Git all repos" })
 
-vim.keymap.set("n", "gh", vim.diagnostic.open_float)
+-- gh describes the element under the cursor (LSP hover: type, signature, docs); without a language
+-- server that can hover it shows the diagnostics of the line instead
+vim.keymap.set("n", "gh", function()
+  local clients = vim.lsp.get_clients({ bufnr = 0, method = "textDocument/hover" })
+  if #clients > 0 then
+    vim.lsp.buf.hover({ border = "rounded", max_height = 25, max_width = 120 })
+  else
+    vim.diagnostic.open_float()
+  end
+end, { desc = "Describe the element (hover)" })
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- Reload Config
