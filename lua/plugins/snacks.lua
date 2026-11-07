@@ -170,24 +170,40 @@ vim.api.nvim_create_autocmd("VimEnter", {
       local group = vim.api.nvim_create_augroup("ExplorerOpenDirectory", { clear = true })
       local function handle(ev)
         if ev.file ~= "" and vim.fn.isdirectory(ev.file) == 1 then
-          -- the open patch above is installed one tick after this handler on startup, so wait here too
+          -- The open patch above is installed one tick after this handler on startup, so wait for the
+          -- git status here too -- without blocking: a blocking wait lets UIEnter run in the middle of
+          -- startup (E823 "Not an undo file: .../undo/." for the directory buffer).
           local cwd = vim.fs.normalize(ev.file)
           _G.explorer_git_ready = _G.explorer_git_ready or {}
-          if not _G.explorer_git_ready[cwd] then
-            pcall(require("snacks.explorer.git").update, cwd, { untracked = true })
-            vim.wait(1500, function()
-              return _G.explorer_git_ready[cwd] == true
-            end, 10)
+          local function open()
+            if not vim.api.nvim_buf_is_valid(ev.buf) then
+              return
+            end
+            local picker = Snacks.explorer.open({ cwd = ev.file })
+            Snacks.bufdelete.delete(ev.buf)
+            if picker then
+              vim.schedule(function()
+                if not picker.closed then
+                  picker:focus()
+                end
+              end)
+            end
           end
-          local picker = Snacks.explorer.open({ cwd = ev.file })
-          Snacks.bufdelete.delete(ev.buf)
-          if picker then
-            vim.schedule(function()
-              if not picker.closed then
-                picker:focus()
-              end
-            end)
+          if _G.explorer_git_ready[cwd] then
+            open()
+            return
           end
+          pcall(require("snacks.explorer.git").update, cwd, { untracked = true })
+          local waited = 0
+          local function poll()
+            waited = waited + 10
+            if _G.explorer_git_ready[cwd] or waited >= 1500 then
+              open()
+            else
+              vim.defer_fn(poll, 10)
+            end
+          end
+          vim.defer_fn(poll, 10)
         end
       end
       -- the directory given on the command line is already the current buffer
