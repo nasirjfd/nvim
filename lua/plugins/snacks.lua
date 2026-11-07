@@ -119,6 +119,22 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end,
 })
 
+-- The explorer learns which entries git ignores from an asynchronous `git status`, so the first
+-- time it opened it listed everything (ignored folders, build output) for a moment and then dropped
+-- them. Running that status ahead of time, at startup and after every directory change, means the
+-- first list is already the right one.
+vim.api.nvim_create_autocmd({ "VimEnter", "DirChanged" }, {
+  group = vim.api.nvim_create_augroup("ExplorerGitWarm", { clear = true }),
+  callback = function()
+    vim.defer_fn(function()
+      local ok, git = pcall(require, "snacks.explorer.git")
+      if ok then
+        pcall(git.update, vim.fn.getcwd(), { untracked = true })
+      end
+    end, 500)
+  end,
+})
+
 return {
   "folke/snacks.nvim",
   priority = 1000,
