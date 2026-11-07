@@ -230,6 +230,22 @@ return {
             -- Cmd+V in the explorer: paste the copied files into the directory under the cursor. A
             -- file pasted into the folder it came from (or onto a name that exists) asks for the new
             -- name first, with the current name filled in, like JetBrains.
+            -- `r`: the name box opens with the cursor before the extension (nothing selected)
+            explorer_rename = function(picker, item)
+              require("snacks.explorer.actions").actions.explorer_rename(picker, item)
+              vim.schedule(function()
+                local win = vim.api.nvim_get_current_win()
+                if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "snacks_input" then
+                  return
+                end
+                local text = vim.api.nvim_get_current_line()
+                local name = text:match("[^/]*$") or text
+                local stem = name:match("^(.+)%.[^.]+$")
+                if stem then
+                  pcall(vim.api.nvim_win_set_cursor, win, { 1, #text - #name + #stem })
+                end
+              end)
+            end,
             explorer_paste_named = function(picker)
               local Tree = require("snacks.explorer.tree")
               local Actions = require("snacks.explorer.actions")
