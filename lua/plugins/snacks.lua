@@ -308,6 +308,11 @@ return {
             -- Cmd+V in the explorer: paste the copied files into the directory under the cursor. A
             -- file pasted into the folder it came from (or onto a name that exists) asks for the new
             -- name first, with the current name filled in, like JetBrains.
+            -- <C-q> in the explorer quits Neovim, as in every other window (the pickers' <C-q> only
+            -- closes the picker, which left a blank buffer and needed a second <C-q>)
+            quit_nvim = function()
+              vim.cmd("confirm qa")
+            end,
             -- `r`: the name box opens with the cursor before the extension (nothing selected)
             explorer_rename = function(picker, item)
               require("snacks.explorer.actions").actions.explorer_rename(picker, item)
@@ -422,9 +427,15 @@ return {
             end,
           },
           win = {
-            input = { keys = { ["<CR>"] = { "search_confirm", mode = { "n", "i" } } } },
+            input = {
+              keys = {
+                ["<CR>"] = { "search_confirm", mode = { "n", "i" } },
+                ["<C-q>"] = { "quit_nvim", mode = { "n", "i" } },
+              },
+            },
             list = {
               keys = {
+                ["<C-q>"] = "quit_nvim",
                 ["<D-c>"] = { "explorer_yank", mode = { "n", "x" } },
                 ["<D-v>"] = "explorer_paste_named",
               },
