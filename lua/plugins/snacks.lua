@@ -259,20 +259,33 @@ return {
                   paste(index + 1)
                 end
                 if vim.fs.dirname(from) == dir or vim.uv.fs_stat(dir .. "/" .. name) then
-                  local input = Snacks.input({ prompt = "Paste as", default = name }, function(value)
+                  local input = Snacks.input({
+                    prompt = "Paste as",
+                    default = name,
+                    -- Enter must also confirm while the name is selected (Select mode)
+                    win = { keys = { ["<CR>"] = { "confirm", mode = { "n", "i", "s" } } } },
+                  }, function(value)
                     value = value and vim.trim(value)
                     if not value or value == "" then
                       return finish()
                     end
                     copy(value)
                   end)
-                  -- cursor before the extension, so the name can be typed over (as in JetBrains)
+                  -- The name before the extension is selected (Select mode): typing replaces it and
+                  -- the extension stays, as in JetBrains
                   local stem = name:match("^(.+)%.[^.]+$")
                   if stem and input and input.win then
                     vim.schedule(function()
-                      if vim.api.nvim_win_is_valid(input.win) then
-                        pcall(vim.api.nvim_win_set_cursor, input.win, { 1, #stem })
+                      if not vim.api.nvim_win_is_valid(input.win) then
+                        return
                       end
+                      vim.api.nvim_win_call(input.win, function()
+                        vim.cmd("stopinsert")
+                        vim.api.nvim_win_set_cursor(0, { 1, 0 })
+                        local more = vim.fn.strchars(stem) - 1
+                        vim.cmd("normal! v" .. (more > 0 and (more .. "l") or ""))
+                        vim.api.nvim_feedkeys(vim.keycode("<C-g>"), "n", false)
+                      end)
                     end)
                   end
                 else
