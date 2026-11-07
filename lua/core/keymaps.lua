@@ -481,3 +481,26 @@ vim.paste = function(lines, phase)
   end
   return paste(lines, phase)
 end
+
+-- <leader>fl: open the project's local .nvim.lua (in the current directory, where exrc loads it); when
+-- it does not exist, offer to create it there.
+vim.keymap.set("n", "<leader>fl", function()
+  local path = vim.fn.getcwd() .. "/.nvim.lua"
+  if vim.fn.filereadable(path) == 0 then
+    local choice = vim.fn.confirm(("No .nvim.lua in %s. Create it?"):format(vim.fn.fnamemodify(vim.fn.getcwd(), ":~")), "&Yes\n&No", 1)
+    if choice ~= 1 then
+      return
+    end
+    vim.fn.writefile({ "-- Local config for this project (runs when Neovim starts here, via exrc)", "" }, path)
+  end
+  vim.cmd("edit " .. vim.fn.fnameescape(path))
+end, { desc = "Open the project's local .nvim.lua" })
+
+-- Saving a .nvim.lua changes its exrc trust hash: trust it again so the next start does not ask.
+vim.api.nvim_create_autocmd("BufWritePost", {
+  group = vim.api.nvim_create_augroup("TrustLocalNvimLua", { clear = true }),
+  pattern = ".nvim.lua",
+  callback = function(ev)
+    pcall(vim.cmd, "silent trust " .. vim.fn.fnameescape(ev.file))
+  end,
+})
