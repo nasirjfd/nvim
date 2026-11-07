@@ -30,7 +30,8 @@ vim.opt.undodir = vim.fn.stdpath("data") .. "/undo" -- Directory to store undo f
 vim.api.nvim_create_autocmd({ "BufReadPre", "BufNewFile" }, {
   group = vim.api.nvim_create_augroup("NoUndoForDirectories", { clear = true }),
   callback = function(args)
-    if args.match ~= "" and vim.fn.isdirectory(args.match) == 1 then
+    -- "." also when the shell sits in a directory that was deleted (it is not a directory then)
+    if args.match == "." or (args.match ~= "" and vim.fn.isdirectory(args.match) == 1) then
       vim.bo[args.buf].undofile = false
     end
   end,

@@ -19,6 +19,10 @@ end
 --- Options of the file picker for the current folder (what <leader><space> passes to the picker).
 function M.opts()
   local cwd = vim.fn.getcwd()
+  if cwd == "" then
+    -- the shell's folder was deleted under us (nvim started in a removed directory)
+    cwd = vim.uv.os_homedir()
+  end
   -- A cwd ignored by its parent repo (e.g. vendor/) would list nothing, so skip the parent's ignore
   -- files there; its own .gitignore files still apply. Looked up once per folder, not per open.
   if ignored_parent[cwd] == nil then
