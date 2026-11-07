@@ -158,6 +158,43 @@ vim.api.nvim_create_autocmd({ "VimEnter", "DirChanged" }, {
   end,
 })
 
+-- Opening a directory shows the explorer on it (what snacks' `replace_netrw` does), but through the
+-- patched `open`, which first waits for the git status: with `nvim .` in vendor/ the explorer used
+-- to appear with every folder of the directory (117 entries) and only the 3 un-ignored ones after the
+-- first `h` / `l` made it redraw.
+vim.api.nvim_create_autocmd("VimEnter", {
+  group = vim.api.nvim_create_augroup("ExplorerGitWarm", { clear = false }),
+  callback = function()
+    vim.schedule(function()
+      pcall(vim.api.nvim_del_augroup_by_name, "FileExplorer") -- netrw
+      local group = vim.api.nvim_create_augroup("ExplorerOpenDirectory", { clear = true })
+      local function handle(ev)
+        if ev.file ~= "" and vim.fn.isdirectory(ev.file) == 1 then
+          local starting = vim.v.vim_did_enter == 0
+          local picker = Snacks.explorer.open({ cwd = ev.file })
+          Snacks.bufdelete.delete(ev.buf)
+          if picker then
+            vim.schedule(function()
+              if not picker.closed then
+                picker:focus()
+              end
+            end)
+          end
+        end
+      end
+      -- the directory given on the command line is already the current buffer
+      for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        local name = vim.api.nvim_buf_get_name(buf)
+        if name ~= "" and vim.fn.isdirectory(name) == 1 then
+          handle({ file = name, buf = buf })
+          break
+        end
+      end
+      vim.api.nvim_create_autocmd("BufEnter", { group = group, callback = handle })
+    end)
+  end,
+})
+
 return {
   "folke/snacks.nvim",
   priority = 1000,
@@ -166,7 +203,9 @@ return {
   opts = {
     bigfile = { enabled = true },
     dashboard = { enabled = true },
-    explorer = { enabled = true },
+    -- replace_netrw is off: opening a directory (`nvim .`, `:e dir`) is handled below, so that it goes
+    -- through the same wait for the git status as every other way of opening the explorer
+    explorer = { enabled = true, replace_netrw = false },
     image = {
       enabled = true,
       doc = {

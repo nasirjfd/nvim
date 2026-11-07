@@ -29,10 +29,14 @@ return {
       callback = function()
         local Git = require("snacks.explorer.git")
         local update, _update = Git.update, Git._update
-        local on_update ---@type fun()?
+        -- every caller that wants to know when the status is in (the explorer asks on each open; an
+        -- earlier warm-up call must not make it forget)
+        local waiting = {} ---@type fun()[]
 
         Git.update = function(cwd, opts)
-          on_update = opts and opts.on_update
+          if opts and opts.on_update then
+            waiting[#waiting + 1] = opts.on_update
+          end
           return update(cwd, opts)
         end
 
@@ -109,8 +113,12 @@ return {
                 -- the status of `cwd` is in: the explorer can show its first, already filtered, list
                 _G.explorer_git_ready = _G.explorer_git_ready or {}
                 _G.explorer_git_ready[vim.fs.normalize(cwd)] = true
-                if changed and on_update then
-                  on_update()
+                local callbacks = waiting
+                waiting = {}
+                if changed then
+                  for _, callback in ipairs(callbacks) do
+                    callback()
+                  end
                 end
               end)
             end
