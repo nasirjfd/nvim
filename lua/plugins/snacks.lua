@@ -235,7 +235,9 @@ return {
         -- <Esc> closes the picker, unless a <BS> follows right away: some terminals deliver
         -- Option+Backspace as <Esc><BS>, which should delete the previous word instead.
         close_or_delete_word = function(picker)
-          vim.wait(30, function()
+          -- Option+Backspace may reach Neovim as <Esc> and, a little later (herdr relays it in two
+          -- pieces), <BS>: give the second half time to arrive before treating this as "close"
+          vim.wait(120, function()
             return vim.fn.getchar(1) ~= 0
           end, 5)
           if vim.fn.getchar(1) ~= 0 then
