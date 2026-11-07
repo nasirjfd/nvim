@@ -21,8 +21,17 @@ local function hide()
   shown = nil
 end
 
+-- Nothing in a diff view: the buffers there are virtual and the view has its own layout
+local function in_diff()
+  local session = package.loaded["codediff.ui.lifecycle.session"]
+  return session ~= nil and session.get_active_diffs()[vim.api.nvim_get_current_tabpage()] ~= nil
+end
+
 local function render()
   if vim.fn.mode() == "c" or vim.fn.getcmdwintype() ~= "" then
+    return hide()
+  end
+  if in_diff() then
     return hide()
   end
   local ok, text = pcall(_G.title_string)
@@ -67,6 +76,24 @@ function M.setup()
     { "BufEnter", "WinEnter", "TabEnter", "BufModifiedSet", "BufFilePost", "DirChanged", "VimResized", "InsertLeave" },
     { group = group, callback = vim.schedule_wrap(render) }
   )
+  -- The diff view switches files without a buffer event of its own
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = { "CodeDiffOpen", "CodeDiffClose", "CodeDiffFileSelect" },
+    callback = vim.schedule_wrap(render),
+  })
+  -- Esc out of the command line (nothing was run, so there is no message to read): the name is back at once
+  vim.api.nvim_create_autocmd("CmdlineLeave", {
+    group = group,
+    callback = function()
+      if vim.v.event.abort then
+        vim.defer_fn(function()
+          shown = nil
+          render()
+        end, 30)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("CmdlineEnter", {
     group = group,
     callback = function()
