@@ -170,7 +170,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
       local group = vim.api.nvim_create_augroup("ExplorerOpenDirectory", { clear = true })
       local function handle(ev)
         if ev.file ~= "" and vim.fn.isdirectory(ev.file) == 1 then
-          local starting = vim.v.vim_did_enter == 0
+          -- the open patch above is installed one tick after this handler on startup, so wait here too
+          local cwd = vim.fs.normalize(ev.file)
+          _G.explorer_git_ready = _G.explorer_git_ready or {}
+          if not _G.explorer_git_ready[cwd] then
+            pcall(require("snacks.explorer.git").update, cwd, { untracked = true })
+            vim.wait(1500, function()
+              return _G.explorer_git_ready[cwd] == true
+            end, 10)
+          end
           local picker = Snacks.explorer.open({ cwd = ev.file })
           Snacks.bufdelete.delete(ev.buf)
           if picker then
