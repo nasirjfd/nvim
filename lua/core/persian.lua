@@ -275,7 +275,7 @@ function M.setup()
   vim.o.arabicshape = false
   vim.api.nvim_set_decoration_provider(ns, {
     on_win = function(_, _, bufnr)
-      return enabled and vim.bo[bufnr].buftype ~= "terminal"
+      return enabled and vim.bo[bufnr].buftype == ""
     end,
     on_line = function(_, winid, bufnr, row)
       local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1]
@@ -359,8 +359,9 @@ function M.setup()
   end
   local last = {}
   vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMovedI", "TextChangedI", "InsertEnter", "InsertLeave" }, {
-    callback = function()
-      if not enabled then
+    callback = function(args)
+      -- only ordinary file buffers: prompts (pickers, input boxes) must never be touched
+      if not enabled or vim.bo[args.buf].buftype ~= "" then
         return
       end
       sync_cursor()
