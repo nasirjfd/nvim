@@ -495,6 +495,44 @@ return {
       end,
       desc = "Grep",
     },
+    -- Grep with the current visual selection typed into the search (single line); plain grep otherwise
+    {
+      "<leader>/",
+      function()
+        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        vim.cmd("normal! \27")
+        Snacks.picker.grep({ pattern = text:match("^[^\n]*") })
+      end,
+      mode = "x",
+      desc = "Grep selection",
+    },
+    {
+      "<D-S-f>",
+      function()
+        Snacks.picker.grep()
+      end,
+      desc = "Grep",
+    },
+    {
+      "<D-S-f>",
+      function()
+        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        vim.cmd("normal! \27")
+        Snacks.picker.grep({ pattern = text:match("^[^\n]*") })
+      end,
+      mode = "x",
+      desc = "Grep selection",
+    },
+    {
+      "<D-F>",
+      function()
+        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        vim.cmd("normal! \27")
+        Snacks.picker.grep({ pattern = text:match("^[^\n]*") })
+      end,
+      mode = "x",
+      desc = "Grep selection",
+    },
     {
       "<leader>.",
       function()

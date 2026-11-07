@@ -53,3 +53,6 @@ font-codepoint-map = U+FE70-U+FEFF=Geeza Pro
 
 # Fullscreen leaves a sub-cell strip at the bottom: paint it with the edge cells color instead of the theme background
 window-padding-color = extend
+
+# cmd+shift+f: grep (with the selection) in Neovim (see lua/plugins/snacks.lua)
+keybind = super+shift+f=csi:102;10u
