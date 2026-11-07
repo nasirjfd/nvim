@@ -50,3 +50,6 @@ keybind = alt+backspace=text:\x17
 font-codepoint-map = U+0600-U+06FF=Geeza Pro
 font-codepoint-map = U+FB50-U+FDFF=Geeza Pro
 font-codepoint-map = U+FE70-U+FEFF=Geeza Pro
+
+# Fullscreen leaves a sub-cell strip at the bottom: paint it with the edge cells color instead of the theme background
+window-padding-color = extend
