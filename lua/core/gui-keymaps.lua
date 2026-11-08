@@ -145,10 +145,16 @@ map("n", "<D-/>", comment_line_down, { desc = "Comment Line + Down" })
 map("x", "<D-/>", comment_selection, { desc = "Comment Selection" })
 
 -- shift+cmd+g -> git panel
--- Toggles: closes the Source Control tab when it is the current one, jumps to it when open elsewhere.
+-- Toggles: hides the Source Control tab when it is the current one (back to the tab it was opened
+-- from), shows it again when hidden. It is never closed, so the repository list keeps its rows and
+-- positions, and its file watcher keeps it current while hidden (the tab line is off, so a hidden
+-- tab is invisible). `q` in the pane still closes it for good.
+local git_return_tab
 local function toggle_git()
+  local current = vim.api.nvim_get_current_tabpage()
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   if not lifecycle then
+    git_return_tab = current
     vim.cmd("CodeDiff scm")
     return
   end
@@ -156,11 +162,17 @@ local function toggle_git()
     local panel = lifecycle.get_panel(tab)
     return panel and panel.data and panel.data.kind == "scm"
   end
-  local current = vim.api.nvim_get_current_tabpage()
   if is_scm(current) then
-    lifecycle.close(current)
+    if git_return_tab and git_return_tab ~= current and vim.api.nvim_tabpage_is_valid(git_return_tab) then
+      vim.api.nvim_set_current_tabpage(git_return_tab)
+    elseif #vim.api.nvim_list_tabpages() > 1 then
+      vim.cmd("tabprevious")
+    else
+      lifecycle.close(current)
+    end
     return
   end
+  git_return_tab = current
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     if is_scm(tab) then
       vim.api.nvim_set_current_tabpage(tab)
