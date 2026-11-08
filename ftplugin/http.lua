@@ -62,6 +62,27 @@ k("\\b", "scratchpad", "Scratchpad")
 k("\\t", "toggle_view", "Toggle headers/body")
 k("\\q", "close", "Close result")
 
+-- Esc in the request file hides the response window when one is shown; otherwise it does what Esc
+-- does everywhere else (close the gh popup, clear cursors, clear the search highlight).
+vim.keymap.set("n", "<Esc>", function()
+  local ok, ui = pcall(require, "kulala.ui")
+  if ok and ui.get_kulala_window() then
+    ui.close_kulala_buffer()
+    return
+  end
+  for _, map in ipairs(vim.api.nvim_get_keymap("n")) do
+    if map.lhs == "<Esc>" then
+      if map.callback then
+        map.callback()
+      elseif map.rhs then
+        vim.api.nvim_feedkeys(vim.keycode(map.rhs), "n", false)
+      end
+      return
+    end
+  end
+  vim.cmd("nohlsearch")
+end, { buffer = true, silent = true, desc = "Kulala: hide the response" })
+
 -- gd on a {{variable}} goes to where it is defined. Kulala's built-in language server has no
 -- "definition" handler, so gd did nothing here. A variable is defined by `@name = value` in the file,
 -- by a request called `# @name name` (for {{name.response…}}), or by a key in the nearest

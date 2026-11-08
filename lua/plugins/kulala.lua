@@ -23,6 +23,16 @@ return {
     end,
     opts = {
       global_keymaps = false, -- our keys live in ftplugin/http.lua (buffer-local)
+      -- Keys of the response window, added to Kulala's own (q closes it): Esc hides it too
+      kulala_keymaps = {
+        ["Close (Esc)"] = {
+          "<Esc>",
+          function()
+            require("kulala.ui").close_kulala_buffer()
+          end,
+          prefix = false,
+        },
+      },
       default_env = "dev", -- environment name in http-client.env.json
       lsp = { enable = true },
       ui = {
