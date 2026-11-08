@@ -104,6 +104,40 @@ local function scan(dir, done)
   )
 end
 
+-- The preview shows the file folded at each request ("### name"), one line per request: its name,
+-- then its method and URL, so every request of the file is seen at once.
+function _G.HttpFilesFoldText()
+  local first = vim.fn.getline(vim.v.foldstart)
+  local request
+  for lnum = vim.v.foldstart + 1, math.min(vim.v.foldend, vim.v.foldstart + 8) do
+    local line = vim.fn.getline(lnum)
+    local method = line:match("^%u+%s+%S+")
+    if method then
+      request = method
+      break
+    end
+  end
+  return { { first, "Title" }, { request and ("   " .. request) or "", "Comment" } }
+end
+
+local function folded_preview(ctx)
+  Snacks.picker.preview.file(ctx)
+  local win = ctx.win
+  if not (win and vim.api.nvim_win_is_valid(win)) then
+    return
+  end
+  local wo = vim.wo[win]
+  wo.foldmethod = "expr"
+  wo.foldexpr = "getline(v:lnum) =~# '^###' ? '>1' : '='"
+  wo.foldtext = "v:lua.HttpFilesFoldText()"
+  wo.foldlevel = 0
+  wo.foldenable = true
+  wo.fillchars = "fold: "
+  vim.api.nvim_win_call(win, function()
+    vim.cmd("normal! zXgg")
+  end)
+end
+
 function M.pick()
   if vim.fn.executable("fd") == 0 then
     vim.notify("fd is not installed (brew install fd)", vim.log.levels.WARN)
@@ -120,7 +154,7 @@ function M.pick()
         return items(dir, skip)
       end,
       format = "file",
-      preview = "file",
+      preview = folded_preview,
       show_empty = true,
       -- keep this order (last opened first) until something is typed
       matcher = { sort_empty = false, frecency = false },
