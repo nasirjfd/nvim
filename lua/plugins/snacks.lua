@@ -54,7 +54,7 @@ local lsp_layout = {
     -- The dimmed backdrop sits below the explorer sidebar (its windows are at zindex 30-33), which
     -- is a float too: above it, the backdrop painted over the sidebar and it looked empty while a
     -- picker was open.
-    backdrop = { blend = 60, win = { zindex = 20 } },
+    backdrop = { blend = require("core.modal-backdrop").blend, win = { zindex = 20 } },
     row = 0.06, -- a little up from the center
     width = 0.7,
     min_width = 80,

@@ -42,6 +42,7 @@ require("lazy").setup({ import = "plugins" }, {
   },
   ui = {
     -- border = "rounded"
+    backdrop = require("core.modal-backdrop").blend, -- same darkness as every other modal
   },
   performance = {
     rtp = {
