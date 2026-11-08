@@ -50,7 +50,7 @@ map("n", "<D-b>", function()
   Snacks.explorer()
 end, { desc = "Toggle Sidebar" })
 
--- cmd+shift+e -> toggle the file explorer (workbench.view.explorer), always, also inside a codediff tab
+-- cmd+shift+e -> focus the file explorer (workbench.view.explorer), always, also inside a codediff tab
 -- (cmd+b is the one that toggles that tab's own sidebar). It focuses the explorer of this tab, opening
 -- it when needed, and reveals the current file when the tab is an ordinary one.
 local function focus_explorer()
@@ -69,15 +69,8 @@ local function focus_explorer()
   local buf = vim.api.nvim_get_current_buf()
   local ordinary = vim.bo[buf].buftype == "" and vim.api.nvim_buf_get_name(buf) ~= ""
   if explorer then
-    -- Already focused: toggle it away instead of doing nothing.
-    local cur = vim.api.nvim_get_current_win()
-    local list_win = explorer.list and explorer.list.win and explorer.list.win.win
-    local input_win = explorer.input and explorer.input.win and explorer.input.win.win
-    if cur == list_win or cur == input_win then
-      explorer:close()
-    else
-      explorer:focus("list")
-    end
+    -- Already open: only move the cursor into it, never close it.
+    explorer:focus("list")
   elseif ordinary and not in_codediff then
     explorer = Snacks.explorer.reveal()
     if explorer then
@@ -88,7 +81,7 @@ local function focus_explorer()
   end
 end
 
-map("n", "<D-S-e>", focus_explorer, { desc = "Toggle Explorer" })
+map("n", "<D-S-e>", focus_explorer, { desc = "Focus Explorer" })
 
 -- cmd+f4 -> close buffer
 map("n", "<D-F4>", function()
@@ -145,36 +138,19 @@ map("n", "<D-/>", comment_line_down, { desc = "Comment Line + Down" })
 map("x", "<D-/>", comment_selection, { desc = "Comment Selection" })
 
 -- shift+cmd+g -> git panel
--- Toggles: hides the Source Control tab when it is the current one (back to the tab it was opened
--- from), shows it again when hidden. It is never closed, so the repository list keeps its rows and
--- positions, and its file watcher keeps it current while hidden (the tab line is off, so a hidden
--- tab is invisible). `q` in the pane still closes it for good.
-local git_return_tab
-local function toggle_git()
-  local current = vim.api.nvim_get_current_tabpage()
+-- Focuses the Source Control pane, never toggles it: jumps to its tab and puts the cursor in it,
+-- opening it when there is none. The tab is never closed by this key, so the repository list keeps
+-- its rows and positions and its file watcher keeps it current (the tab line is off, so a tab out of
+-- view is invisible). `q` in the pane closes it for good.
+local function focus_git()
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   if not lifecycle then
-    git_return_tab = current
     vim.cmd("CodeDiff scm")
     return
   end
-  local function is_scm(tab)
-    local panel = lifecycle.get_panel(tab)
-    return panel and panel.data and panel.data.kind == "scm"
-  end
-  if is_scm(current) then
-    if git_return_tab and git_return_tab ~= current and vim.api.nvim_tabpage_is_valid(git_return_tab) then
-      vim.api.nvim_set_current_tabpage(git_return_tab)
-    elseif #vim.api.nvim_list_tabpages() > 1 then
-      vim.cmd("tabprevious")
-    else
-      lifecycle.close(current)
-    end
-    return
-  end
-  git_return_tab = current
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-    if is_scm(tab) then
+    local panel = lifecycle.get_panel(tab)
+    if panel and panel.data and panel.data.kind == "scm" then
       vim.api.nvim_set_current_tabpage(tab)
       -- cmd+shift+e in the git tab swaps its sidebar for the file explorer: bring the git one back,
       -- since that is what this key is for.
@@ -196,7 +172,7 @@ local function toggle_git()
   end
   vim.cmd("CodeDiff scm")
 end
-map("n", "<D-S-g>", toggle_git, { desc = "Toggle Git" })
+map("n", "<D-S-g>", focus_git, { desc = "Focus Git" })
 
 -- cmd+ctrl+j / cmd+ctrl+k -> insert cursor below/above (multicursor.nvim)
 map({ "n", "x" }, "<D-C-j>", function()
