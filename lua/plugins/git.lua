@@ -276,6 +276,15 @@ return {
 
       local group = vim.api.nvim_create_augroup("UserCodeDiff", { clear = true })
 
+      -- The selected file in the git pane uses the file explorer's colors: its cursor line while
+      -- the pane has the cursor, the subtle editor cursor line once the cursor is elsewhere.
+      local function selection_colors()
+        vim.api.nvim_set_hl(0, "CodeDiffExplorerSelected", { link = "SnacksPickerListCursorLine" })
+        vim.api.nvim_set_hl(0, "CodeDiffExplorerSelectedNC", { link = "CursorLine" })
+      end
+      selection_colors()
+      vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = selection_colors })
+
       -- Preview the file under the cursor as you move through the file list
       -- (no <CR> needed).
       local function preview_on_move(bufnr, panel)
