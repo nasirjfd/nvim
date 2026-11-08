@@ -176,6 +176,21 @@ local function toggle_git()
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     if is_scm(tab) then
       vim.api.nvim_set_current_tabpage(tab)
+      -- cmd+shift+e in the git tab swaps its sidebar for the file explorer: bring the git one back,
+      -- since that is what this key is for.
+      for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
+        local win = picker.list and picker.list.win and picker.list.win.win
+        if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == tab then
+          picker:close()
+        end
+      end
+      local view = lifecycle.get_panel_view(tab)
+      if view and view.is_hidden then
+        require("codediff.ui.explorer").toggle_visibility(view)
+      end
+      if view and view.winid and vim.api.nvim_win_is_valid(view.winid) then
+        vim.api.nvim_set_current_win(view.winid)
+      end
       return
     end
   end
