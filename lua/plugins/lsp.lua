@@ -343,26 +343,9 @@ vim.api.nvim_create_autocmd("LspAttach", {
       vim.lsp.codelens.enable(true, { bufnr = bufnr })
     end
 
-    -- Document highlight on cursor hold
-    if client.server_capabilities.documentHighlightProvider then
-      local group = vim.api.nvim_create_augroup("LspDocumentHighlight_" .. bufnr, { clear = true })
-      vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
-        buffer = bufnr,
-        group = group,
-        callback = function()
-          -- not while selecting: the selection highlight owns that (it flashed with both)
-          if vim.fn.mode():match("^[vV\22sS\19]") then
-            return
-          end
-          vim.lsp.buf.document_highlight()
-        end,
-      })
-      vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
-        buffer = bufnr,
-        group = group,
-        callback = vim.lsp.buf.clear_references,
-      })
-    end
+    -- Highlighting the word under the cursor is snacks.words (lua/plugins/snacks.lua): it keeps the
+    -- highlight while the cursor stays inside the word. A second CursorHold/CursorMoved pair here
+    -- cleared it on every move and made it blink.
   end,
 })
 
