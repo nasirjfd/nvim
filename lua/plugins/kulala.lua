@@ -27,7 +27,7 @@ return {
       lsp = { enable = true },
       ui = {
         display_mode = "split",
-        split_direction = "vertical",
+        split_direction = "horizontal", -- response below the request, not to its right
         -- client.log() in a script is shown in the result's Script Output tab. In a terminal Kulala
         -- also `print`s it, and a long value (response.json) filled the screen with a -- More --
         -- prompt that had to be dismissed after every request.
