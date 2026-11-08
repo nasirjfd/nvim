@@ -171,11 +171,11 @@ local function toggle_git()
 end
 map("n", "<D-S-g>", toggle_git, { desc = "Toggle Git" })
 
--- cmd+ctrl+j / cmd+ctrl+k -> insert cursor below/above (multicursor.nvim)
-map({ "n", "x" }, "<D-C-j>", function()
+-- alt+cmd+j / alt+cmd+k -> insert cursor below/above (multicursor.nvim); cmd+ctrl+hjkl moves between herdr panes
+map({ "n", "x" }, "<D-M-j>", function()
   require("multicursor-nvim").lineAddCursor(1)
 end, { desc = "Add Cursor Below" })
-map({ "n", "x" }, "<D-C-k>", function()
+map({ "n", "x" }, "<D-M-k>", function()
   require("multicursor-nvim").lineAddCursor(-1)
 end, { desc = "Add Cursor Above" })
 
