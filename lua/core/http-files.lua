@@ -57,14 +57,18 @@ local function key(path)
   return (uv.fs_realpath(path) or vim.fs.normalize(path)):lower()
 end
 
--- Rows for the picker: last opened first, then the others by name.
-local function items(dir)
+-- Rows for the picker: last opened first, then the others by name. `skip`: key() of a file to
+-- leave out (the one being edited).
+local function items(dir, skip)
   local s = load()
   local list = s.lists[dir] or {}
   local rows = {}
   for _, rel in ipairs(list) do
     local abs = dir .. "/" .. rel
-    rows[#rows + 1] = { file = abs, text = rel, opened = s.opened[key(abs)] or 0 }
+    local k = key(abs)
+    if k ~= skip then
+      rows[#rows + 1] = { file = abs, text = rel, opened = s.opened[k] or 0 }
+    end
   end
   table.sort(rows, function(a, b)
     if a.opened ~= b.opened then
@@ -106,12 +110,14 @@ function M.pick()
     return
   end
   local dir = cwd()
+  local current = vim.api.nvim_buf_get_name(0)
+  local skip = current ~= "" and key(current) or nil
   local function open()
     return Snacks.picker.pick({
       source = "http_files",
       title = "HTTP Files",
       finder = function()
-        return items(dir)
+        return items(dir, skip)
       end,
       format = "file",
       preview = "file",
