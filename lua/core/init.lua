@@ -10,4 +10,5 @@ require("core.cmdline-file")
 -- require("core.persian").setup() -- off: it broke typing in pickers
 require("core.file-cache").setup()
 require("core.selection-highlight").setup()
+require("core.json-modal")
 require("core.lazy")
