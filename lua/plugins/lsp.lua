@@ -349,7 +349,13 @@ vim.api.nvim_create_autocmd("LspAttach", {
       vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
         buffer = bufnr,
         group = group,
-        callback = vim.lsp.buf.document_highlight,
+        callback = function()
+          -- not while selecting: the selection highlight owns that (it flashed with both)
+          if vim.fn.mode():match("^[vV\22sS\19]") then
+            return
+          end
+          vim.lsp.buf.document_highlight()
+        end,
       })
       vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
         buffer = bufnr,

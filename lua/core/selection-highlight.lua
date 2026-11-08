@@ -1,8 +1,11 @@
 -- Like VS Code: while text is selected (on one line), every other occurrence of it in the window gets
--- a subtle highlight.
+-- a subtle highlight. Updates are debounced and only touch the match when the text really changes,
+-- so it doesn't flicker while the selection grows.
 local M = {}
 
 local group = vim.api.nvim_create_augroup("SelectionHighlight", { clear = true })
+local timer = assert(vim.uv.new_timer())
+local DELAY = 80
 
 local function set_highlight()
   local function get(name)
@@ -26,48 +29,82 @@ end
 
 local function clear(win)
   win = win or vim.api.nvim_get_current_win()
+  if not vim.api.nvim_win_is_valid(win) then
+    return
+  end
   local id = vim.w[win].selection_match_id
   if id then
     pcall(vim.fn.matchdelete, id, win)
     vim.w[win].selection_match_id = nil
+    vim.w[win].selection_match_pattern = nil
   end
 end
 
-local function update()
-  local mode = vim.fn.mode()
-  if mode ~= "v" then
-    clear()
-    return
+-- the pattern for the current selection, or nil when nothing should be highlighted
+local function current_pattern()
+  if vim.fn.mode() ~= "v" then
+    return nil
   end
   local start, finish = vim.fn.getpos("v"), vim.fn.getpos(".")
-  -- only a selection inside one line, like VS Code
   if start[2] ~= finish[2] then
-    clear()
-    return
+    return nil
   end
   local lines = vim.fn.getregion(start, finish, { type = "v" })
   local text = lines[1] or ""
   if #lines ~= 1 or vim.trim(text) == "" or vim.fn.strchars(text) < 2 then
+    return nil
+  end
+  return "\\V" .. vim.fn.escape(text, "\\")
+end
+
+local function apply()
+  local pattern = current_pattern()
+  if not pattern then
     clear()
     return
   end
+  if vim.w.selection_match_pattern == pattern then
+    return
+  end
   clear()
-  local pattern = "\\V" .. vim.fn.escape(text, "\\")
   vim.w.selection_match_id = vim.fn.matchadd("SelectionMatch", pattern, -1)
+  vim.w.selection_match_pattern = pattern
+end
+
+local function schedule()
+  timer:stop()
+  timer:start(DELAY, 0, vim.schedule_wrap(apply))
 end
 
 function M.setup()
   set_highlight()
   vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_highlight })
-  vim.api.nvim_create_autocmd({ "CursorMoved", "ModeChanged" }, {
+  vim.api.nvim_create_autocmd("CursorMoved", {
     group = group,
     callback = function()
-      update()
+      if vim.fn.mode() == "v" then
+        schedule()
+      elseif vim.w.selection_match_id then
+        timer:stop()
+        clear()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    callback = function()
+      if vim.fn.mode() == "v" then
+        schedule()
+      else
+        timer:stop()
+        clear()
+      end
     end,
   })
   vim.api.nvim_create_autocmd("WinLeave", {
     group = group,
     callback = function()
+      timer:stop()
       clear()
     end,
   })
