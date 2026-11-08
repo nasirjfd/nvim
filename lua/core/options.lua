@@ -57,6 +57,7 @@ vim.opt.showcmd = false           -- Don't show partial command in command line
 vim.opt.ruler = true              -- Show cursor position in command line
 vim.opt.showtabline = 0           -- Never show the tab line
 vim.opt.cmdheight = 1             -- Height of command line area
+vim.opt.shortmess:append("q")      -- No "recording @x" there: the bottom line shows the file name only
 vim.opt.pumheight = 10            -- Maximum height of popup menu
 vim.opt.fillchars = { eob = " " } -- Hide ~ characters on empty lines
 vim.o.winborder = "rounded"       -- Use rounded borders for floating windows
