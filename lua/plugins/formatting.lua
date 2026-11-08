@@ -58,6 +58,11 @@ return {
             lsp_format = "fallback",
         },
         format_on_save = function(bufnr)
+            -- A project's .nvim.lua can turn it off for every save (cmd+s, :w, autosave):
+            -- vim.g.disable_format_on_save = true. Formatting on request (<leader>cf, shift+option+f) still works.
+            if vim.g.disable_format_on_save or vim.b[bufnr].disable_format_on_save then
+                return nil
+            end
             -- Kulala's LSP formatter rewrites .http files (adds HTTP/1.1, drops comments) and blocks on save
             if vim.bo[bufnr].filetype == "http" then
                 return nil

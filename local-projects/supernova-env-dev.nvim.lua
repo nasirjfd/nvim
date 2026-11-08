@@ -1,4 +1,8 @@
 local root = vim.fn.expand("~/Can/Develop/php/supernova-env-dev/vendor")
+
+-- Never format this project on save (cmd+s, :w, autosave): formatting runs only when asked
+-- (<leader>cf, shift+option+f, cmd+option+l).
+vim.g.disable_format_on_save = true
 local downgraded_codes = { 
   P1006 = vim.lsp.protocol.DiagnosticSeverity.Warning,
   P1013 = vim.lsp.protocol.DiagnosticSeverity.Warning 
