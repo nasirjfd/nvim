@@ -46,8 +46,8 @@ function M.open()
     vim.bo[buf].bufhidden = "hide"
     vim.bo[buf].filetype = "json"
   end
-  local width = math.floor(vim.o.columns * 0.7)
-  local height = math.floor(vim.o.lines * 0.75)
+  local width = math.floor(vim.o.columns * 0.9)
+  local height = math.floor(vim.o.lines * 0.85)
   local win = api.nvim_open_win(buf, true, {
     relative = "editor",
     width = width,
