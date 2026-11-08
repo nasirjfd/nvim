@@ -32,6 +32,10 @@ return {
         -- also `print`s it, and a long value (response.json) filled the screen with a -- More --
         -- prompt that had to be dismissed after every request.
         disable_script_print_output = true,
+        -- Long lines of the response wrap at word boundaries, continuing at the line's indent
+        win_opts = {
+          wo = { wrap = true, linebreak = true, breakindent = true, breakindentopt = "shift:2" },
+        },
       },
     },
   },
