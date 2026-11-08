@@ -62,12 +62,15 @@ k("\\b", "scratchpad", "Scratchpad")
 k("\\t", "toggle_view", "Toggle headers/body")
 k("\\q", "close", "Close result")
 
--- Esc in the request file hides the response window when one is shown; otherwise it does what Esc
--- does everywhere else (close the gh popup, clear cursors, clear the search highlight).
+-- Esc in the request file closes the gh popup first, then hides the response window when one is
+-- shown; otherwise it does what Esc does everywhere else (clear cursors, the search highlight).
 vim.keymap.set("n", "<Esc>", function()
-  local ok, ui = pcall(require, "kulala.ui")
-  if ok and ui.get_kulala_window() then
-    ui.close_kulala_buffer()
+  local popup = vim.b.lsp_floating_preview
+  if popup and vim.api.nvim_win_is_valid(popup) then
+    vim.api.nvim_win_close(popup, true)
+    return
+  end
+  if require("core.kulala-ui").hide_response() then
     return
   end
   for _, map in ipairs(vim.api.nvim_get_keymap("n")) do

@@ -23,12 +23,20 @@ return {
     end,
     opts = {
       global_keymaps = false, -- our keys live in ftplugin/http.lua (buffer-local)
-      -- Keys of the response window, added to Kulala's own (q closes it): Esc hides it too
+      -- Keys of the response window, added to Kulala's own: q and Esc hide it (closing the window
+      -- before its buffer, see core/kulala-ui.lua)
       kulala_keymaps = {
+        ["Close"] = {
+          "q",
+          function()
+            require("core.kulala-ui").hide_response()
+          end,
+          prefix = false,
+        },
         ["Close (Esc)"] = {
           "<Esc>",
           function()
-            require("kulala.ui").close_kulala_buffer()
+            require("core.kulala-ui").hide_response()
           end,
           prefix = false,
         },
