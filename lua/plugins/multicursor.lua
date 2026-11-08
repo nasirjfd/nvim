@@ -42,14 +42,29 @@ return {
 
     set("n", "<c-leftmouse>", mc.handleMouse)
 
-    -- Escape clears multiple cursors first; falls through to normal <Esc>
-    -- behavior (clear search highlight) when there are none.
+    -- The popup of gh (LSP hover or line diagnostics) shown for the current buffer, or the one the
+    -- cursor is in: Neovim records it as b:lsp_floating_preview of the buffer it was opened from.
+    local function hover_popup()
+      local current = vim.api.nvim_get_current_win()
+      for _, buf in ipairs({ vim.api.nvim_get_current_buf(), unpack(vim.api.nvim_list_bufs()) }) do
+        local win = vim.b[buf].lsp_floating_preview
+        if win and vim.api.nvim_win_is_valid(win) and (buf == vim.api.nvim_get_current_buf() or win == current) then
+          return win
+        end
+      end
+    end
+
+    -- Escape closes the gh popup first, then clears multiple cursors; falls through to normal
+    -- <Esc> behavior (clear search highlight) when there is neither.
     set("n", "<esc>", function()
-      if mc.hasCursors() then
+      local popup = hover_popup()
+      if popup then
+        vim.api.nvim_win_close(popup, true)
+      elseif mc.hasCursors() then
         mc.clearCursors()
       else
         vim.cmd("nohlsearch")
       end
-    end, { desc = "Clear Cursors / Highlight" })
+    end, { desc = "Close Popup / Clear Cursors / Highlight" })
   end,
 }
