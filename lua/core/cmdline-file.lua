@@ -38,6 +38,15 @@ local function render()
   if not ok or not text or text == "" then
     return hide()
   end
+  -- a file: its name first and clear, then the folder it is in, dim
+  local name, dir = text, ""
+  local path = vim.api.nvim_buf_get_name(0)
+  if path ~= "" and vim.bo.buftype == "" then
+    name = vim.fn.fnamemodify(path, ":t") .. (vim.bo.modified and " ●" or "")
+    dir = vim.fn.fnamemodify(path, ":~:.:h")
+    dir = (dir == "." or dir == "") and "" or ("  " .. dir)
+    text = name .. dir
+  end
   local width = vim.fn.strwidth(text) + 1
   local row = vim.o.lines - vim.o.cmdheight
   local key = text .. "|" .. width .. "|" .. row
@@ -47,7 +56,10 @@ local function render()
   local b = ensure_buf()
   vim.api.nvim_buf_set_lines(b, 0, -1, false, { text })
   vim.api.nvim_buf_clear_namespace(b, -1, 0, -1)
-  vim.api.nvim_buf_add_highlight(b, -1, "Comment", 0, 0, -1)
+  vim.api.nvim_buf_add_highlight(b, -1, "CmdlineFileName", 0, 0, #name)
+  if dir ~= "" then
+    vim.api.nvim_buf_add_highlight(b, -1, "CmdlineFilePath", 0, #name, -1)
+  end
   local config = {
     relative = "editor",
     row = row,
@@ -69,8 +81,27 @@ local function render()
   shown = key
 end
 
+local function set_highlights()
+  local ok, normal = pcall(vim.api.nvim_get_hl, 0, { name = "Normal", link = false })
+  if ok and normal.fg then
+    vim.api.nvim_set_hl(0, "CmdlineFileName", { fg = normal.fg, bold = true })
+  else
+    vim.api.nvim_set_hl(0, "CmdlineFileName", { link = "Normal" })
+  end
+  vim.api.nvim_set_hl(0, "CmdlineFilePath", { link = "Comment" })
+  shown = nil
+end
+
 function M.setup()
   local group = vim.api.nvim_create_augroup("CmdlineFile", { clear = true })
+  set_highlights()
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = group,
+    callback = function()
+      set_highlights()
+      vim.schedule(render)
+    end,
+  })
   -- Only events that can change the name or the row: nothing runs per cursor move or keystroke.
   vim.api.nvim_create_autocmd(
     { "BufEnter", "WinEnter", "TabEnter", "BufModifiedSet", "BufFilePost", "DirChanged", "VimResized", "InsertLeave" },
