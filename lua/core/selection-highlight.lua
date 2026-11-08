@@ -1,15 +1,18 @@
--- Like VS Code: while text is selected (on one line), every other occurrence of it in the window gets
--- a subtle highlight. Updates are debounced and only touch the match when the text really changes,
--- so it doesn't flicker while the selection grows.
+-- Like VS Code: while text is selected (on one line), the other occurrences of it on screen get a
+-- subtle highlight. Only the visible lines are searched (plain find, extmarks), the selection itself
+-- is never painted, and it updates in the same redraw as the selection, so nothing flickers.
+-- Outside visual mode it costs one mode check per cursor move.
 local M = {}
 
-local group = vim.api.nvim_create_augroup("SelectionHighlight", { clear = true })
-local timer = assert(vim.uv.new_timer())
-local DELAY = 80
+local api = vim.api
+local ns = api.nvim_create_namespace("selection_highlight")
+local group = api.nvim_create_augroup("SelectionHighlight", { clear = true })
+
+local marked_buf, marked_key -- what is currently drawn
 
 local function set_highlight()
   local function get(name)
-    local ok, value = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+    local ok, value = pcall(api.nvim_get_hl, 0, { name = name, link = false })
     return ok and value or {}
   end
   local visual, normal = get("Visual"), get("Normal")
@@ -21,90 +24,84 @@ local function set_highlight()
       end
       return channel(65536) + channel(256) + channel(1)
     end
-    vim.api.nvim_set_hl(0, "SelectionMatch", { bg = blend(visual.bg, normal.bg, 0.45), default = true })
+    api.nvim_set_hl(0, "SelectionMatch", { bg = blend(visual.bg, normal.bg, 0.45), default = true })
   else
-    vim.api.nvim_set_hl(0, "SelectionMatch", { link = "Search", default = true })
+    api.nvim_set_hl(0, "SelectionMatch", { link = "Search", default = true })
   end
 end
 
-local function clear(win)
-  win = win or vim.api.nvim_get_current_win()
-  if not vim.api.nvim_win_is_valid(win) then
-    return
-  end
-  local id = vim.w[win].selection_match_id
-  if id then
-    pcall(vim.fn.matchdelete, id, win)
-    vim.w[win].selection_match_id = nil
-    vim.w[win].selection_match_pattern = nil
+local function clear()
+  if marked_buf then
+    if api.nvim_buf_is_valid(marked_buf) then
+      api.nvim_buf_clear_namespace(marked_buf, ns, 0, -1)
+    end
+    marked_buf, marked_key = nil, nil
   end
 end
 
--- the pattern for the current selection, or nil when nothing should be highlighted
-local function current_pattern()
-  if vim.fn.mode() ~= "v" then
-    return nil
+local function update()
+  if api.nvim_get_mode().mode ~= "v" then
+    return clear()
   end
-  local start, finish = vim.fn.getpos("v"), vim.fn.getpos(".")
-  if start[2] ~= finish[2] then
-    return nil
+  local s, e = vim.fn.getpos("v"), vim.fn.getpos(".")
+  if s[2] ~= e[2] then
+    return clear()
   end
-  local lines = vim.fn.getregion(start, finish, { type = "v" })
-  local text = lines[1] or ""
-  if #lines ~= 1 or vim.trim(text) == "" or vim.fn.strchars(text) < 2 then
-    return nil
+  if s[3] > e[3] then
+    s, e = e, s
   end
-  return "\\V" .. vim.fn.escape(text, "\\")
-end
-
-local function apply()
-  local pattern = current_pattern()
-  if not pattern then
-    clear()
-    return
+  local row = s[2] - 1
+  local text = vim.fn.getregion(s, e, { type = "v" })[1] or ""
+  if #text < 2 or not text:find("%S") then
+    return clear()
   end
-  if vim.w.selection_match_pattern == pattern then
+  local buf, win = api.nvim_get_current_buf(), api.nvim_get_current_win()
+  local top, bottom = vim.fn.line("w0", win) - 1, vim.fn.line("w$", win)
+  local key = table.concat({ buf, row, s[3], text, top, bottom, vim.b[buf].changedtick }, "\0")
+  if key == marked_key then
     return
   end
   clear()
-  vim.w.selection_match_id = vim.fn.matchadd("SelectionMatch", pattern, -1)
-  vim.w.selection_match_pattern = pattern
-end
-
-local function schedule()
-  timer:stop()
-  timer:start(DELAY, 0, vim.schedule_wrap(apply))
+  local self_col = s[3] - 1
+  local lines = api.nvim_buf_get_lines(buf, top, bottom, false)
+  for i, line in ipairs(lines) do
+    local lnum = top + i - 1
+    local init = 1
+    while true do
+      local from, to = line:find(text, init, true)
+      if not from then
+        break
+      end
+      if not (lnum == row and from - 1 == self_col) then
+        api.nvim_buf_set_extmark(buf, ns, lnum, from - 1, {
+          end_col = to,
+          hl_group = "SelectionMatch",
+          priority = 90,
+        })
+      end
+      init = to + 1
+    end
+  end
+  marked_buf, marked_key = buf, key
 end
 
 function M.setup()
   set_highlight()
-  vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_highlight })
-  vim.api.nvim_create_autocmd("CursorMoved", {
+  api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_highlight })
+  api.nvim_create_autocmd({ "CursorMoved", "WinScrolled", "TextChanged" }, {
     group = group,
     callback = function()
-      if vim.fn.mode() == "v" then
-        schedule()
-      elseif vim.w.selection_match_id then
-        timer:stop()
-        clear()
+      if marked_buf or api.nvim_get_mode().mode == "v" then
+        update()
       end
     end,
   })
-  vim.api.nvim_create_autocmd("ModeChanged", {
+  api.nvim_create_autocmd({ "ModeChanged", "WinLeave", "BufLeave" }, {
     group = group,
-    callback = function()
-      if vim.fn.mode() == "v" then
-        schedule()
-      else
-        timer:stop()
-        clear()
+    callback = function(ev)
+      if ev.event == "ModeChanged" and api.nvim_get_mode().mode == "v" then
+        return update()
       end
-    end,
-  })
-  vim.api.nvim_create_autocmd("WinLeave", {
-    group = group,
-    callback = function()
-      timer:stop()
       clear()
     end,
   })
