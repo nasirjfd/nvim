@@ -1,14 +1,13 @@
--- Cursor-style activity bar: Explorer, Search and Source Control icons in a row along the top of
--- the screen (Neovim's tab line). A click does what the key does (Cmd+Shift+E / F / G). Hovering
+-- Cursor-style activity bar: Explorer and Source Control icons in a row along the top of
+-- the screen (Neovim's tab line). A click does what the key does (Cmd+Shift+E / G). Hovering
 -- tints the icon and shows its name and key beside the icons; the open view is underlined.
 local M = {}
 
 local api = vim.api
 
--- Nerd Font codicons: files, search, source control
+-- Nerd Font codicons: files, source control
 local ITEMS = {
   { icon = "\u{eaf0}", name = "Explorer", key = "⇧⌘E", lhs = "<D-S-e>" },
-  { icon = "\u{ea6d}", name = "Search", key = "⇧⌘F", lhs = "<D-S-f>" },
   { icon = "\u{ea68}", name = "Source Control", key = "⇧⌘G", lhs = "<D-S-g>" },
 }
 local LEFT = 1 -- columns before the first icon
