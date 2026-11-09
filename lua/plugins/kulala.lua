@@ -46,6 +46,11 @@ return {
           prefix = false,
         },
       },
+      -- The values a `css …::text` filter takes out of an HTML response (core/kulala-ui.lua), already
+      -- formatted there: shown with JSON colours, not reformatted
+      contenttypes = {
+        ["kulala/values"] = { ft = "json" },
+      },
       default_env = "dev", -- environment name in http-client.env.json
       lsp = { enable = true },
       ui = {
