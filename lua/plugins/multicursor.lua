@@ -48,20 +48,28 @@ return {
       local current = vim.api.nvim_get_current_win()
       for _, buf in ipairs({ vim.api.nvim_get_current_buf(), unpack(vim.api.nvim_list_bufs()) }) do
         local win = vim.b[buf].lsp_floating_preview
-        if win and vim.api.nvim_win_is_valid(win) and (buf == vim.api.nvim_get_current_buf() or win == current) then
+        if
+          win
+          and vim.api.nvim_win_is_valid(win)
+          and (buf == vim.api.nvim_get_current_buf() or win == current)
+        then
           return win
         end
       end
     end
 
-    -- Escape closes the gh popup first, then clears multiple cursors; falls through to normal
-    -- <Esc> behavior (clear search highlight) when there is neither.
+    -- Escape closes the gh popup first, then clears multiple cursors, then closes the find bar
+    -- (core/find-bar.lua; Esc in visual mode only ends the selection); falls through to normal
+    -- <Esc> behavior (clear search highlight) when there is none of them.
     set("n", "<esc>", function()
       local popup = hover_popup()
+      local find_bar = package.loaded["core.find-bar"]
       if popup then
         vim.api.nvim_win_close(popup, true)
       elseif mc.hasCursors() then
         mc.clearCursors()
+      elseif find_bar and find_bar.is_open() then
+        find_bar.close()
       else
         vim.cmd("nohlsearch")
       end

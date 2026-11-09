@@ -1,4 +1,4 @@
--- JetBrains-style find / replace bar at the top left of the window, instead of Vim's search line.
+-- JetBrains-style find / replace bar at the top right of the window, instead of Vim's search line.
 --
 --   /  or Cmd+F   find                 Cmd+R   find and replace (Cmd+R twice: LSP rename)
 --
@@ -8,7 +8,8 @@
 -- replace field, with Replace and Replace All buttons (Option+P / Option+A).
 --
 -- In the bar: Enter / Down next match, Shift+Enter / Up previous, Tab switches between the find
--- and replace fields, Esc closes. A selection is put in the find field. The text is searched
+-- and replace fields, Esc closes. The bar stays open while you click or select in the file; Esc
+-- there (with nothing selected) closes it. A selection is put in the find field. The text is searched
 -- literally unless Regex is on (then it is a regex with $1 for groups in the replacement).
 -- After closing, n / N go on with the same search.
 local M = {}
@@ -197,7 +198,7 @@ local function draw()
 end
 
 -- Mark the match under the target's cursor, scroll it into view (below the bar).
-local function show_current(pat)
+local function show_current(pat, scroll)
   api.nvim_buf_clear_namespace(state.tbuf, ns, 0, -1)
   local m = pat and current_match(pat)
   if not m then
@@ -209,6 +210,9 @@ local function show_current(pat)
     hl_group = "FindBarCurrent",
     priority = 300,
   })
+  if scroll == false then
+    return
+  end
   api.nvim_win_call(state.target, function()
     local top, bottom = vim.fn.line("w0"), vim.fn.line("w$")
     local bar_rows = (state.replace and 2 or 1) + 2
@@ -371,26 +375,42 @@ function M.close()
     api.nvim_buf_clear_namespace(s.tbuf, ns, 0, -1)
   end
   vim.v.hlsearch = 0
+  local in_bar = api.nvim_get_current_win() == s.win
+  pcall(api.nvim_del_augroup_by_name, "FindBar")
+  for _, mode in ipairs({ "n", "x", "i" }) do
+    pcall(vim.keymap.del, mode, "<LeftMouse>")
+  end
   if api.nvim_win_is_valid(s.win) then
     pcall(api.nvim_win_close, s.win, true)
   end
-  if api.nvim_win_is_valid(s.target) then
-    api.nvim_set_current_win(s.target)
+  if in_bar then
+    if api.nvim_win_is_valid(s.target) then
+      api.nvim_set_current_win(s.target)
+    end
+    vim.cmd("stopinsert")
   end
-  vim.cmd("stopinsert")
+end
+
+function M.is_open()
+  return alive() == true
+end
+
+-- Where the bar sits: the top right corner of the window it searches.
+local function geometry(target, height)
+  local tw = api.nvim_win_get_width(target)
+  return {
+    relative = "win",
+    win = target,
+    anchor = "NE",
+    row = 0,
+    col = tw,
+    width = math.max(math.min(72, tw - 2), 20),
+    height = height,
+  }
 end
 
 local function resize()
-  local height = state.replace and 2 or 1
-  local tw = api.nvim_win_get_width(state.target)
-  api.nvim_win_set_config(state.win, {
-    relative = "win",
-    win = state.target,
-    row = 0,
-    col = 0,
-    width = math.max(math.min(72, tw - 2), 20),
-    height = height,
-  })
+  api.nvim_win_set_config(state.win, geometry(state.target, state.replace and 2 or 1))
 end
 
 local function show_replace(on)
@@ -409,15 +429,16 @@ local function show_replace(on)
   M.update(false)
 end
 
--- A click on the bar: a button runs, elsewhere the cursor moves there; outside the bar it closes.
+-- A click on the bar: a button runs, elsewhere the cursor moves there. A click outside it is an
+-- ordinary click: the bar stays open (Esc closes it).
 local function click()
   local pos = vim.fn.getmousepos()
   if pos.winid ~= state.win then
-    M.close()
-    vim.schedule(function()
-      api.nvim_feedkeys(vim.keycode("<LeftMouse>"), "n", false)
-    end)
+    api.nvim_feedkeys(vim.keycode("<LeftMouse>"), "n", false)
     return
+  end
+  if api.nvim_get_current_win() ~= state.win then
+    api.nvim_set_current_win(state.win)
   end
   -- a click on the frame around the bar: line 0 (top border) or past the last line (bottom border)
   pos.line = math.min(math.max(pos.line, 1), api.nvim_buf_line_count(state.buf))
@@ -555,11 +576,19 @@ end
 function M.open(o)
   o = o or {}
   if state then
-    if alive() and api.nvim_get_current_win() == state.win then
+    local current = api.nvim_get_current_win()
+    if alive() and (current == state.win or current == state.target) then
+      -- already open on this window: back into it (with the new selection, if any)
+      api.nvim_set_current_win(state.win)
       if o.text then
         api.nvim_buf_set_lines(state.buf, 0, 1, false, { o.text })
       end
+      state.origin = api.nvim_win_get_cursor(state.target)
       show_replace(o.replace or false)
+      if o.text then
+        M.update(true)
+      end
+      vim.cmd("startinsert!")
       return
     end
     M.close()
@@ -572,17 +601,15 @@ function M.open(o)
   vim.b[buf].completion = false -- blink.cmp
   vim.b[buf].minipairs_disable = true
   api.nvim_buf_set_lines(buf, 0, -1, false, { find })
-  local win = api.nvim_open_win(buf, true, {
-    relative = "win",
-    win = target,
-    row = 0,
-    col = 0,
-    width = math.max(math.min(72, api.nvim_win_get_width(target) - 2), 20),
-    height = 1,
-    style = "minimal",
-    border = "rounded",
-    zindex = 60,
-  })
+  local win = api.nvim_open_win(
+    buf,
+    true,
+    vim.tbl_extend(
+      "force",
+      geometry(target, 1),
+      { style = "minimal", border = "rounded", zindex = 60 }
+    )
+  )
   vim.wo[win].signcolumn = "yes:1"
   vim.wo[win].wrap = false
   vim.wo[win].winhighlight = "NormalFloat:NormalFloat,FloatBorder:FloatBorder"
@@ -615,17 +642,52 @@ function M.open(o)
       end
     end,
   })
+  -- The bar stays open while you work in the file: typing there leaves insert mode behind, coming
+  -- back (a click, / or Cmd+F) types into it again. Edits and moves in the file update the count.
   api.nvim_create_autocmd("WinLeave", {
     group = group,
     buffer = buf,
     callback = function()
-      vim.schedule(function()
-        if state and state.win == win and api.nvim_get_current_win() ~= win then
-          M.close()
-        end
-      end)
+      vim.cmd("stopinsert")
     end,
   })
+  api.nvim_create_autocmd("WinEnter", {
+    group = group,
+    buffer = buf,
+    callback = function()
+      vim.cmd("startinsert!")
+    end,
+  })
+  api.nvim_create_autocmd({ "CursorMoved", "TextChanged", "TextChangedI" }, {
+    group = group,
+    buffer = state.tbuf,
+    callback = function()
+      if alive() then
+        local pat = pattern((fields()))
+        if pat and valid(pat) then
+          show_current(pat, false)
+        end
+        draw()
+      end
+    end,
+  })
+  api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    pattern = tostring(target),
+    callback = function()
+      vim.schedule(M.close)
+    end,
+  })
+  -- a click on the bar's buttons works from the file too (the bar's own mapping only fires in it)
+  for _, mode in ipairs({ "n", "x", "i" }) do
+    vim.keymap.set(mode, "<LeftMouse>", function()
+      if alive() then
+        click()
+      else
+        api.nvim_feedkeys(vim.keycode("<LeftMouse>"), "n", false)
+      end
+    end, { desc = "Click (find bar buttons)" })
+  end
   api.nvim_create_autocmd("WinResized", {
     group = group,
     callback = function()
