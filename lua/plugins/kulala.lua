@@ -33,6 +33,13 @@ return {
           end,
           prefix = false,
         },
+        -- F filters the response: jq for JSON (Kulala's own), a CSS selector for HTML
+        ["Show filter"] = {
+          "F",
+          function()
+            require("core.kulala-ui").filter()
+          end,
+        },
         ["Close (Esc)"] = {
           "<Esc>",
           function()
