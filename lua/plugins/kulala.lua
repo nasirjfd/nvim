@@ -21,6 +21,11 @@ return {
         end,
       })
     end,
+    config = function(_, opts)
+      require("kulala").setup(opts)
+      -- HTML responses filtered by a hand-written CSS selector (# @css / @css / "css" in the env file)
+      require("core.kulala-ui").setup_css()
+    end,
     opts = {
       global_keymaps = false, -- our keys live in ftplugin/http.lua (buffer-local)
       -- Keys of the response window, added to Kulala's own: q and Esc hide it (closing the window
@@ -32,13 +37,6 @@ return {
             require("core.kulala-ui").hide_response()
           end,
           prefix = false,
-        },
-        -- F filters the response: jq for JSON (Kulala's own), a CSS selector for HTML
-        ["Show filter"] = {
-          "F",
-          function()
-            require("core.kulala-ui").filter()
-          end,
         },
         ["Close (Esc)"] = {
           "<Esc>",

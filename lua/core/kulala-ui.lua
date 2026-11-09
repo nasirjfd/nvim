@@ -26,78 +26,88 @@ function M.hide_response()
   return shown
 end
 
--- F in the response window filters the response. Kulala's own filter is jq, for JSON; an HTML
--- response is filtered with a CSS selector instead (htmlq), showing only the matching elements below
--- the request summary, one match per line. Ending the selector with ::text shows only the text of
--- the matches (".price::text"). An empty selector shows the whole response again.
-local last_selector = ""
+-- HTML responses filtered by a CSS selector, written by hand at one of three levels; the most
+-- specific one wins:
+--   1. request:  a `# @css <selector>` line in the request, like Kulala's `# @jq`
+--   2. file:     a `@css = <selector>` variable in the file (at the top: every request of the file)
+--   3. global:   a "css" entry in http-client.env.json, under "$shared" (every request) or an env
+-- Only HTML responses are filtered (htmlq). The response then starts with a comment naming the
+-- selector and where it came from, followed by the matches, one per line. A selector ending in
+-- ::text shows only the text of the matches (".price::text"). `none` turns it off (`# @css none`).
 
 local function is_html(response)
   local headers = type(response.headers) == "string" and response.headers or ""
   if headers:lower():find("content%-type:%s*[^\n]*html") then
     return true
   end
-  local body = response.body_raw ~= "" and response.body_raw or response.body
+  local body = response.body
   return type(body) == "string" and body:match("^%s*<") ~= nil and not body:match("^%s*<%?xml")
 end
 
-function M.filter()
-  local ui = require("kulala.ui")
-  local response = ui.get_current_response()
-  if not is_html(response) then
-    return ui.toggle_filter()
+-- The selector for a request and where it came from, or nil.
+local function selector_for(request)
+  for _, meta in ipairs(request.metadata or {}) do
+    if meta.name == "css" and meta.value and vim.trim(meta.value) ~= "" then
+      return vim.trim(meta.value), "request"
+    end
   end
-  if vim.fn.executable("htmlq") == 0 then
-    vim.notify("htmlq is not installed (brew install htmlq)", vim.log.levels.WARN)
+  local file = (request.variables or {}).css or ((request.shared or {}).variables or {}).css
+  if file and vim.trim(tostring(file)) ~= "" then
+    return vim.trim(tostring(file)), "file"
+  end
+  local global = (request.environment or {}).css
+  if global and vim.trim(tostring(global)) ~= "" then
+    return vim.trim(tostring(global)), "global"
+  end
+end
+
+local function apply_css(request, response)
+  local selector, level = selector_for(request)
+  if not selector or selector == "none" or not is_html(response) then
     return
   end
-  vim.ui.input({ prompt = "CSS selector (empty shows everything): ", default = last_selector }, function(selector)
-    if selector == nil then
-      return
+  if vim.fn.executable("htmlq") == 0 then
+    vim.notify("htmlq is not installed (brew install htmlq): the @css filter is skipped", vim.log.levels.WARN)
+    return
+  end
+  local css, text_only = selector:gsub("%s*::text$", "")
+  local cmd = text_only > 0 and { "htmlq", "--text", css } or { "htmlq", css }
+  local result = vim.system(cmd, { stdin = response.body, text = true }):wait()
+  local header = ("<!-- css (%s): %s -->"):format(level, selector)
+  if result.code ~= 0 then
+    response.body = header .. "\n<!-- htmlq: " .. vim.trim(result.stderr or "invalid selector") .. " -->\n" .. response.body
+    return
+  end
+  local matches = vim.tbl_filter(function(line)
+    return vim.trim(line) ~= ""
+  end, vim.split(result.stdout, "\n", { plain = true }))
+  if #matches == 0 then
+    matches = { "<!-- nothing matches -->" }
+  end
+  response.body = header .. "\n\n" .. table.concat(matches, "\n")
+  if text_only > 0 then
+    -- plain text now: shown as it is, one match per line (the HTML formatter would join them)
+    response.headers = response.headers:gsub("([Cc]ontent%-[Tt]ype:%s*)[^\r\n]*", "%1text/plain", 1)
+  end
+end
+
+-- Run the filter where Kulala post-processes every response (its post-request scripts step).
+function M.setup_css()
+  local scripts = require("kulala.parser.scripts")
+  if scripts._css_wrapped then
+    return
+  end
+  scripts._css_wrapped = true
+  local run = scripts.run
+  scripts.run = function(kind, request, response, ...)
+    if kind == "post_request" and response then
+      local ok, err = pcall(apply_css, request, response)
+      if not ok then
+        vim.notify("css filter: " .. tostring(err), vim.log.levels.WARN)
+      end
     end
-    selector = vim.trim(selector)
-    last_selector = selector
-    if selector == "" then
-      return ui.show_body()
-    end
-    local body = response.body_raw ~= "" and response.body_raw or response.body
-    local css, text_only = selector:gsub("%s*::text$", "")
-    local cmd = text_only > 0 and { "htmlq", "--text", css } or { "htmlq", css }
-    vim.system(cmd, { stdin = body, text = true }, vim.schedule_wrap(function(result)
-      if result.code ~= 0 then
-        vim.notify("htmlq: " .. vim.trim(result.stderr ~= "" and result.stderr or "invalid selector"), vim.log.levels.ERROR)
-        return
-      end
-      local buf = ui.get_kulala_buffer()
-      if not buf then
-        return
-      end
-      ui.show_body()
-      local out = vim.tbl_filter(function(line)
-        return vim.trim(line) ~= ""
-      end, vim.split(result.stdout, "\n", { plain = true }))
-      if #out == 0 then
-        out = { "" }
-      end
-      if #out == 1 and out[1] == "" then
-        out = { "(nothing matches " .. selector .. ")" }
-      end
-      -- the summary (request, URL, buffer) takes the first lines and a blank one; the body follows
-      local first = 0
-      for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, 8, false)) do
-        if line == "" then
-          first = i
-          break
-        end
-      end
-      -- Kulala writes this buffer again on every view switch, so it is left as editable as it was
-      local modifiable = vim.bo[buf].modifiable
-      vim.bo[buf].modifiable = true
-      vim.api.nvim_buf_set_lines(buf, first, -1, false, vim.list_extend({ "CSS Filter: " .. selector, "" }, out))
-      vim.bo[buf].modifiable = modifiable
-      vim.api.nvim_buf_set_extmark(buf, vim.api.nvim_create_namespace("kulala_css_filter"), first, 0, { end_col = 11, hl_group = "Question" })
-    end))
-  end)
+    return run(kind, request, response, ...)
+  end
 end
 
 return M
