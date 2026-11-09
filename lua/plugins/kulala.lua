@@ -65,7 +65,17 @@ return {
         max_response_size = 5 * 1024 * 1024,
         -- Long lines of the response wrap at word boundaries, continuing at the line's indent
         win_opts = {
-          wo = { wrap = true, linebreak = true, breakindent = true, breakindentopt = "shift:2" },
+          -- conceal: \" in JSON strings is drawn as a plain " (after/queries/json/highlights.scm),
+          -- on the cursor line too, in the string colour
+          wo = {
+            winhighlight = "Conceal:String",
+            wrap = true,
+            linebreak = true,
+            breakindent = true,
+            breakindentopt = "shift:2",
+            conceallevel = 2,
+            concealcursor = "nvic",
+          },
         },
       },
     },
