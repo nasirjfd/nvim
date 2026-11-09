@@ -8,6 +8,41 @@ local function outside_diff()
   end
 end
 
+-- The explorer's "Explorer" title stays at the top while its search box is hidden: a plain centred
+-- title (no border) in the explorer's top row. / shows the search box (which has the same title on
+-- its border) in its place; Esc or opening a file brings the plain title back.
+local EXPLORER_TITLE = "%#FloatTitle#%=Explorer%="
+
+local function explorer_title(picker, on)
+  local layout = picker.layout
+  local root = layout and not layout.closed and layout.root
+  if not (root and root.win and vim.api.nvim_win_is_valid(root.win)) then
+    return
+  end
+  local winbar = on and EXPLORER_TITLE or ""
+  vim.wo[root.win].winbar = winbar
+  -- snacks re-applies its window options when the layout updates: keep the title in them
+  root.opts.wo = root.opts.wo or {}
+  root.opts.wo.winbar = winbar
+end
+
+-- Draw the title whenever an explorer list appears (opened, revealed, shown again).
+vim.api.nvim_create_autocmd("BufWinEnter", {
+  group = vim.api.nvim_create_augroup("ExplorerTitle", { clear = true }),
+  callback = function(args)
+    if vim.bo[args.buf].filetype ~= "snacks_picker_list" then
+      return
+    end
+    vim.schedule(function()
+      for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
+        if not picker.closed and picker.layout and picker.layout:is_hidden("input") then
+          explorer_title(picker, true)
+        end
+      end
+    end)
+  end,
+})
+
 -- Jump straight to an LSP location. Duplicate locations (the same spot reported twice) are
 -- collapsed; with several distinct ones, `first` jumps to the first and otherwise `fallback`
 -- opens the picker. `on_self` runs instead of jumping when the target is the cursor's own line
@@ -468,11 +503,13 @@ return {
                   picker.input:set("", "")
                   picker:find()
                   picker:toggle("input", { enable = false })
+                  explorer_title(picker, true)
                 end
               end)
             end,
-            -- / in the list: show the search box and type in it
+            -- / in the list: show the search box (in place of the plain title) and type in it
             show_search = function(picker)
+              explorer_title(picker, false)
               picker:toggle("input", { enable = true, focus = true })
             end,
             -- Esc in the search box: clear it, hide it, back to the list
@@ -481,6 +518,7 @@ return {
               picker.input:set("", "")
               picker:find()
               picker:toggle("input", { enable = false })
+              explorer_title(picker, true)
               picker:focus("list")
             end,
           },
