@@ -55,7 +55,7 @@ vim.opt.breakindent = true        -- Wrapped lines preserve indentation
 vim.opt.showmode = false          -- Don't show mode in command line (shown in statusline)
 vim.opt.showcmd = false           -- Don't show partial command in command line
 vim.opt.ruler = true              -- Show cursor position in command line
-vim.opt.showtabline = 0           -- Never show the tab line
+vim.opt.showtabline = 2           -- The tab line holds the activity bar (core/activity-bar.lua), not tabs
 vim.opt.cmdheight = 1             -- Height of command line area
 vim.opt.shortmess:append("q")      -- No "recording @x" there: the bottom line shows the file name only
 vim.opt.pumheight = 10            -- Maximum height of popup menu
