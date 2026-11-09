@@ -11,7 +11,16 @@ end
 -- The explorer's "Explorer" title stays at the top while its search box is hidden: a plain centred
 -- title (no border) in the explorer's top row. / shows the search box (which has the same title on
 -- its border) in its place; Esc or opening a file brings the plain title back.
-local EXPLORER_TITLE = "%#FloatTitle#%=Explorer%="
+local EXPLORER_TITLE = "%#ExplorerTitle#%=Explorer%="
+
+-- The title on the explorer's own background (a window header row is otherwise lighter grey)
+local function explorer_title_colors()
+  local bg = vim.api.nvim_get_hl(0, { name = "SnacksPickerList", link = false }).bg
+  local fg = vim.api.nvim_get_hl(0, { name = "FloatTitle", link = false }).fg
+  vim.api.nvim_set_hl(0, "ExplorerTitle", { bg = bg, fg = fg, bold = true })
+end
+explorer_title_colors()
+vim.api.nvim_create_autocmd("ColorScheme", { callback = explorer_title_colors })
 
 local function explorer_title(picker, on)
   local layout = picker.layout
