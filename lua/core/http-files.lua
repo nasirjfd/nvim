@@ -1,4 +1,4 @@
--- <leader>hh: pick an .http file of the project, like cmd+e: the file opened last is at the top
+-- <leader>h: pick an .http file of the project, like cmd+e: the file opened last is at the top
 -- (only when it was opened counts, not how often), then the rest by name.
 --
 -- Every .http file under the working directory is listed, hidden ones too, except what git ignores.
@@ -207,6 +207,6 @@ api.nvim_create_autocmd("BufWritePost", {
   end,
 })
 
-vim.keymap.set("n", "<leader>hh", M.pick, { desc = "HTTP files (last opened first)" })
+vim.keymap.set("n", "<leader>h", M.pick, { desc = "HTTP files (last opened first)" })
 
 return M
