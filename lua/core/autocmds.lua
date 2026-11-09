@@ -125,3 +125,20 @@ api.nvim_create_autocmd({ "InsertLeave", "BufLeave", "FocusLost" }, {
     end
   end,
 })
+
+-- In every picker list (files, grep, LSP references, …) the folder of a file is drawn subtle, in
+-- the comment grey, so the file name stands out; so are grep's line:column numbers. Hidden and
+-- ignored paths keep their own colours.
+local function subtle_picker_paths()
+  local comment = vim.api.nvim_get_hl(0, { name = "Comment", link = false })
+  local fg = comment.fg or vim.api.nvim_get_hl(0, { name = "NonText", link = false }).fg
+  vim.api.nvim_set_hl(0, "SnacksPickerDir", { fg = fg })
+  for _, group in ipairs({ "SnacksPickerRow", "SnacksPickerCol", "SnacksPickerDelim" }) do
+    vim.api.nvim_set_hl(0, group, { fg = fg })
+  end
+end
+subtle_picker_paths()
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = vim.api.nvim_create_augroup("SubtlePickerPaths", { clear = true }),
+  callback = subtle_picker_paths,
+})
