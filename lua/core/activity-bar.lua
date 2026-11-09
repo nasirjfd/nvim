@@ -38,6 +38,20 @@ local function set_highlights()
   api.nvim_set_hl(0, "ActivityBarActive", { bg = bg, fg = fg, underline = true, sp = accent })
   api.nvim_set_hl(0, "ActivityBarHover", { bg = hover_bg, fg = fg })
   api.nvim_set_hl(0, "ActivityBarSep", { bg = bg, fg = dim })
+  -- the git pane's toolbar: plain grey icons on the header colour, like the switcher (codediff
+  -- defines these as defaults, so these win)
+  api.nvim_set_hl(0, "CodeDiffToolbar", { bg = bg, fg = dim })
+  for _, name in ipairs({
+    "",
+    "_graph",
+    "_repositories",
+    "_refresh",
+    "_collapse",
+    "_skipped",
+    "_view_mode",
+  }) do
+    api.nvim_set_hl(0, "CodeDiffToolbarButton" .. name, { bg = bg, fg = dim })
+  end
 end
 
 local function icons(win, kind)
@@ -58,7 +72,8 @@ local function draw(win)
     decorated[win] = nil
     return
   end
-  local rest = d.base ~= "" and ("%#ActivityBarSep#│" .. d.base) or "%#ActivityBarFill#%="
+  -- the git pane's own buttons go to the right end, the switcher stays on the left
+  local rest = "%#ActivityBarFill#%=" .. d.base
   local winbar = icons(win, d.kind) .. rest
   vim.wo[win].winbar = winbar
   -- snacks re-applies its window options when the explorer lays itself out: make it apply this

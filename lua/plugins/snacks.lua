@@ -85,7 +85,8 @@ local builtin_layouts = {
       border = "none",
       box = "vertical",
       { win = "input", height = 1, border = "none" },
-      { win = "list", border = "none" },
+      -- a blank row between the header and the folders
+      { win = "list", border = { "", " ", "", "", "", "", "", "" } },
     },
   },
   select = { preset = "select" },
