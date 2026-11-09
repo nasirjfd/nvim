@@ -8,7 +8,12 @@ local api = vim.api
 
 local function is_codediff_tab(tab)
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
-  return lifecycle ~= nil and (lifecycle.get_session(tab) ~= nil or lifecycle.get_panel(tab) ~= nil)
+  if lifecycle and (lifecycle.get_session(tab) ~= nil or lifecycle.get_panel(tab) ~= nil) then
+    return true
+  end
+  -- the git graph (with its commit details at the bottom)
+  local graph = package.loaded["codediff.ui.graph"]
+  return graph ~= nil and graph.get(tab) ~= nil
 end
 
 -- A plain window of a tab: its last used one, else the first that is not a float or a sidebar.
