@@ -321,7 +321,13 @@ return {
         -- Recent files: v:oldfiles also keeps directories (the explorer and `nvim .` open them as
         -- buffers), which showed up as a row without a file name
         recent = {
-          matcher = { smartcase = false, ignorecase = true }, -- case never matters, as in files
+          matcher = { -- case never matters, ranked like files
+            smartcase = false,
+            ignorecase = true,
+            on_match = function(...)
+              require("core.file-rank").on_match(...)
+            end,
+          },
           transform = function(item)
             local file = item.file
             if type(file) ~= "string" or file == "" or file:sub(-1) == "/" or vim.fn.isdirectory(file) == 1 then
@@ -335,7 +341,16 @@ return {
           diagnostics = false,
           -- Rank recently-opened files to the top, even before typing anything. Case never matters
           -- (no smartcase): POST also finds PostController.php, the whole word ranked above P…O…S…T.
-          matcher = { frecency = true, sort_empty = true, smartcase = false, ignorecase = true },
+          matcher = {
+            frecency = true,
+            sort_empty = true,
+            smartcase = false,
+            ignorecase = true,
+            -- JetBrains-like: pprecord ranks ParcelProjectionRecord first (core/file-rank.lua)
+            on_match = function(...)
+              require("core.file-rank").on_match(...)
+            end,
+          },
         },
         explorer = {
           actions = {
