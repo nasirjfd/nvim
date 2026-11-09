@@ -137,7 +137,8 @@ local function dump_to_json(text)
 end
 
 local function as_value(text)
-  text = vim.trim(text)
+  -- In a web page Symfony starts each dump with "^", a link to the file and line of the dump() call
+  text = vim.trim(text):gsub("^%^%s+", "")
   local quoted = text:match('^"(.*)"$')
   local inner = quoted or text
   if inner:match("^%s*[%[{]") then
