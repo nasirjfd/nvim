@@ -354,6 +354,7 @@ return {
         grep = {
           regex = false,
           args = { "--ignore-case" },
+          toggles = { regex = false }, -- the title's "R" flag: the regex button replaces it
           on_show = function(picker)
             require("core.grep-toggles").attach(picker)
           end,

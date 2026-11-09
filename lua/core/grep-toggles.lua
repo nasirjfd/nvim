@@ -3,23 +3,34 @@
 -- Defaults: case-insensitive, plain text (no regex), no whole-word.
 local M = {}
 
+local PRIORITY = 1
 local ns = vim.api.nvim_create_namespace("grep_toggles")
 local BUTTONS = {
-  { key = "case", label = " Aa ", tip = "Match case (A-c)" },
-  { key = "word", label = " ab ", tip = "Whole word (A-w)" },
-  { key = "regex", label = " .* ", tip = "Regex (A-r)" },
+  { key = "case", label = "Aa" },
+  { key = "word", label = "ab" },
+  { key = "regex", label = ".*" },
 }
-local GAP = " "
+-- pill: rounded cap, " label ", rounded cap, then a gap
+local CAP_L, CAP_R, GAP = "\u{e0b6}", "\u{e0b4}", " "
+local function width_of(b)
+  return vim.fn.strdisplaywidth(CAP_L .. " " .. b.label .. " " .. CAP_R)
+end
 local TOTAL = 0
 for _, b in ipairs(BUTTONS) do
-  TOTAL = TOTAL + vim.fn.strdisplaywidth(b.label) + #GAP
+  TOTAL = TOTAL + width_of(b) + #GAP
 end
 
+local COLORS = {
+  off = { fg = "#9aa0aa", bg = "#2e3138" },
+  hover = { fg = "#ffffff", bg = "#4a4e58" },
+  on = { fg = "#ffffff", bg = "#3d6bb3" },
+  onhover = { fg = "#ffffff", bg = "#5a8ee0" },
+}
 local function set_hl()
-  vim.api.nvim_set_hl(0, "GrepToggle", { fg = "#8a8f98", bg = "#2b2d33", default = true })
-  vim.api.nvim_set_hl(0, "GrepToggleHover", { fg = "#e6e8ec", bg = "#44474f", default = true })
-  vim.api.nvim_set_hl(0, "GrepToggleOn", { fg = "#ffffff", bg = "#3d6bb3", bold = true, default = true })
-  vim.api.nvim_set_hl(0, "GrepToggleOnHover", { fg = "#ffffff", bg = "#5586d0", bold = true, default = true })
+  for name, c in pairs(COLORS) do
+    vim.api.nvim_set_hl(0, "GrepToggle_" .. name, { fg = c.fg, bg = c.bg, bold = name:find("on") ~= nil, default = true })
+    vim.api.nvim_set_hl(0, "GrepToggleCap_" .. name, { fg = c.bg, default = true })
+  end
 end
 
 local function render(picker)
@@ -31,12 +42,16 @@ local function render(picker)
   local chunks = {}
   for i, b in ipairs(BUTTONS) do
     local on, hover = st[b.key], st.hover == i
-    local hl = on and (hover and "GrepToggleOnHover" or "GrepToggleOn") or (hover and "GrepToggleHover" or "GrepToggle")
-    chunks[#chunks + 1] = { b.label, hl }
+    local state = on and (hover and "onhover" or "on") or (hover and "hover" or "off")
+    chunks[#chunks + 1] = { CAP_L, "GrepToggleCap_" .. state }
+    chunks[#chunks + 1] = { " " .. b.label .. " ", "GrepToggle_" .. state }
+    chunks[#chunks + 1] = { CAP_R, "GrepToggleCap_" .. state }
     chunks[#chunks + 1] = { GAP, "Normal" }
   end
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-  pcall(vim.api.nvim_buf_set_extmark, buf, ns, 0, 0, { virt_text = chunks, virt_text_pos = "right_align", hl_mode = "combine" })
+  pcall(vim.api.nvim_buf_set_extmark, buf, ns, 0, 0, {
+    virt_text = chunks, virt_text_pos = "right_align", hl_mode = "combine", priority = PRIORITY,
+  })
 end
 
 local function apply(picker)
@@ -68,7 +83,7 @@ local function button_at(picker)
   local col = m.wincol - info.textoff - 1 -- 0-based inside the text area
   local x = text_width - TOTAL
   for i, b in ipairs(BUTTONS) do
-    local w = vim.fn.strdisplaywidth(b.label)
+    local w = width_of(b)
     if col >= x and col < x + w then
       return i
     end
