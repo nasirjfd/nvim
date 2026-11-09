@@ -29,7 +29,10 @@ map("n", "<D-S-o>", function()
 end, { desc = "All Files" })
 -- with a selection: the search box starts with the selected text (first line), editable
 map("x", "<D-S-o>", function()
-  local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+  local text = table.concat(
+    vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }),
+    "\n"
+  )
   vim.cmd("normal! \27")
   Snacks.picker.files({ pattern = text:match("^[^\n]*") })
 end, { desc = "All Files (selection)" })
@@ -64,7 +67,11 @@ local function focus_explorer()
   local explorer
   for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
     local win = picker.list and picker.list.win and picker.list.win.win
-    if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == current_tab then
+    if
+      win
+      and vim.api.nvim_win_is_valid(win)
+      and vim.api.nvim_win_get_tabpage(win) == current_tab
+    then
       explorer = picker
       break
     end
@@ -154,10 +161,19 @@ local function focus_git()
     vim.cmd("CodeDiff scm")
     return
   end
+  local from = vim.api.nvim_get_current_buf()
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     local panel = lifecycle.get_panel(tab)
     if panel and panel.data and panel.data.kind == "scm" then
+      local came_from_other_tab = tab ~= vim.api.nvim_get_current_tabpage()
       vim.api.nvim_set_current_tabpage(tab)
+      -- with no change selected, the right side shows the file you came from (like VS Code)
+      if came_from_other_tab then
+        local view_module = package.loaded["codediff.ui.view"]
+        if view_module and view_module.set_home_buffer then
+          pcall(view_module.set_home_buffer, tab, from)
+        end
+      end
       -- cmd+shift+e in the git tab swaps its sidebar for the file explorer: bring the git one back,
       -- since that is what this key is for.
       for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
@@ -231,7 +247,12 @@ local function undo_or_redo(redo)
     local session = lifecycle and lifecycle.get_session(tab)
     if session and session.git_root and session.modified_revision == nil and not session.merge then
       require("codediff.ui.view.actions.hunk").undo(tab, redo)
-    elseif session and session.merge and session.result_win and vim.api.nvim_win_is_valid(session.result_win) then
+    elseif
+      session
+      and session.merge
+      and session.result_win
+      and vim.api.nvim_win_is_valid(session.result_win)
+    then
       -- the merge view: one step back (or forward), buttons included, from any column
       local history = require("codediff.ui.conflict.history")
       if redo then

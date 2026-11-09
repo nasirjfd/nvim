@@ -71,7 +71,23 @@ local lsp_layout = {
 }
 
 local builtin_layouts = {
-  explorer = { preset = "sidebar", preview = false },
+  -- The explorer: the list right under its header (core/activity-bar.lua); the search row only
+  -- shows on / (one plain row, no box), and Esc or opening a file hides it again.
+  explorer = {
+    preview = false,
+    hidden = { "input" },
+    layout = {
+      backdrop = false,
+      width = 40,
+      min_width = 40,
+      height = 0,
+      position = "left",
+      border = "none",
+      box = "vertical",
+      { win = "input", height = 1, border = "none" },
+      { win = "list", border = "none" },
+    },
+  },
   select = { preset = "select" },
   command_history = { preset = "vscode" },
   search_history = { preset = "vscode" },
@@ -347,6 +363,8 @@ return {
           },
         },
         explorer = {
+          -- the explorer's own default (the sidebar preset) wins over picker.layout above
+          layout = builtin_layouts.explorer,
           actions = {
             -- Cmd+V in the explorer: paste the copied files into the directory under the cursor. A
             -- file pasted into the folder it came from (or onto a name that exists) asks for the new
@@ -460,25 +478,41 @@ return {
               if vim.api.nvim_win_is_valid(picker.main) then
                 vim.api.nvim_set_current_win(picker.main)
               end
-              -- clear the search, so the explorer shows the full tree again (with the file revealed)
+              -- clear and hide the search, so the explorer shows the full tree again (with the file
+              -- revealed)
               vim.schedule(function()
                 if not picker.closed then
                   picker.input:set("", "")
                   picker:find()
+                  picker:toggle("input", { enable = false })
                 end
               end)
+            end,
+            -- / in the list: show the search row and type in it
+            show_search = function(picker)
+              picker:toggle("input", { enable = true, focus = true })
+            end,
+            -- Esc in the search row: clear it, hide it, back to the list
+            hide_search = function(picker)
+              vim.cmd("stopinsert")
+              picker.input:set("", "")
+              picker:find()
+              picker:toggle("input", { enable = false })
+              picker:focus("list")
             end,
           },
           win = {
             input = {
               keys = {
                 ["<CR>"] = { "search_confirm", mode = { "n", "i" } },
+                ["<Esc>"] = { "hide_search", mode = { "n", "i" } },
                 ["<C-q>"] = { "quit_nvim", mode = { "n", "i" } },
               },
             },
             list = {
               keys = {
                 ["<C-q>"] = "quit_nvim",
+                ["/"] = "show_search",
                 ["<D-c>"] = { "explorer_yank", mode = { "n", "x" } },
                 ["<D-v>"] = "explorer_paste_named",
               },

@@ -265,6 +265,9 @@ return {
         -- an added file is faintly green all over, a deleted one faintly red
         highlight_added_deleted_files = true,
       },
+      -- Source Control pane: with no change selected, the right side shows the file you were in
+      -- (like VS Code) instead of the shortcuts page (g? shows those)
+      scm = { empty_view = "buffer" },
       keymaps = {
         view = {
           quit = { "q", "<leader>dc" },
@@ -275,6 +278,8 @@ return {
     },
     config = function(_, opts)
       require("codediff").setup(opts)
+      -- the Explorer / Source Control switcher in front of the git pane's toolbar
+      require("core.activity-bar").hook_git_toolbar()
 
       local group = vim.api.nvim_create_augroup("UserCodeDiff", { clear = true })
 

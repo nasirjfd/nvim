@@ -1,19 +1,21 @@
--- Cursor-style activity bar: Explorer and Source Control icons in a row along the top of
--- the screen (Neovim's tab line). A click does what the key does (Cmd+Shift+E / G). Hovering
--- tints the icon and shows its name and key beside the icons; the open view is underlined.
+-- Cursor-style switcher on top of the sidebar: Explorer and Source Control icons in the header row
+-- (winbar) of the file explorer and of the git pane, as wide as the sidebar, shown only while one is
+-- open. In the git pane they come before its own toolbar buttons. A click does what the key does
+-- (Cmd+Shift+E / G), hovering tints the icon, the pane you are in is underlined.
 local M = {}
 
 local api = vim.api
 
 -- Nerd Font codicons: files, source control
 local ITEMS = {
-  { icon = "\u{eaf0}", name = "Explorer", key = "⇧⌘E", lhs = "<D-S-e>" },
-  { icon = "\u{ea68}", name = "Source Control", key = "⇧⌘G", lhs = "<D-S-g>" },
+  { icon = "\u{eaf0}", name = "Explorer", lhs = "<D-S-e>" },
+  { icon = "\u{ea68}", name = "Source Control", lhs = "<D-S-g>" },
 }
 local LEFT = 1 -- columns before the first icon
-local CELL = 5 -- each icon takes "  x  "
+local CELL = 3 -- each icon takes " x "
 
-local hovered -- index of the icon under the mouse
+local hovered -- { win, index } of the icon under the mouse
+local decorated = {} -- sidebar win -> { kind = "Explorer"|"Source Control", base = winbar after the icons }
 
 local function set_highlights()
   local function get(name)
@@ -35,46 +37,35 @@ local function set_highlights()
   api.nvim_set_hl(0, "ActivityBarIcon", { bg = bg, fg = dim })
   api.nvim_set_hl(0, "ActivityBarActive", { bg = bg, fg = fg, underline = true, sp = accent })
   api.nvim_set_hl(0, "ActivityBarHover", { bg = hover_bg, fg = fg })
-  api.nvim_set_hl(0, "ActivityBarLabel", { bg = bg, fg = dim })
+  api.nvim_set_hl(0, "ActivityBarSep", { bg = bg, fg = dim })
 end
 
--- Which view is open in the current tab: "Explorer", "Source Control" or nil.
-local function active()
-  local tab = api.nvim_get_current_tabpage()
-  local snacks = rawget(_G, "Snacks")
-  if snacks and snacks.picker then
-    for _, picker in ipairs(snacks.picker.get({ source = "explorer" })) do
-      local w = picker.list and picker.list.win and picker.list.win.win
-      if w and api.nvim_win_is_valid(w) and api.nvim_win_get_tabpage(w) == tab then
-        return "Explorer"
-      end
-    end
-  end
-  local lifecycle = package.loaded["codediff.ui.lifecycle"]
-  local panel = lifecycle and lifecycle.get_panel(tab)
-  local view = lifecycle and lifecycle.get_panel_view(tab)
-  if panel and panel.data and panel.data.kind == "scm" and not (view and view.is_hidden) then
-    return "Source Control"
-  end
-end
-
-function M.tabline()
-  local ok, open = pcall(active)
-  open = ok and open or nil
+local function icons(win, kind)
   local parts = { "%#ActivityBarFill#", string.rep(" ", LEFT) }
   for i, item in ipairs(ITEMS) do
-    local group = (hovered == i and "ActivityBarHover")
-      or (open == item.name and "ActivityBarActive")
+    local is_hover = hovered and hovered[1] == win and hovered[2] == i
+    local group = (is_hover and "ActivityBarHover")
+      or (kind == item.name and "ActivityBarActive")
       or "ActivityBarIcon"
-    parts[#parts + 1] = ("%%%d@v:lua.ActivityBarClick@%%#%s#  %s  %%X"):format(i, group, item.icon)
+    parts[#parts + 1] = ("%%%d@v:lua.ActivityBarClick@%%#%s# %s %%X"):format(i, group, item.icon)
   end
-  parts[#parts + 1] = "%#ActivityBarLabel#"
-  if hovered then
-    local item = ITEMS[hovered]
-    parts[#parts + 1] = "  " .. item.name .. "  " .. item.key
-  end
-  parts[#parts + 1] = "%#ActivityBarFill#%="
   return table.concat(parts)
+end
+
+local function draw(win)
+  local d = decorated[win]
+  if not d or not api.nvim_win_is_valid(win) then
+    decorated[win] = nil
+    return
+  end
+  local rest = d.base ~= "" and ("%#ActivityBarSep#│" .. d.base) or "%#ActivityBarFill#%="
+  local winbar = icons(win, d.kind) .. rest
+  vim.wo[win].winbar = winbar
+  -- snacks re-applies its window options when the explorer lays itself out: make it apply this
+  if d.root and d.root.opts then
+    d.root.opts.wo = d.root.opts.wo or {}
+    d.root.opts.wo.winbar = winbar
+  end
 end
 
 function _G.ActivityBarClick(index)
@@ -90,44 +81,89 @@ function _G.ActivityBarClick(index)
   end)
 end
 
-local function redraw()
-  vim.cmd.redrawtabline()
+-- The explorer's header: on the window that holds its search box and list.
+local function decorate_explorers()
+  local snacks = rawget(_G, "Snacks")
+  if not (snacks and snacks.picker) then
+    return
+  end
+  for _, picker in ipairs(snacks.picker.get({ source = "explorer" })) do
+    local win = picker.layout and picker.layout.root and picker.layout.root.win
+    if win and api.nvim_win_is_valid(win) and (not decorated[win] or vim.wo[win].winbar == "") then
+      decorated[win] = { kind = "Explorer", base = "", root = picker.layout.root }
+      draw(win)
+    end
+  end
 end
+
+-- The git pane's toolbar is redrawn by codediff: put the icons back in front of it every time.
+local function hook_git_toolbar()
+  local ok, toolbar = pcall(require, "codediff.ui.explorer.toolbar")
+  if not ok or toolbar._activity_bar then
+    return
+  end
+  toolbar._activity_bar = true
+  -- the icons and their separator: the toolbar leaves out buttons that would not fit beside them
+  toolbar.reserved = LEFT + CELL * #ITEMS + 1
+  local apply = toolbar.apply
+  toolbar.apply = function(explorer, ...)
+    local result = apply(explorer, ...)
+    local win = explorer and explorer.winid
+    if win and api.nvim_win_is_valid(win) and explorer.data and explorer.data.kind == "scm" then
+      decorated[win] = { kind = "Source Control", base = vim.wo[win].winbar }
+      draw(win)
+    end
+    return result
+  end
+end
+
+M.hook_git_toolbar = hook_git_toolbar
 
 local function on_mouse_move()
   local pos = vim.fn.getmousepos()
   local now
-  if pos.screenrow == 1 and pos.winid == 0 then
-    local i = math.floor((pos.screencol - 1 - LEFT) / CELL) + 1
-    if pos.screencol > LEFT and ITEMS[i] then
-      now = i
+  if decorated[pos.winid] and pos.winrow == 1 then
+    local i = math.floor((pos.wincol - 1 - LEFT) / CELL) + 1
+    if pos.wincol > LEFT and ITEMS[i] then
+      now = { pos.winid, i }
     end
   end
-  if now ~= hovered then
+  local before = hovered
+  if (now and now[1]) ~= (before and before[1]) or (now and now[2]) ~= (before and before[2]) then
     hovered = now
-    redraw()
+    for _, win in ipairs({ before and before[1] or false, now and now[1] or false }) do
+      if win then
+        draw(win)
+      end
+    end
   end
 end
 
 function M.setup()
   vim.o.mousemoveevent = true
-  vim.o.showtabline = 2
-  vim.o.tabline = "%!v:lua.require'core.activity-bar'.tabline()"
   set_highlights()
   local group = api.nvim_create_augroup("ActivityBar", { clear = true })
   api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_highlights })
-  -- the explorer or git pane opening / closing moves the underline
-  api.nvim_create_autocmd({ "TabEnter", "WinEnter", "WinClosed", "BufWinEnter" }, {
+  api.nvim_create_autocmd({ "WinNew", "WinEnter", "BufWinEnter", "TabEnter" }, {
     group = group,
     callback = function()
-      vim.schedule(redraw)
+      vim.schedule(function()
+        decorate_explorers()
+        hook_git_toolbar()
+      end)
+    end,
+  })
+  api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    callback = function(ev)
+      decorated[tonumber(ev.match)] = nil
     end,
   })
   vim.keymap.set(
     { "n", "i", "x", "s" },
     "<MouseMove>",
     on_mouse_move,
-    { desc = "Activity bar hover" }
+    { desc = "Sidebar switcher hover" }
   )
 end
 
