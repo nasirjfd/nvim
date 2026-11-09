@@ -50,6 +50,9 @@ return {
         -- also `print`s it, and a long value (response.json) filled the screen with a -- More --
         -- prompt that had to be dismissed after every request.
         disable_script_print_output = true,
+        -- Show responses up to 5 MB (Kulala's default of 32 KB replaced a 63 KB JSON response
+        -- with a "size of response is > 32Kb" note)
+        max_response_size = 5 * 1024 * 1024,
         -- Long lines of the response wrap at word boundaries, continuing at the line's indent
         win_opts = {
           wo = { wrap = true, linebreak = true, breakindent = true, breakindentopt = "shift:2" },
