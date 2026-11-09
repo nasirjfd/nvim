@@ -285,17 +285,11 @@ return {
           picker:close()
         end,
         confirm = function(picker, item, action)
-          local main = picker.main
-          if main and vim.api.nvim_win_is_valid(main) then
-            local lifecycle = package.loaded["codediff.ui.lifecycle"]
-            local session = lifecycle and lifecycle.get_session(vim.api.nvim_win_get_tabpage(main))
-            local buf = vim.api.nvim_win_get_buf(main)
-            if session and (buf == session.original_bufnr or buf == session.modified_bufnr or buf == session.result_bufnr) then
-              vim.api.nvim_set_current_win(main)
-              if require("codediff.ui.view.actions.panes").open_current_elsewhere() then
-                picker.main = vim.api.nvim_get_current_win()
-              end
-            end
+          -- picked in the git pane or another codediff tab: open it in an editor tab instead of a
+          -- pane of the diff (core/leave-codediff.lua)
+          local target = require("core.leave-codediff").editor_window(picker.main)
+          if target then
+            picker.main = target
           end
           Snacks.picker.actions.jump(picker, item, action)
         end,
