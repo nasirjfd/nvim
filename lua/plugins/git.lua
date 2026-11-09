@@ -283,6 +283,8 @@ return {
       local function selection_colors()
         vim.api.nvim_set_hl(0, "CodeDiffExplorerSelected", { link = "SnacksPickerListCursorLine" })
         vim.api.nvim_set_hl(0, "CodeDiffExplorerSelectedNC", { link = "CursorLine" })
+        -- a deleted file: a clear red wash (the theme's deleted-line colour is grey)
+        vim.api.nvim_set_hl(0, "CodeDiffFileDelete", { bg = "#3a2124" })
       end
       selection_colors()
       vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = selection_colors })
