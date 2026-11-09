@@ -419,6 +419,9 @@ local function click()
     end)
     return
   end
+  -- a click on the frame around the bar: line 0 (top border) or past the last line (bottom border)
+  pos.line = math.min(math.max(pos.line, 1), api.nvim_buf_line_count(state.buf))
+  pos.column = math.max(pos.column, 1)
   if pos.line == 1 and pos.wincol <= 2 then
     show_replace(not state.replace)
     return
