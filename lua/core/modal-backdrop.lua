@@ -51,6 +51,10 @@ local function set_dim_highlights()
   local dark_bg = blend(bg, 0, 1 - M.sidebar_dim)
   api.nvim_set_hl(0, "ModalDim", { bg = dark_bg, fg = blend(fg, dark_bg, 1 - M.sidebar_dim * 0.6) })
   api.nvim_set_hl(0, "ModalDimText", { fg = blend(fg, dark_bg, 1 - M.sidebar_dim * 0.6) })
+  -- the explorer's search box has a border drawn in its own background colour (invisible): dimmed,
+  -- it stays invisible instead of showing up in the text colour
+  api.nvim_set_hl(0, "ModalDimBorder", { bg = dark_bg, fg = dark_bg })
+  api.nvim_set_hl(0, "ModalDimTitle", { bg = dark_bg, fg = blend(fg, dark_bg, 1 - M.sidebar_dim * 0.6), bold = true })
 end
 
 -- explorer sidebar parts: floats that sit above the backdrop but below modals
@@ -74,7 +78,8 @@ local DIM_MAP = table.concat({
   "SnacksPickerList:ModalDim",
   "SnacksPickerInput:ModalDim",
   "SnacksPickerBox:ModalDim",
-  "FloatBorder:ModalDim",
+  "FloatBorder:ModalDimBorder",
+  "FloatTitle:ModalDimTitle",
   "SnacksPickerFile:ModalDimText",
   "SnacksPickerDir:ModalDimText",
   "SnacksPickerDirectory:ModalDimText",
