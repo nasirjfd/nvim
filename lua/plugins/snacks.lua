@@ -347,6 +347,8 @@ return {
           },
         },
         explorer = {
+          -- the search box is hidden until / (Esc, or opening a file from it, hides it again)
+          layout = { preset = "sidebar", preview = false, hidden = { "input" } },
           actions = {
             -- Cmd+V in the explorer: paste the copied files into the directory under the cursor. A
             -- file pasted into the folder it came from (or onto a name that exists) asks for the new
@@ -465,20 +467,35 @@ return {
                 if not picker.closed then
                   picker.input:set("", "")
                   picker:find()
+                  picker:toggle("input", { enable = false })
                 end
               end)
+            end,
+            -- / in the list: show the search box and type in it
+            show_search = function(picker)
+              picker:toggle("input", { enable = true, focus = true })
+            end,
+            -- Esc in the search box: clear it, hide it, back to the list
+            hide_search = function(picker)
+              vim.cmd("stopinsert")
+              picker.input:set("", "")
+              picker:find()
+              picker:toggle("input", { enable = false })
+              picker:focus("list")
             end,
           },
           win = {
             input = {
               keys = {
                 ["<CR>"] = { "search_confirm", mode = { "n", "i" } },
+                ["<Esc>"] = { "hide_search", mode = { "n", "i" } },
                 ["<C-q>"] = { "quit_nvim", mode = { "n", "i" } },
               },
             },
             list = {
               keys = {
                 ["<C-q>"] = "quit_nvim",
+                ["/"] = "show_search",
                 ["<D-c>"] = { "explorer_yank", mode = { "n", "x" } },
                 ["<D-v>"] = "explorer_paste_named",
               },
