@@ -321,6 +321,7 @@ return {
         -- Recent files: v:oldfiles also keeps directories (the explorer and `nvim .` open them as
         -- buffers), which showed up as a row without a file name
         recent = {
+          matcher = { smartcase = false, ignorecase = true }, -- case never matters, as in files
           transform = function(item)
             local file = item.file
             if type(file) ~= "string" or file == "" or file:sub(-1) == "/" or vim.fn.isdirectory(file) == 1 then
@@ -332,8 +333,9 @@ return {
           git_status = false,
           ignored = false,
           diagnostics = false,
-          -- Rank recently-opened files to the top, even before typing anything.
-          matcher = { frecency = true, sort_empty = true },
+          -- Rank recently-opened files to the top, even before typing anything. Case never matters
+          -- (no smartcase): POST also finds PostController.php, the whole word ranked above P…O…S…T.
+          matcher = { frecency = true, sort_empty = true, smartcase = false, ignorecase = true },
         },
         explorer = {
           actions = {
