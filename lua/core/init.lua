@@ -19,5 +19,3 @@ require("core.lazy")
 pcall(function()
   require("core.leave-codediff").setup()
 end)
--- VS Code-style activity bar (Explorer / Search / Source Control) on the far left
-require("core.activity-bar").setup()

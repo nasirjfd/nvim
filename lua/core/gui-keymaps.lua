@@ -63,12 +63,6 @@ end, { desc = "Toggle Sidebar" })
 -- (cmd+b is the one that toggles that tab's own sidebar). It focuses the explorer of this tab, opening
 -- it when needed, and reveals the current file when the tab is an ordinary one.
 local function focus_explorer()
-  -- In the git pane, the graph or a diff tab: switch to the editor tab and show the explorer there,
-  -- so the explorer and the git pane are never open side by side (one sidebar at a time).
-  local editor = require("core.leave-codediff").editor_window(vim.api.nvim_get_current_win())
-  if editor then
-    vim.api.nvim_set_current_win(editor)
-  end
   local current_tab = vim.api.nvim_get_current_tabpage()
   local explorer
   for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
@@ -167,7 +161,9 @@ local function focus_git()
     vim.cmd("CodeDiff scm")
     return
   end
-  local from = vim.api.nvim_get_current_buf()
+  -- the file being edited (also when the cursor is in the file explorer)
+  local scm_handler = package.loaded["codediff.commands.handlers.scm"]
+  local from = scm_handler and scm_handler.editor_buffer and scm_handler.editor_buffer() or vim.api.nvim_get_current_buf()
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     local panel = lifecycle.get_panel(tab)
     if panel and panel.data and panel.data.kind == "scm" then

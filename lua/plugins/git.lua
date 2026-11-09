@@ -278,8 +278,6 @@ return {
     },
     config = function(_, opts)
       require("codediff").setup(opts)
-      -- the Explorer / Source Control switcher in front of the git pane's toolbar
-      require("core.activity-bar").hook_git_toolbar()
 
       local group = vim.api.nvim_create_augroup("UserCodeDiff", { clear = true })
 
