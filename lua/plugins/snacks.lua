@@ -8,6 +8,77 @@ local function outside_diff()
   end
 end
 
+-- The explorer's search box is hidden until /. Meanwhile an empty box with the same "Explorer"
+-- title stands in its place: its top edge (╭── Explorer ──╮) in the winbar of the explorer's outer
+-- window, its bottom edge (╰──────╯) in the winbar of the list. / swaps that for the real search
+-- box; Esc or opening a file swaps back. ─ fills both edges to the window's width.
+-- `stored`: the layout's own settings for that window, which it rebuilds the window's options from
+-- on every update (adding the top edge resizes the explorer, which runs one).
+local function set_winbar(win, winbar, stored)
+  if not (win and win.win and vim.api.nvim_win_is_valid(win.win)) then
+    return
+  end
+  vim.api.nvim_win_call(win.win, function()
+    vim.opt_local.fillchars:append({ wbr = "─" })
+  end)
+  vim.wo[win.win].winbar = winbar
+  for _, opts in ipairs({ win.opts, stored }) do
+    opts.wo = opts.wo or {}
+    opts.wo.winbar = winbar
+    opts.wo.fillchars = vim.wo[win.win].fillchars
+  end
+end
+
+local function explorer_header(picker, on)
+  local layout = picker.layout
+  if not layout or layout.closed then
+    return
+  end
+  layout.win_opts.list = layout.win_opts.list or {}
+  set_winbar(
+    layout.root,
+    on and "%#FloatBorder#╭%=%#FloatTitle# Explorer %#FloatBorder#%=╮" or "",
+    {}
+  )
+  set_winbar(
+    picker.list and picker.list.win,
+    on and "%#FloatBorder#╰%=╯" or "",
+    layout.win_opts.list
+  )
+end
+
+-- Draw the empty header whenever an explorer list appears (opened, revealed, shown again).
+vim.api.nvim_create_autocmd("BufWinEnter", {
+  group = vim.api.nvim_create_augroup("ExplorerHeader", { clear = true }),
+  callback = function(args)
+    if vim.bo[args.buf].filetype ~= "snacks_picker_list" then
+      return
+    end
+    vim.schedule(function()
+      for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
+        if not picker.closed and picker.layout and picker.layout:is_hidden("input") then
+          explorer_header(picker, true)
+        end
+      end
+    end)
+  end,
+})
+
+-- Show (on) or hide the explorer's search box, with the empty header box in its place when hidden.
+local function explorer_search(picker, on)
+  if on then
+    explorer_header(picker, false)
+    picker:toggle("input", { enable = true, focus = true })
+  else
+    vim.cmd("stopinsert")
+    picker.input:set("", "")
+    picker:find()
+    picker:toggle("input", { enable = false })
+    explorer_header(picker, true)
+    picker:focus("list")
+  end
+end
+
 -- Jump straight to an LSP location. Duplicate locations (the same spot reported twice) are
 -- collapsed; with several distinct ones, `first` jumps to the first and otherwise `fallback`
 -- opens the picker. `on_self` runs instead of jumping when the target is the cursor's own line
@@ -248,7 +319,12 @@ return {
     },
     indent = { enabled = false },
     input = { enabled = true },
-    notifier = { enabled = true, timeout = 3000, width = { min = 40, max = 0.6 }, height = { min = 1, max = 0.8 } }, -- wide and tall enough that a long message (git output, a commit message) shows whole
+    notifier = {
+      enabled = true,
+      timeout = 3000,
+      width = { min = 40, max = 0.6 },
+      height = { min = 1, max = 0.8 },
+    }, -- wide and tall enough that a long message (git output, a commit message) shows whole
     picker = {
       enabled = true,
       -- Every picker: list on top, preview below, dimmed backdrop behind the modal. Pickers that
@@ -324,7 +400,12 @@ return {
           },
           transform = function(item)
             local file = item.file
-            if type(file) ~= "string" or file == "" or file:sub(-1) == "/" or vim.fn.isdirectory(file) == 1 then
+            if
+              type(file) ~= "string"
+              or file == ""
+              or file:sub(-1) == "/"
+              or vim.fn.isdirectory(file) == 1
+            then
               return false
             end
           end,
@@ -347,8 +428,29 @@ return {
           },
         },
         explorer = {
-          -- the search box is hidden until / (Esc, or opening a file from it, hides it again)
-          layout = { preset = "sidebar", preview = false, hidden = { "input" } },
+          -- the search box is hidden until / (Esc, or opening a file from it, hides it again); an
+          -- empty "Explorer" box stands in its place (see explorer_search at the top)
+          layout = {
+            preview = false,
+            hidden = { "input" },
+            layout = {
+              backdrop = false,
+              width = 40,
+              min_width = 40,
+              height = 0,
+              position = "left",
+              border = "none",
+              box = "vertical",
+              {
+                win = "input",
+                height = 1,
+                border = true,
+                title = "{title} {live} {flags}",
+                title_pos = "center",
+              },
+              { win = "list", border = "none" },
+            },
+          },
           actions = {
             -- Cmd+V in the explorer: paste the copied files into the directory under the cursor. A
             -- file pasted into the folder it came from (or onto a name that exists) asks for the new
@@ -378,10 +480,13 @@ return {
               local Tree = require("snacks.explorer.tree")
               local Actions = require("snacks.explorer.actions")
               local files = vim.tbl_filter(function(file)
-                return file ~= "" and (vim.fn.filereadable(file) == 1 or vim.fn.isdirectory(file) == 1)
+                return file ~= ""
+                  and (vim.fn.filereadable(file) == 1 or vim.fn.isdirectory(file) == 1)
               end, vim.split(vim.fn.getreg("+") or "", "\n", { plain = true }))
               if #files == 0 then
-                return Snacks.notify.warn("Nothing copied: copy a file in the explorer with Cmd+C first")
+                return Snacks.notify.warn(
+                  "Nothing copied: copy a file in the explorer with Cmd+C first"
+                )
               end
               local dir = vim.fs.normalize(picker:dir())
               local last
@@ -465,23 +570,21 @@ return {
               -- clear the search, so the explorer shows the full tree again (with the file revealed)
               vim.schedule(function()
                 if not picker.closed then
-                  picker.input:set("", "")
-                  picker:find()
-                  picker:toggle("input", { enable = false })
+                  local file_win = vim.api.nvim_get_current_win()
+                  explorer_search(picker, false)
+                  if vim.api.nvim_win_is_valid(file_win) then
+                    vim.api.nvim_set_current_win(file_win)
+                  end
                 end
               end)
             end,
             -- / in the list: show the search box and type in it
             show_search = function(picker)
-              picker:toggle("input", { enable = true, focus = true })
+              explorer_search(picker, true)
             end,
             -- Esc in the search box: clear it, hide it, back to the list
             hide_search = function(picker)
-              vim.cmd("stopinsert")
-              picker.input:set("", "")
-              picker:find()
-              picker:toggle("input", { enable = false })
-              picker:focus("list")
+              explorer_search(picker, false)
             end,
           },
           win = {
@@ -517,7 +620,11 @@ return {
       -- No glide while a picker is open: its preview jumps between files and lines as the selection
       -- moves (LSP references, grep...), and animating that only gets in the way.
       filter = function(buf)
-        if vim.g.snacks_scroll == false or vim.b[buf].snacks_scroll == false or vim.bo[buf].buftype == "terminal" then
+        if
+          vim.g.snacks_scroll == false
+          or vim.b[buf].snacks_scroll == false
+          or vim.bo[buf].buftype == "terminal"
+        then
           return false
         end
         local ok, pickers = pcall(function()
@@ -551,9 +658,18 @@ return {
     {
       "<leader><space>",
       function()
-        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        local text = table.concat(
+          vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }),
+          "\n"
+        )
         vim.cmd("normal! \27")
-        Snacks.picker.files(vim.tbl_extend("force", require("core.file-cache").opts() or {}, { pattern = text:match("^[^\n]*") }))
+        Snacks.picker.files(
+          vim.tbl_extend(
+            "force",
+            require("core.file-cache").opts() or {},
+            { pattern = text:match("^[^\n]*") }
+          )
+        )
       end,
       mode = "x",
       desc = "Find Files (selection)",
@@ -569,7 +685,10 @@ return {
     {
       "<leader>/",
       function()
-        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        local text = table.concat(
+          vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }),
+          "\n"
+        )
         vim.cmd("normal! \27")
         Snacks.picker.grep({ search = text:match("^[^\n]*"), live = true })
       end,
@@ -586,7 +705,10 @@ return {
     {
       "<D-S-f>",
       function()
-        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        local text = table.concat(
+          vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }),
+          "\n"
+        )
         vim.cmd("normal! \27")
         Snacks.picker.grep({ search = text:match("^[^\n]*"), live = true })
       end,
@@ -596,7 +718,10 @@ return {
     {
       "<D-F>",
       function()
-        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        local text = table.concat(
+          vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }),
+          "\n"
+        )
         vim.cmd("normal! \27")
         Snacks.picker.grep({ search = text:match("^[^\n]*"), live = true })
       end,
@@ -1105,11 +1230,16 @@ return {
         outside_diff()
         -- On a usage: jump to the definition. Already on the definition: list its usages
         -- (a single usage is opened directly).
-        lsp_goto("definition", function()
-          Snacks.picker.lsp_definitions()
-        end, true, function()
-          Snacks.picker.lsp_references({ include_declaration = false })
-        end)
+        lsp_goto(
+          "definition",
+          function()
+            Snacks.picker.lsp_definitions()
+          end,
+          true,
+          function()
+            Snacks.picker.lsp_references({ include_declaration = false })
+          end
+        )
       end,
       desc = "Definition",
     },
