@@ -350,6 +350,14 @@ return {
         list = { keys = { ["<C-q>"] = "close" } },
       },
       sources = {
+        -- Global grep: case-insensitive, plain text; buttons in the search box toggle case / word / regex
+        grep = {
+          regex = false,
+          args = { "--ignore-case" },
+          on_show = function(picker)
+            require("core.grep-toggles").attach(picker)
+          end,
+        },
         -- LSP location lists: only file:line, the code is already in the preview; list on top, preview below
         lsp_references = { format = "filename", layout = lsp_layout },
         lsp_definitions = { format = "filename", layout = lsp_layout },
