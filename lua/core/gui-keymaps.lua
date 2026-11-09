@@ -45,6 +45,11 @@ map("n", "<D-b>", function()
   local sidebars = require("core.sidebars")
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   local panel = lifecycle and lifecycle.get_panel_view(tab)
+  -- The file explorer was the sidebar opened last (e.g. cmd+shift+e in the git tab): toggle that.
+  if panel and sidebars.prefers_explorer(tab) then
+    Snacks.explorer()
+    return
+  end
   if panel then
     require("codediff.ui.explorer").toggle_visibility(panel)
     return
