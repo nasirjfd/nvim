@@ -62,8 +62,13 @@ k("\\b", "scratchpad", "Scratchpad")
 k("\\t", "toggle_view", "Toggle headers/body")
 k("\\q", "close", "Close result")
 
+-- Cmd+Shift+B shows the last response again after Esc / q hid it, or hides it (core/kulala-ui.lua)
+vim.keymap.set("n", "<D-S-b>", function()
+  require("core.kulala-ui").toggle_response()
+end, { buffer = true, silent = true, desc = "Kulala: show / hide the response" })
+
 -- Esc in the request file closes the gh popup first, then hides the response window when one is
--- shown; otherwise it does what Esc does everywhere else (clear cursors, the search highlight).
+-- shown (Cmd+Shift+B brings it back); otherwise it does what Esc does everywhere else (clear cursors, the search highlight).
 vim.keymap.set("n", "<Esc>", function()
   local popup = vim.b.lsp_floating_preview
   if popup and vim.api.nvim_win_is_valid(popup) then

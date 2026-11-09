@@ -45,6 +45,13 @@ return {
           end,
           prefix = false,
         },
+        ["Hide (Cmd+Shift+B)"] = {
+          "<D-S-b>",
+          function()
+            require("core.kulala-ui").hide_response()
+          end,
+          prefix = false,
+        },
       },
       -- The values a `css …::text` filter takes out of an HTML response (core/kulala-ui.lua), already
       -- formatted there: shown with JSON colours, not reformatted

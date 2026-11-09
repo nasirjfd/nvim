@@ -4,7 +4,12 @@
 -- hover (gh) Neovim watches every closing window and reads that window's variables; a window closed
 -- through a buffer delete is already gone by then, and Neovim raises "Invalid window id". Closing
 -- the window first, while it is still valid, and deleting the buffer after avoids that.
+--
+-- Hiding only hides: the responses stay in Kulala's history, and M.toggle_response() (Cmd+Shift+B)
+-- shows the last one shown again, on the same tab (body / headers / …) and scrolled where it was.
 local M = {}
+
+local saved_view -- cursor and scroll of the response window when it was hidden
 
 function M.hide_response()
   local ok, ui = pcall(require, "kulala.ui")
@@ -18,12 +23,43 @@ function M.hide_response()
   local shown = false
   for _, win in ipairs(vim.fn.win_findbuf(buf)) do
     shown = true
+    saved_view = vim.api.nvim_win_call(win, vim.fn.winsaveview)
     if #vim.api.nvim_tabpage_list_wins(vim.api.nvim_win_get_tabpage(win)) > 1 then
       pcall(vim.api.nvim_win_close, win, true)
     end
   end
   pcall(ui.close_kulala_buffer)
   return shown
+end
+
+-- Show the response again (where it was hidden), or hide it when it is shown.
+function M.toggle_response()
+  local ok, ui = pcall(require, "kulala.ui")
+  if not ok then
+    return
+  end
+  if M.hide_response() then
+    return
+  end
+  local db = require("kulala.db").global_update()
+  if #(db.responses or {}) == 0 then
+    vim.notify("No Kulala response yet: send a request first", vim.log.levels.INFO)
+    return
+  end
+  -- Kulala opens the response next to its request file: when that file is not shown (or was closed),
+  -- next to the current one
+  local current = require("kulala.db").get_current_buffer()
+  if not (current and vim.api.nvim_buf_is_valid(current) and #vim.fn.win_findbuf(current) > 0) then
+    require("kulala.db").set_current_buffer(vim.api.nvim_get_current_buf())
+  end
+  ui.open_default_view()
+  local win = ui.get_kulala_window()
+  if win and saved_view then
+    local view = saved_view
+    pcall(vim.api.nvim_win_call, win, function()
+      vim.fn.winrestview(view)
+    end)
+  end
 end
 
 -- HTML responses filtered by a CSS selector, written by hand at one of three levels; the most
