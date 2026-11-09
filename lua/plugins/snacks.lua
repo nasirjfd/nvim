@@ -531,7 +531,7 @@ return {
       function()
         local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
         vim.cmd("normal! \27")
-        Snacks.picker.grep({ pattern = text:match("^[^\n]*") })
+        Snacks.picker.grep({ search = text:match("^[^\n]*"), live = true })
       end,
       mode = "x",
       desc = "Grep selection",
@@ -548,7 +548,7 @@ return {
       function()
         local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
         vim.cmd("normal! \27")
-        Snacks.picker.grep({ pattern = text:match("^[^\n]*") })
+        Snacks.picker.grep({ search = text:match("^[^\n]*"), live = true })
       end,
       mode = "x",
       desc = "Grep selection",
@@ -558,7 +558,7 @@ return {
       function()
         local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
         vim.cmd("normal! \27")
-        Snacks.picker.grep({ pattern = text:match("^[^\n]*") })
+        Snacks.picker.grep({ search = text:match("^[^\n]*"), live = true })
       end,
       mode = "x",
       desc = "Grep selection",
