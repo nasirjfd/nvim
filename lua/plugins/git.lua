@@ -262,6 +262,8 @@ return {
         cycle_hunks_across_files = true,
         -- <leader>hr discards the hunk immediately, without the "Discard hunk N?" prompt
         confirm_discard_hunk = false,
+        -- an added file is faintly green all over, a deleted one faintly red
+        highlight_added_deleted_files = true,
       },
       keymaps = {
         view = {
