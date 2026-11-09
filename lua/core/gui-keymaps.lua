@@ -105,8 +105,8 @@ map("n", "<D-F12>", function()
   Snacks.picker.lsp_symbols()
 end, { desc = "Goto Symbol" })
 
--- cmd+r cmd+r -> rename symbol
-map("n", "<D-r><D-r>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
+-- cmd+r cmd+r -> rename symbol: the first cmd+r opens the replace bar, the second one in the bar
+-- renames (core/find-bar.lua), so a single cmd+r doesn't wait for a second key
 
 -- cmd+g -> goto line
 map("n", "<D-g>", function()
