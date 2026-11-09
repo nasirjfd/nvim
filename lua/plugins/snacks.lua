@@ -518,6 +518,18 @@ return {
       end,
       desc = "Find Files",
     },
+    -- With a selection: the files picker starts with the selected text (first line) in its search
+    -- box, editable like any typed search
+    {
+      "<leader><space>",
+      function()
+        local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+        vim.cmd("normal! \27")
+        Snacks.picker.files(vim.tbl_extend("force", require("core.file-cache").opts() or {}, { pattern = text:match("^[^\n]*") }))
+      end,
+      mode = "x",
+      desc = "Find Files (selection)",
+    },
     {
       "<leader>/",
       function()

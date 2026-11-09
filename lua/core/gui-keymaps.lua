@@ -27,6 +27,12 @@ end, { desc = "Recent Files" })
 map("n", "<D-S-o>", function()
   Snacks.picker.files()
 end, { desc = "All Files" })
+-- with a selection: the search box starts with the selected text (first line), editable
+map("x", "<D-S-o>", function()
+  local text = table.concat(vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() }), "\n")
+  vim.cmd("normal! \27")
+  Snacks.picker.files({ pattern = text:match("^[^\n]*") })
+end, { desc = "All Files (selection)" })
 
 -- cmd+b -> toggle the sidebar (show/hide), matches workbench.action.toggleSidebarVisibility.
 -- In a codediff tab (diff, history or the multi-repo Source Control pane) it
