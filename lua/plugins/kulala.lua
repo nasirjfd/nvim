@@ -7,7 +7,10 @@ return {
     -- v6+ moved the backend (kulala-core) to a closed-source binary that needs a license token.
     -- v5.3.4 is the last curl-based, token-free release; drop the pin if you get a token.
     commit = "6656c9d332735ca6a27725e0fb45a1715c4372d9", -- tag v5.3.4
+    -- Kulala registers the tree-sitter parser for .http. With ft alone it loaded too late for the first
+    -- .http buffer of a session (e.g. a diff pane), which then had no colours.
     ft = { "http", "rest" },
+    event = "VeryLazy",
     init = function()
       -- Show the whole response in the result window instead of collapsed (indent) folds
       vim.api.nvim_create_autocmd("BufWinEnter", {
