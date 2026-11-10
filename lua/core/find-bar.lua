@@ -571,6 +571,15 @@ local function keep_lines()
   api.nvim_win_set_cursor(state.win, { r, #new[r] })
 end
 
+-- Select the text of the find field (Select mode), so typing replaces it like in a text field.
+local function select_find()
+  vim.schedule(function()
+    if state and alive() and api.nvim_get_current_win() == state.win and api.nvim_buf_get_lines(state.buf, 0, 1, false)[1] ~= "" then
+      api.nvim_feedkeys(vim.keycode("<Esc>$v0<C-g>"), "n", false)
+    end
+  end)
+end
+
 --- Open the bar on the current window. `o.replace` shows the replace field, `o.text` fills the
 --- find field (else the last search).
 function M.open(o)
@@ -589,6 +598,9 @@ function M.open(o)
         M.update(true)
       end
       vim.cmd("startinsert!")
+      if not o.replace then
+        select_find()
+      end
       return
     end
     M.close()
@@ -707,6 +719,9 @@ function M.open(o)
     M.update(true)
   end
   vim.cmd("startinsert!")
+  if not o.replace then
+    select_find()
+  end
 end
 
 -- The visual selection (first line), leaving visual mode.

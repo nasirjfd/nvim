@@ -529,6 +529,15 @@ return {
             show_search = function(picker)
               explorer_title(picker, false)
               picker:toggle("input", { enable = true, focus = true })
+              -- an earlier search stays in the box: select it, so typing replaces it (like a text field)
+              vim.schedule(function()
+                if picker.closed or picker.input:get() == "" then
+                  return
+                end
+                if vim.api.nvim_get_current_win() == picker.input.win.win then
+                  vim.api.nvim_feedkeys(vim.keycode("<Esc>$v0<C-g>"), "n", false)
+                end
+              end)
             end,
             -- Esc in the search box: clear it, hide it, back to the list
             hide_search = function(picker)
