@@ -330,6 +330,84 @@ lib.test("http pane: a request row is only its name, and the search box does not
   screen:close()
 end)
 
+-- the text of the row the pane's cursor is on
+local function current_row(screen)
+  return screen:exec("local c = require('modules.http_requests').panes()[1]:current(); return c and (c.kind .. ':' .. c.text) or ''")
+end
+
+local function select_row(screen, kind_text)
+  for _ = 1, 30 do
+    if current_row(screen) == kind_text then
+      return
+    end
+    screen:input("j")
+    vim.wait(50)
+  end
+  lib.eq(kind_text, current_row(screen), "could not select the row")
+end
+
+lib.test("http pane: l opens and h closes folders and files, h on a request goes to its file", function()
+  local screen = open_pane(project())
+  select_row(screen, "file:users.http")
+  screen:input("h") -- open: closes
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "List users", 40) == nil
+  end, "h did not close the file")
+  vim.wait(200) -- the refresh puts the cursor back on the file once it is done
+  lib.eq("file:users.http", current_row(screen), "the cursor stays on the closed file")
+  screen:input("h") -- already closed: goes to the folder it is in
+  h.wait(screen, function()
+    return current_row(screen) == "dir:users"
+  end, "h on a closed file did not go to its folder")
+  screen:input("h")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "users.http", 40) == nil
+  end, "h did not close the folder")
+  vim.wait(200)
+  screen:input("l")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "users.http", 40) ~= nil
+  end, "l did not open the folder")
+  screen:input("l") -- open: goes to its first row
+  h.wait(screen, function()
+    return current_row(screen) == "file:users.http"
+  end, "l on an open folder did not go to its first row")
+  screen:input("l") -- the file is still closed (its state was kept): opens
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "List users", 40) ~= nil
+  end, "l did not open the file")
+  vim.wait(200)
+  screen:input("l") -- now open: first request
+  h.wait(screen, function()
+    return current_row(screen):find("^request:") ~= nil
+  end, "l on an open file did not go to its first request")
+  screen:input("h")
+  h.wait(screen, function()
+    return current_row(screen) == "file:users.http"
+  end, "h on a request did not go to its file")
+  lib.eq(0, screen:exec("return #_G.runs"), "h and l must not run anything")
+  screen:close()
+end)
+
+lib.test("http pane: the terminal cursor is hidden while the pane has the focus and back outside it", function()
+  local screen = open_pane(project())
+  local function cursor_hidden()
+    return screen:exec("return vim.o.guicursor") == "a:HttpPaneHiddenCursor"
+  end
+  h.wait(screen, cursor_hidden, "the cursor must be hidden in the pane")
+  screen:input("/") -- the search box is a place to type
+  h.wait(screen, function()
+    return not cursor_hidden()
+  end, "the cursor must show in the search box")
+  screen:input("<Esc><Esc>")
+  screen:input("<C-w>l") -- the editor window
+  h.wait(screen, function()
+    return screen:exec("return #vim.tbl_filter(function(w) return vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'snacks_picker_list' end, { vim.api.nvim_get_current_win() })") == 0
+      and not cursor_hidden()
+  end, "the cursor must come back outside the pane")
+  screen:close()
+end)
+
 lib.test("http pane: an unsaved edit of an open file shows in the pane", function()
   local dir = project()
   local screen = open_pane(dir)

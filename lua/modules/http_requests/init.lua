@@ -303,6 +303,49 @@ local function toggle(picker, item)
   refresh(picker, item.key)
 end
 
+-- move the pane's cursor onto the row with this key
+local function move_to(picker, key)
+  for index, item in ipairs(picker:items()) do
+    if item.key == key then
+      picker.list:move(index, true)
+      return true
+    end
+  end
+  return false
+end
+
+-- l: open a closed folder/file; on an open one go to its first row
+local function open_node(picker, item)
+  if not item or (item.kind ~= "dir" and item.kind ~= "file") then
+    return
+  end
+  if not item.open then
+    collapsed[item.key] = nil
+    refresh(picker, item.key)
+  else
+    local items = picker:items()
+    for index, candidate in ipairs(items) do
+      if candidate.key == item.key and items[index + 1] and items[index + 1].parent == item then
+        picker.list:move(index + 1, true)
+        return
+      end
+    end
+  end
+end
+
+-- h: close an open folder/file; on anything else go to the folder/file it is in
+local function close_node(picker, item)
+  if not item then
+    return
+  end
+  if (item.kind == "dir" or item.kind == "file") and item.open then
+    collapsed[item.key] = true
+    refresh(picker, item.key)
+  elseif item.parent and item.parent.key then
+    move_to(picker, item.parent.key)
+  end
+end
+
 local function is_http(name)
   return name:find("%.http$") ~= nil or name:find("%.rest$") ~= nil
 end
@@ -395,6 +438,12 @@ local actions = {
   http_curl = function(picker, item)
     add_from_curl(picker, item or picker:current())
   end,
+  http_open = function(picker, item)
+    open_node(picker, item or picker:current())
+  end,
+  http_close = function(picker, item)
+    close_node(picker, item or picker:current())
+  end,
   http_refresh = function(picker)
     files.scan(cwd(), function()
       refresh(picker)
@@ -483,6 +532,8 @@ local function open()
           ["<2-LeftRelease>"] = "http_click",
           ["<3-LeftRelease>"] = "http_click",
           ["<4-LeftRelease>"] = "http_click",
+          ["l"] = "http_open",
+          ["h"] = "http_close",
           ["<C-CR>"] = "http_run",
           ["r"] = "http_run",
           ["a"] = "http_new",
@@ -575,6 +626,43 @@ api.nvim_create_autocmd("BufWinEnter", {
         set_title(picker)
       end
     end)
+  end,
+})
+
+-- The rows are selected by the list's own highlight: the terminal cursor on top of it is only noise, so it
+-- is hidden while the pane's list has the focus (and given back when the focus leaves).
+local saved_guicursor ---@type string?
+local function hide_cursor()
+  if saved_guicursor == nil then
+    saved_guicursor = vim.o.guicursor
+    api.nvim_set_hl(0, "HttpPaneHiddenCursor", { blend = 100, nocombine = true })
+    vim.o.guicursor = "a:HttpPaneHiddenCursor"
+  end
+end
+local function show_cursor()
+  if saved_guicursor ~= nil then
+    vim.o.guicursor = saved_guicursor
+    saved_guicursor = nil
+  end
+end
+local function sync_cursor()
+  local buf = api.nvim_get_current_buf()
+  local in_pane = false
+  if vim.bo[buf].filetype == "snacks_picker_list" then
+    for _, picker in ipairs(M.panes()) do
+      in_pane = in_pane or (picker.list.win.buf == buf)
+    end
+  end
+  if in_pane then
+    hide_cursor()
+  else
+    show_cursor()
+  end
+end
+api.nvim_create_autocmd({ "BufEnter", "WinEnter", "WinLeave", "BufLeave", "FocusGained", "TabEnter", "ModeChanged" }, {
+  group = group,
+  callback = function()
+    vim.schedule(sync_cursor)
   end,
 })
 
