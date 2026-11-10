@@ -392,7 +392,7 @@ end)
 lib.test("http pane: the terminal cursor is hidden while the pane has the focus and back outside it", function()
   local screen = open_pane(project())
   local function cursor_hidden()
-    return screen:exec("return vim.o.guicursor") == "a:HttpPaneHiddenCursor"
+    return screen:exec("return require('modules.pane_kit').hidden()")
   end
   h.wait(screen, cursor_hidden, "the cursor must be hidden in the pane")
   screen:input("/") -- the search box is a place to type

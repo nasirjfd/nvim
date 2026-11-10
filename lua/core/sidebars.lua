@@ -11,7 +11,7 @@ local M = {}
 local panels = {}
 -- Tabs where the file explorer was opened last: <D-b> toggles that instead of the codediff sidebar.
 local explorer_pref = {}
--- The sidebar opened last in each tab: "explorer", "codediff" or "http" (the HTTP Requests pane).
+-- The sidebar opened last in each tab: "explorer", "codediff", "http" (HTTP Requests) or "tests".
 local last_sidebar = {}
 
 function M.last(tab)
@@ -31,10 +31,27 @@ local function source_of(buf)
   end
 end
 
--- The HTTP Requests panes shown in `tab`.
-local function http_panes(tab)
-  local ok, http = pcall(require, "modules.http_requests")
-  return ok and http.panes(tab) or {}
+-- The panes built on a Snacks picker besides the explorer: name -> picker source.
+local EXTRA = { http = "http_requests", tests = "phpunit_tests" }
+
+-- The extra panes (HTTP Requests, Tests) shown in `tab`, except the one called `except`.
+local function extra_panes(tab, except)
+  local found = {}
+  local kit = require("modules.pane_kit")
+  for name, source in pairs(EXTRA) do
+    if name ~= except then
+      vim.list_extend(found, kit.panes(source, tab))
+    end
+  end
+  return found
+end
+
+local function name_of_source(source)
+  for name, candidate in pairs(EXTRA) do
+    if candidate == source then
+      return name
+    end
+  end
 end
 
 -- Close a Snacks picker *now*, windows included. picker:close() destroys its windows one tick later; a
@@ -117,7 +134,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       end
       explorer_pref[tab] = true
       last_sidebar[tab] = "explorer"
-      for _, picker in ipairs(http_panes(tab)) do
+      for _, picker in ipairs(extra_panes(tab)) do
         close_now(picker)
       end
       restore_cmdheight()
@@ -152,7 +169,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       for _, picker in ipairs(snacks_explorers(tab)) do
         close_now(picker)
       end
-      for _, picker in ipairs(http_panes(tab)) do
+      for _, picker in ipairs(extra_panes(tab)) do
         close_now(picker)
       end
       restore_cmdheight()
@@ -160,7 +177,8 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   end,
 })
 
--- The HTTP Requests pane appeared: close the file explorer and hide the codediff sidebar of the tab.
+-- An extra pane (HTTP Requests, Tests) appeared: close the file explorer and the other extra pane, hide the
+-- codediff sidebar of the tab.
 vim.api.nvim_create_autocmd("BufWinEnter", {
   group = group,
   callback = function(args)
@@ -169,11 +187,15 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
     end
     local tab = vim.api.nvim_get_current_tabpage()
     vim.schedule(function()
-      if not vim.api.nvim_tabpage_is_valid(tab) or #http_panes(tab) == 0 or source_of(args.buf) ~= "http_requests" then
+      local name = vim.api.nvim_tabpage_is_valid(tab) and name_of_source(source_of(args.buf))
+      if not name then
         return
       end
-      last_sidebar[tab] = "http"
+      last_sidebar[tab] = name
       for _, picker in ipairs(snacks_explorers(tab)) do
+        close_now(picker)
+      end
+      for _, picker in ipairs(extra_panes(tab, name)) do
         close_now(picker)
       end
       local panel = codediff_panel(tab)
@@ -188,10 +210,14 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   end,
 })
 
--- Called by the HTTP Requests pane right before it opens: nothing else may be a sidebar at that moment.
-function M.make_room_for_http(tab)
+-- Called by an extra pane ("http", "tests") right before it opens: nothing else may be a sidebar at that
+-- moment.
+function M.make_room(name, tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   for _, picker in ipairs(snacks_explorers(tab)) do
+    close_now(picker)
+  end
+  for _, picker in ipairs(extra_panes(tab, name)) do
     close_now(picker)
   end
   local panel = codediff_panel(tab)
@@ -203,6 +229,10 @@ function M.make_room_for_http(tab)
     end
   end
   restore_cmdheight()
+end
+
+function M.make_room_for_http(tab)
+  M.make_room("http", tab)
 end
 
 -- The file explorer is about to open (Snacks.explorer(), <leader>e, cmd+b, …): close the HTTP pane first,
@@ -218,7 +248,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
     Snacks.picker.pick = function(source, opts)
       local name = type(source) == "table" and source.source or source
       if name == "explorer" and #snacks_explorers(vim.api.nvim_get_current_tabpage()) == 0 then
-        for _, picker in ipairs(http_panes(vim.api.nvim_get_current_tabpage())) do
+        for _, picker in ipairs(extra_panes(vim.api.nvim_get_current_tabpage())) do
           close_now(picker)
         end
       end

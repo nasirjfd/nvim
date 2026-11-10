@@ -77,7 +77,10 @@ function ADAPTER.build_spec(args)
   local specs = {}
   for index, target in ipairs(targets) do
     local results = string.format("%s/%d-%d-%s.xml", dir, vim.uv.os_getpid(), index, nio.fn.tempname():match("[^/]+$"))
-    local argv = plan.args(target, results, position.type == "test" and position.name or nil)
+    -- one test, or the tests of a file that the pane picked (the ones that failed last time)
+    local only = args.extra_args and args.extra_args.only
+    local test = position.type == "test" and position.name or only
+    local argv = plan.args(target, results, test)
     specs[#specs + 1] = {
       command = { "/bin/sh", "-c", plan.command(argv) },
       cwd = plan.get().root or vim.uv.cwd(),
@@ -128,32 +131,8 @@ end
 M.adapter = ADAPTER
 
 -- ── the tests pane (Cmd+Shift+T) ───────────────────────────────────────────────────────────────
-
-local function summary_win()
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neotest-summary" then
-      return win
-    end
-  end
-end
-M.summary_win = summary_win
-
---- Open the pane and focus it; focus it when it is open elsewhere; close it when it has the focus.
-function M.toggle()
-  local win = summary_win()
-  if win and vim.api.nvim_get_current_win() == win then
-    require("neotest").summary.close()
-    return
-  end
-  if win then
-    vim.api.nvim_set_current_win(win)
-    return
-  end
-  require("neotest").summary.open()
-  win = summary_win()
-  if win then
-    vim.api.nvim_set_current_win(win)
-  end
+M.toggle = function()
+  require("modules.phpunit.pane").toggle()
 end
 
 return M

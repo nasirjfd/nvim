@@ -45,6 +45,29 @@ lib.test("phpunit plan: a file runs in its project with the project's config; a 
   plan.reset()
 end)
 
+lib.test("phpunit plan: --configuration in args (like the VS Code setting) limits the tests to that project", function()
+  local dir = h.tmpdir()
+  h.write(dir .. "/g/one/tests.xml", { "<phpunit/>" })
+  h.write(dir .. "/g/one/tests/ATest.php", { "x" })
+  h.write(dir .. "/g/two/tests.xml", { "<phpunit/>" })
+  h.write(dir .. "/g/two/tests/BTest.php", { "x" })
+  plan.configure({ root = dir, args = { "--configuration=g/one/tests.xml", "--no-interaction" }, paths = { [dir] = "/c" } })
+  local root = plan.norm(dir)
+  lib.eq({ root .. "/g/one" }, plan.get().projects)
+  lib.eq({ "--no-interaction" }, plan.get().args, "the configuration is not given twice")
+  lib.ok(plan.project_of(root .. "/g/one/tests/ATest.php"), "a file of the configured project belongs to it")
+  lib.eq(nil, plan.project_of(root .. "/g/two/tests/BTest.php"), "a file of another project does not")
+  local t = plan.targets(root .. "/g/one/tests/ATest.php")
+  lib.eq("--configuration=/c/g/one/tests.xml", plan.args(t[1], dir .. "/r.xml")[1])
+  lib.eq("php --no-interaction", (plan.command({}):gsub("^php %S*%s*vendor/bin/phpunit ", "php ")), "the other arguments stay")
+  -- both spellings, and an explicit list of projects wins
+  plan.configure({ root = dir, args = { "--configuration", "g/two/tests.xml" } })
+  lib.eq({ root .. "/g/two" }, plan.get().projects)
+  plan.configure({ root = dir, args = { "--configuration=g/one/tests.xml" }, projects = { "g/one", "g/two" } })
+  lib.eq(2, #plan.get().projects)
+  plan.reset()
+end)
+
 lib.test("phpunit plan: the VS Code command template is filled in and the arguments survive both shells", function()
   local dir = h.tmpdir()
   plan.configure({
@@ -178,7 +201,7 @@ local function start_neotest(screen, dir)
       command = "ROOT=" .. %q .. " " .. %q .. "/fake-phpunit.sh ${phpunitargs}",
     })
     vim.cmd("edit " .. %q)
-    require("neotest").summary.open()
+    require("neotest")
   ]], dir, dir, dir, dir, dir .. "/app/tests/FooTest.php"))
   h.wait(screen, function()
     return (counts(screen) or {}).total == 2
@@ -242,15 +265,15 @@ end)
 -- ── the pane ────────────────────────────────────────────────────────────────────────────────────
 local function layout(screen)
   return screen:exec([[
-    local heights, summary = {}, 0
+    local heights = {}
     for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
       if vim.api.nvim_win_get_config(win).relative == "" then
         heights[#heights + 1] = vim.api.nvim_win_get_height(win)
-        if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neotest-summary" then summary = summary + 1 end
       end
     end
-    return { cmdheight = vim.o.cmdheight, lines = vim.o.lines, heights = heights, summary = summary,
-      focused = vim.bo.filetype == "neotest-summary" }
+    local panes = require("modules.phpunit.pane").panes()
+    return { cmdheight = vim.o.cmdheight, lines = vim.o.lines, heights = heights, summary = #panes,
+      focused = #panes > 0 and panes[1].list.win.win == vim.api.nvim_get_current_win() }
   ]])
 end
 
@@ -266,7 +289,7 @@ lib.test("tests pane: Cmd+Shift+T opens it with the focus, focuses it from elsew
     local l = layout(screen)
     return l.summary == 1 and l.focused
   end, "the pane did not open with the focus")
-  screen:input("<C-w>h") -- away from it
+  screen:input("<C-w>l") -- away from it
   h.wait(screen, function()
     return not layout(screen).focused
   end, "could not leave the pane")

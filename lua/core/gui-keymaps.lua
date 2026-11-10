@@ -43,9 +43,13 @@ end, { desc = "All Files (selection)" })
 map("n", "<D-b>", function()
   local tab = vim.api.nvim_get_current_tabpage()
   local sidebars = require("core.sidebars")
-  -- the HTTP Requests pane was the sidebar opened last: toggle that
+  -- the HTTP Requests or the Tests pane was the sidebar opened last: toggle that
   if sidebars.last(tab) == "http" then
     require("modules.http_requests").show_hide()
+    return
+  end
+  if sidebars.last(tab) == "tests" then
+    require("modules.phpunit.pane").show_hide()
     return
   end
   local lifecycle = package.loaded["codediff.ui.lifecycle"]

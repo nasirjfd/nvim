@@ -5,6 +5,8 @@
 -- (host folder -> folder inside the container) and `args`. Besides them:
 --   root          the workspace folder (the tree of tests starts here)
 --   projects      sub folders of root that have tests, each with its own phpunit config (default: root alone)
+--                 or, when `args` holds `--configuration=<project>/tests.xml` like the VS Code setting, that one
+--                 project: the search for tests is limited to it
 --   config_files  names of the phpunit config looked for in a project, first one found wins
 --   env           environment of the command
 local M = {}
@@ -45,13 +47,39 @@ function M.configure(opts)
   settings = vim.tbl_extend("force", vim.deepcopy(DEFAULTS), opts)
   settings.root = opts.root and norm(opts.root) or nil
   settings.paths = mapped(opts.paths)
+  settings.configs = {}
   configured = opts.root ~= nil
-  if opts.projects then
-    settings.projects = {}
-    for _, rel in ipairs(opts.projects) do
-      settings.projects[#settings.projects + 1] = norm(settings.root .. "/" .. rel)
+
+  -- `--configuration=<file>` in args: the project of that file, run with that config
+  local args, from_args = {}, {}
+  local list = opts.args or {}
+  local i = 1
+  while i <= #list do
+    local arg = list[i]
+    local file = arg:match("^%-%-configuration=(.+)$")
+    if not file and arg == "--configuration" and list[i + 1] then
+      file, i = list[i + 1], i + 1
     end
+    if file and settings.root then
+      local abs = norm(file:sub(1, 1) == "/" and file or (settings.root .. "/" .. file))
+      local project = vim.fs.dirname(abs)
+      settings.configs[project] = abs
+      from_args[#from_args + 1] = project
+    else
+      args[#args + 1] = arg
+    end
+    i = i + 1
   end
+  settings.args = args
+
+  local projects = {}
+  for _, rel in ipairs(opts.projects or {}) do
+    projects[#projects + 1] = norm(settings.root .. "/" .. rel)
+  end
+  if #projects == 0 then
+    projects = from_args
+  end
+  settings.projects = #projects > 0 and projects or nil
 end
 
 function M.reset()
@@ -122,6 +150,9 @@ end
 
 --- The phpunit config file of a project folder, nil when it has none.
 function M.config_of(project)
+  if settings.configs and settings.configs[project] then
+    return settings.configs[project]
+  end
   for _, name in ipairs(settings.config_files) do
     local file = project .. "/" .. name
     if uv.fs_stat(file) then
@@ -220,7 +251,7 @@ end
 --- junit log to `results` (a host path under a mapped folder).
 ---@param target { project: string, path: string }
 ---@param results string
----@param test? string name of one test method
+---@param test? string|string[] name of one test method, or of several
 function M.args(target, results, test)
   local args = {}
   local config = M.config_of(target.project)
@@ -231,9 +262,13 @@ function M.args(target, results, test)
     args[#args + 1] = M.to_container(target.path)
   end
   args[#args + 1] = "--log-junit=" .. M.to_container(results)
+  if type(test) == "table" and #test == 1 then
+    test = test[1]
+  end
   if test then
     args[#args + 1] = "--filter"
-    args[#args + 1] = "::" .. test .. "( with data set .*)?$"
+    local names = type(test) == "table" and ("(" .. table.concat(test, "|") .. ")") or test
+    args[#args + 1] = "::" .. names .. "( with data set .*)?$"
   end
   return args
 end
