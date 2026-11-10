@@ -183,6 +183,18 @@ lib.test("tests run: the test under the cursor, the file, and the last run again
   screen:close()
 end)
 
+lib.test("tests run: the test under the cursor runs even before the pane has found the project's tests", function()
+  local dir = project()
+  local screen = start(dir)
+  screen:exec("vim.cmd('wincmd l')")
+  screen:exec("vim.api.nvim_win_set_cursor(0, { 9, 0 })")
+  screen:exec("package.loaded['modules.phpunit.pane'].nearest = function() return nil end") -- as if it did not know the file
+  screen:exec("require('modules.phpunit.runner').run_nearest()")
+  wait_runs(screen, dir, 1)
+  lib.matches("BTest%.php .*%-%-filter ::testTwo%(", lines(dir .. "/args.log")[1])
+  screen:close()
+end)
+
 lib.test("tests run: stopping ends the queue of a parallel run", function()
   local dir = project()
   local screen = start(dir)

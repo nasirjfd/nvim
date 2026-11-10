@@ -106,7 +106,10 @@ end
 function M.run_nearest()
   local id = pane().nearest(vim.api.nvim_buf_get_name(0), vim.api.nvim_win_get_cursor(0)[1] - 1)
   if not id then
-    return notify("No tests under the cursor", vim.log.levels.WARN)
+    -- the pane does not know this file yet (neotest is still looking through the project, or the pane was
+    -- never opened): neotest reads the file in this window itself and runs the test under the cursor
+    require("neotest").run.run({ concurrent = false })
+    return
   end
   M.run({ id })
 end
