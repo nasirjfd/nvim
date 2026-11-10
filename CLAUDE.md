@@ -10,7 +10,7 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
   - This may bootstrap lazy.nvim, install/update plugins, and touch the network (see Startup side effects).
 - Format Lua: `stylua <files>` (config in `stylua.toml`: 2 spaces, 100 cols, prefer double quotes, always call parens).
 - Lint Lua: `luacheck <files>` (config in `.luacheckrc`; `vim` is a declared global).
-- Automated tests: `tests/run.sh [name filter]` (about 8 s). Each spec drives a real Neovim running this config in an embedded, rendered UI (`tests/screen.lua`) and asserts on the screen: grep toggles and hover, file names in pickers, find bar, Cmd+B sidebar toggling, `.http` startup, Cmd+Alt+Z. Run it after every change to the config; add a spec in `tests/specs/` for every new feature or fixed bug. `NVIM_CONFIG_TESTS=1` (set by the runner) disables the lazy.nvim update checker and the daily auto-sync.
+- Automated tests: `tests/run.sh [name filter]` (about 8 s). Each spec drives a real Neovim running this config in an embedded, rendered UI (`tests/screen.lua`) and asserts on the screen: grep toggles and hover, file names in pickers, find bar, Cmd+B sidebar toggling, `.http` startup, Cmd+Alt+Z, the HTTP and tests panes. Run it after every change to the config; add a spec in `tests/specs/` for every new feature or fixed bug. `NVIM_CONFIG_TESTS=1` (set by the runner) disables the lazy.nvim update checker and the daily auto-sync.
 - The git plugin (`multi-repo-code-diff`) has its own suite: `./tests/run_tests.sh [spec|dir]` inside its folder (`integration/ui/conflict/scroll_sync_spec.lua`, `integration/ui/view/end_of_changes_spec.lua`, `e2e/conflict/scroll_sync_spec.lua` are the fast ones for the merge view and F7 behaviour; the `e2e/` specs that use the native watcher are slow). A few older specs fail on a clean checkout (`gutter_grid`, `move_keymap`, `keymap/golden_matrix`, `keymap/help`, `plugin/modules`, `plugin/setup`).
 - Broader runtime diagnostics are interactive only: `:checkhealth`, `:checkhealth vim.lsp`, `:Lazy`, `:Mason`.
 
@@ -30,6 +30,13 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 - Two Snacks sidebars alive at the same moment make Neovim split the screen between them and hand the leftover rows to the command line (cmdheight 20). So the pane closes the Explorer *before* it opens (`make_room_for_http`), `Snacks.picker.pick` is wrapped to close the pane before an Explorer opens, and `close_now` destroys a picker's windows immediately. In a diff tab a request opens in another tab, never over the diff.
 - It is one of three sidebars (Explorer, Git, HTTP) shown one at a time per tab: the wiring is in `lua/core/sidebars.lua` (`last_sidebar`, `source_of`) and `<D-b>` in `lua/core/gui-keymaps.lua`.
 - Tests: `tests/specs/07_http_pane.lua`. The clipboard is read through `require("modules.http_requests").clipboard()` so tests can fake it.
+
+### Tests pane (Cmd+Shift+T)
+
+- neotest (`lua/plugins/neotest.lua`, summary window on the right is the pane; `<leader>tt/tf/ta/tl/to/ts` run and show) with `lua/modules/phpunit/`, which wraps olimorris/neotest-phpunit: `plan.lua` (pure: command template, container paths, projects), `junit.lua` (the junit log -> results; neotest-phpunit's own reader crashes on a testcase without `file`), `init.lua` (the adapter and the pane toggle). Ghostty keybind `super+shift+t=csi:116;10u`.
+- A project turns it on in its `.nvim.lua` with `require("modules.phpunit").configure({ root, command, paths, args, config_files, projects })`, the same values as the VS Code PHPUnit extension (`phpunit.command` with `${php}`/`${phpargs}`/`${phpunitargs}`, `phpunit.paths`, `phpunit.args`). `supernova-env-dev/vendor/.nvim.lua` runs PHPUnit in the `worker` container, each project with its own `tests.xml`. The junit log goes to `<root>/.neotest-results/` (a folder the container sees) and is deleted after the run. Without `configure` it runs `vendor/bin/phpunit` locally.
+- neotest reads tests in a child Neovim with the runtimepath of setup time, so `neotest-phpunit` is required before `setup` in the plugin spec (else its `utils` module is not found there).
+- Tests: `tests/specs/08_tests_pane.lua` (a fake phpunit stands in for the container).
 
 ### LSP (native 0.11 API, not nvim-lspconfig setup calls)
 

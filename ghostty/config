@@ -34,6 +34,8 @@ keybind = super+alt+z=csi:122;11u
 keybind = ctrl+enter=csi:13;5u
 # cmd+shift+h opens the HTTP Requests pane (modules/http_requests)
 keybind = super+shift+h=csi:104;10u
+# cmd+shift+t opens the tests pane (neotest, lua/plugins/neotest.lua)
+keybind = super+shift+t=csi:116;10u
 keybind = super+s=csi:115;9u
 keybind = super+r=csi:114;9u
 keybind = super+shift+e=csi:101;10u

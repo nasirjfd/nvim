@@ -64,7 +64,34 @@ require("codediff").setup({
       "digiexpress/drop-shipping-api",
       "digiexpress/point-provider-contract",
       "digiexpress/ride-provider-contract",
+      "http",
     }),
   },
 })
 
+
+-- Tests (Cmd+Shift+T): PHPUnit runs inside the worker container, exactly like .vscode/settings.json
+-- (phpunit.command, phpunit.paths). Each project below is run with its own tests.xml.
+require("modules.phpunit").configure({
+  root = root,
+  command = 'docker compose exec -T -w /var/www/vendor worker /bin/sh -c "${php} ${phpargs} /var/www/vendor/bin/phpunit ${phpunitargs}"',
+  paths = { [root] = "/var/www/vendor" },
+  config_files = { "tests.xml", "phpunit.xml" },
+  projects = {
+    "digikala/supernova-digiexpress",
+    "digikala/supernova-hedwig",
+    "digikala/supernova-flex",
+    "digikala/supernova-digikala-shared",
+    "digiexpress/digi-express-api",
+    "digiexpress/digi-express-util",
+    "digiexpress/digi-express-infrastructure",
+    "digiexpress/digiexpress-finanace-core",
+    "digiexpress/digiexpress-finance",
+    "digiexpress/digiexpress-finance-agent-core",
+    "digiexpress/digiexpress-finance-cod",
+    "digiexpress/digiexpress-point-provider-core",
+    "digiexpress/digiexpress-ride-provider-core",
+    "digiexpress/finance-consignor-invoicing-core",
+    "digiexpress/survey-service",
+  },
+})
