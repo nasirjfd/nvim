@@ -349,6 +349,81 @@ lib.test("tests pane: it replaces the Explorer and the HTTP pane, one sidebar at
   screen:close()
 end)
 
+lib.test("tests pane: the failed tests come first, in a section above the folders", function()
+  local dir = project()
+  h.write(dir .. "/fail-B", { "x" })
+  local screen = start(dir)
+  h.wait(screen, function()
+    return pane_row(screen, "Run all tests") ~= nil
+  end, "no button")
+  lib.ok(not pane_row(screen, "Failed"), "no Failed section before a run")
+  h.click(screen, pane_row(screen, "Run all tests"), 8)
+  h.wait(screen, function()
+    return pane_row(screen, "✗ Failed") ~= nil
+  end, "the Failed section did not appear", 20000)
+  local failed_row = pane_row(screen, "✗ Failed")
+  local files_row = pane_row(screen, "ATest.php")
+  lib.ok(failed_row and files_row and failed_row < files_row, "Failed must be above the folders")
+  local test_row = pane_row(screen, "testTwo")
+  lib.ok(test_row and test_row > failed_row and test_row < files_row, "the failed test is listed in the section")
+  lib.ok(pane_row(screen, "BTest.php") and pane_row(screen, "BTest.php") < files_row + 3, "with its file next to it")
+  -- the section folds
+  h.click(screen, failed_row, 8)
+  h.wait(screen, function()
+    return pane_row(screen, "testTwo") == nil
+  end, "clicking the section did not fold it")
+  screen:close()
+end)
+
+lib.test("tests pane: the Flat list button shows every test on its own row, failed ones first, and goes back", function()
+  local dir = project()
+  h.write(dir .. "/fail-C", { "x" })
+  local screen = start(dir)
+  h.wait(screen, function()
+    return pane_row(screen, "Run all tests") ~= nil
+  end, "no button")
+  h.click(screen, pane_row(screen, "Run all tests"), 8)
+  h.wait(screen, function()
+    return pane_row(screen, "Run failed tests (1)") ~= nil
+  end, "the run did not finish", 20000)
+  h.click(screen, pane_row(screen, "Flat list"), 8)
+  h.wait(screen, function()
+    return pane_row(screen, "testOne") ~= nil
+  end, "the flat list did not show the tests")
+  lib.eq(true, screen:exec("return require('modules.phpunit.options').flat()"))
+  lib.ok(not pane_row(screen, "✗ Failed"), "no separate section in the flat list")
+  -- every test is there (8), the failed one first, each with its file
+  local rows = 0
+  for row = 1, 29 do
+    local text = screen:text(row, 1, 54)
+    if text:find("test%u") or text:find("test[OT]") then
+      rows = rows + 1
+    end
+  end
+  lib.eq(8, rows, "all eight tests listed")
+  local first = pane_row(screen, "testTwo")
+  lib.ok(first and pane_row(screen, "CTest.php") == first, "the failed test comes first with its file name")
+  h.click(screen, pane_row(screen, "Flat list"), 8)
+  h.wait(screen, function()
+    return pane_row(screen, "ATest.php") ~= nil and pane_row(screen, "testOne") == nil
+  end, "the button did not bring the folders back")
+  lib.eq(false, screen:exec("return require('modules.phpunit.options').flat()"))
+  screen:close()
+end)
+
+lib.test("tests pane: the buttons at the top are quiet (dark tints, nothing bold)", function()
+  local screen = h.nvim(h.tmpdir())
+  screen:exec("require('modules.phpunit.pane')") -- defines the highlights
+  local groups = { "PhpTestToggleOn", "PhpTestToggleOff", "PhpTestStepOn", "PhpTestStepOff", "PhpTestRun", "PhpTestRunFailed", "PhpTestRunIdle" }
+  for _, name in ipairs(groups) do
+    local hl = screen:exec("return vim.api.nvim_get_hl(0, { name = ... })", { name })
+    lib.ok(not hl.bold, name .. " must not be bold")
+    local r, g, b = math.floor(hl.bg / 65536) % 256, math.floor(hl.bg / 256) % 256, hl.bg % 256
+    lib.ok(math.max(r, g, b) <= 0x56, name .. " background is too bright: " .. string.format("#%02x%02x%02x", r, g, b))
+  end
+  screen:close()
+end)
+
 -- ── smoothness ──────────────────────────────────────────────────────────────────────────────────
 -- Every redraw of the screen is a frame the eye can see. A refresh used to put the list on its first row for a
 -- moment and back again (a flash); the rows of the pane must not move at all when a folder is folded.

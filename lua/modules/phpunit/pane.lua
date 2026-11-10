@@ -222,9 +222,74 @@ local function rows(_, ctx)
   local items = {
     { text = "Tests", kind = "info", counts = total, discovering = snap.tree == nil, key = "h:info" },
     { text = "Parallel", kind = "toggle", key = "h:parallel" },
+    { text = "Flat list", kind = "view", key = "h:view" },
     { text = "Run all tests", kind = "button", action = "all", key = "h:all" },
     { text = "Run failed tests", kind = "button", action = "failed", failed = total.failed, key = "h:failed" },
   }
+
+  local function test_item(test, extra)
+    local base = vim.fs.basename(test.path)
+    return vim.tbl_extend("force", {
+      text = test.name .. " " .. base,
+      name = test.name,
+      kind = "test",
+      key = test.id,
+      ids = { test.id },
+      id = test.id,
+      file = test.path,
+      line = test.line,
+      status = snap.running[test.id] and "running" or (snap.results[test.id] or {}).status or "none",
+    }, extra or {})
+  end
+
+  -- flat: every test on its own row, the failed ones first
+  if options.flat() then
+    local list = {}
+    for _, file in ipairs(files) do
+      for _, test in ipairs(file.tests) do
+        list[#list + 1] = test_item(test, { flat = true, file_name = vim.fs.basename(test.path) })
+      end
+    end
+    local rank = { failed = 0, running = 1 }
+    local indexed = {}
+    for i, item in ipairs(list) do
+      indexed[i] = { item = item, i = i }
+    end
+    table.sort(indexed, function(a, b)
+      local ra, rb = rank[a.item.status] or 2, rank[b.item.status] or 2
+      if ra ~= rb then
+        return ra < rb
+      end
+      return a.i < b.i
+    end)
+    for _, entry in ipairs(indexed) do
+      items[#items + 1] = entry.item
+    end
+    return items
+  end
+
+  -- the failed tests first, in a section of their own
+  local failed_tests = {}
+  for _, file in ipairs(files) do
+    for _, test in ipairs(file.tests) do
+      if not snap.running[test.id] and (snap.results[test.id] or {}).status == "failed" then
+        failed_tests[#failed_tests + 1] = test
+      end
+    end
+  end
+  if #failed_tests > 0 then
+    local header = {
+      text = "Failed", kind = "failed", key = "x:failed", open = searching or not collapsed["x:failed"], count = #failed_tests,
+    }
+    items[#items + 1] = header
+    if header.open then
+      for i, test in ipairs(failed_tests) do
+        items[#items + 1] = test_item(test, {
+          key = "x:" .. test.id, parent = header, last = i == #failed_tests, file_name = vim.fs.basename(test.path),
+        })
+      end
+    end
+  end
 
   -- group the files by their parent folder
   local groups = {}
@@ -282,18 +347,7 @@ local function rows(_, ctx)
         items[#items + 1] = fitem
         if fitem.open then
           for ti, test in ipairs(file.tests) do
-            items[#items + 1] = {
-              text = test.name,
-              kind = "test",
-              key = test.id,
-              parent = fitem,
-              last = ti == #file.tests,
-              ids = { test.id },
-              id = test.id,
-              file = test.path,
-              line = test.line,
-              status = snap.running[test.id] and "running" or (snap.results[test.id] or {}).status or "none",
-            }
+            items[#items + 1] = test_item(test, { text = test.name, parent = fitem, last = ti == #file.tests })
           end
         end
       end
@@ -314,13 +368,14 @@ local function set_highlights()
   hl("PhpTestRunning", { link = "DiagnosticInfo" })
   hl("PhpTestNone", { link = "NonText" })
   hl("PhpTestDim", { link = "Comment" })
-  hl("PhpTestToggleOn", { fg = "#e8eaee", bg = "#2f6f4f", bold = true })
-  hl("PhpTestToggleOff", { fg = "#aab0b8", bg = "#2b2f36" })
-  hl("PhpTestStepOn", { fg = "#ffffff", bg = "#46996f", bold = true })
-  hl("PhpTestStepOff", { fg = "#cfd3d9", bg = "#3b4048", bold = true })
-  hl("PhpTestRun", { fg = "#e8eaee", bg = "#33507d", bold = true })
-  hl("PhpTestRunFailed", { fg = "#e8eaee", bg = "#7a3b44", bold = true })
-  hl("PhpTestRunIdle", { fg = "#7d838c", bg = "#2b2f36" })
+  -- the bars at the top are quiet: dark tints of their colour, no bold
+  hl("PhpTestToggleOn", { fg = "#bfd0c6", bg = "#25352d" })
+  hl("PhpTestToggleOff", { fg = "#7f858d", bg = "#24282e" })
+  hl("PhpTestStepOn", { fg = "#d5e2da", bg = "#31483c" })
+  hl("PhpTestStepOff", { fg = "#9aa0a8", bg = "#2c3137" })
+  hl("PhpTestRun", { fg = "#b9c6da", bg = "#27334a" })
+  hl("PhpTestRunFailed", { fg = "#d6bcc0", bg = "#412e32" })
+  hl("PhpTestRunIdle", { fg = "#656b73", bg = "#24282e" })
 end
 set_highlights()
 api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
@@ -395,6 +450,13 @@ local function format(item, picker)
     local on = options.parallel()
     ret[#ret + 1] = { string.rep(" ", math.max(0, WIDTH - width)), on and "PhpTestToggleOn" or "PhpTestToggleOff" }
     return ret
+  elseif item.kind == "view" then
+    local on = options.flat()
+    ret[#ret + 1] = {
+      kit.pad("  " .. (on and "󰄵" or "󰄱") .. "  Flat list of all tests", WIDTH),
+      on and "PhpTestToggleOn" or "PhpTestToggleOff",
+    }
+    return ret
   elseif item.kind == "button" then
     if item.action == "all" then
       ret[#ret + 1] = { kit.pad("  ▶  Run all tests", WIDTH), "PhpTestRun" }
@@ -405,7 +467,15 @@ local function format(item, picker)
     return ret
   end
 
-  vim.list_extend(ret, Snacks.picker.format.tree(item, picker))
+  if item.kind == "failed" then
+    ret[#ret + 1] = { (item.open and "▾" or "▸") .. " ", "PhpTestFailed" }
+    ret[#ret + 1] = { "✗ Failed", "PhpTestFailed" }
+    ret[#ret + 1] = { "  " .. item.count, "PhpTestDim" }
+    return ret
+  end
+  if not item.flat then
+    vim.list_extend(ret, Snacks.picker.format.tree(item, picker))
+  end
   local icons = picker.opts.icons.files
   if item.kind == "dir" then
     ret[#ret + 1] = status_chunk(status_of(item.counts))
@@ -422,7 +492,10 @@ local function format(item, picker)
     ret[#ret + 1] = { "  " .. item.counts.total, "PhpTestDim" }
   else
     ret[#ret + 1] = status_chunk(item.status)
-    ret[#ret + 1] = { item.text, item.status == "failed" and "PhpTestFailed" or nil }
+    ret[#ret + 1] = { item.name or item.text, item.status == "failed" and "PhpTestFailed" or nil }
+    if item.file_name then
+      ret[#ret + 1] = { "  " .. item.file_name, "PhpTestDim" }
+    end
   end
   return ret
 end
@@ -431,7 +504,7 @@ end
 local refresh = kit.refresh
 
 local function toggle_fold(picker, item)
-  if item.kind == "dir" then
+  if item.kind == "dir" or item.kind == "failed" then
     collapsed[item.key] = (not collapsed[item.key]) or nil
   else
     expanded[item.key] = (not expanded[item.key]) or nil
@@ -440,11 +513,11 @@ local function toggle_fold(picker, item)
 end
 
 local function open_node(picker, item)
-  if not item or (item.kind ~= "dir" and item.kind ~= "file") then
+  if not item or (item.kind ~= "dir" and item.kind ~= "file" and item.kind ~= "failed") then
     return
   end
   if not item.open then
-    if item.kind == "dir" then
+    if item.kind == "dir" or item.kind == "failed" then
       collapsed[item.key] = nil
     else
       expanded[item.key] = true
@@ -465,7 +538,7 @@ local function close_node(picker, item)
   if not item then
     return
   end
-  if (item.kind == "dir" or item.kind == "file") and item.open then
+  if (item.kind == "dir" or item.kind == "file" or item.kind == "failed") and item.open then
     toggle_fold(picker, item)
   elseif item.parent and item.parent.key then
     kit.move_to(picker, item.parent.key)
@@ -483,7 +556,9 @@ local function run_item(item)
   if not item then
     return
   end
-  if item.kind == "button" then
+  if item.kind == "failed" then
+    runner().run_failed()
+  elseif item.kind == "button" then
     if item.action == "all" then
       runner().run_all()
     else
@@ -503,17 +578,20 @@ local actions = {
     if item.kind == "toggle" then
       options.toggle_parallel()
       refresh(picker, item.key)
+    elseif item.kind == "view" then
+      options.toggle_flat()
+      refresh(picker, item.key)
     elseif item.kind == "button" then
       run_item(item)
     elseif item.kind == "test" then
       kit.goto_line(picker, item.file, item.line)
-    elseif item.kind == "dir" or item.kind == "file" then
+    elseif item.kind == "dir" or item.kind == "file" or item.kind == "failed" then
       toggle_fold(picker, item)
     end
   end,
   tests_run = function(picker, item)
     item = item or picker:current()
-    if item and item.kind == "toggle" then
+    if item and (item.kind == "toggle" or item.kind == "view") then
       return
     end
     run_item(item)
@@ -527,6 +605,10 @@ local actions = {
   tests_parallel = function(picker)
     options.toggle_parallel()
     refresh(picker, "h:parallel")
+  end,
+  tests_view = function(picker)
+    options.toggle_flat()
+    refresh(picker, "h:view")
   end,
   tests_more = function(picker)
     options.set_workers(options.workers() + options.step(true))
@@ -626,6 +708,7 @@ local function open()
           ["a"] = "tests_all",
           ["F"] = "tests_failed",
           ["p"] = "tests_parallel",
+          ["v"] = "tests_view",
           ["+"] = "tests_more",
           ["="] = "tests_more",
           ["<kPlus>"] = "tests_more",

@@ -1,6 +1,7 @@
 -- The options of the tests pane that the user changes while working (kept between sessions):
 --   parallel   run the test files of one run at the same time
 --   workers    how many at once
+--   flat       list every test on its own (true) instead of folder -> file -> tests
 local M = {}
 
 -- (a test run of the configuration must not touch the options of the real one)
@@ -14,13 +15,14 @@ local function load()
   if values then
     return values
   end
-  values = { parallel = false, workers = 4 }
+  values = { parallel = false, workers = 4, flat = false }
   local fd = io.open(file, "r")
   if fd then
     local ok, data = pcall(vim.json.decode, fd:read("*a"))
     fd:close()
     if ok and type(data) == "table" then
       values.parallel = data.parallel == true
+      values.flat = data.flat == true
       if type(data.workers) == "number" then
         values.workers = math.min(MAX, math.max(MIN, math.floor(data.workers)))
       end
@@ -40,6 +42,16 @@ end
 
 function M.parallel()
   return load().parallel
+end
+
+function M.flat()
+  return load().flat
+end
+
+function M.toggle_flat()
+  load().flat = not values.flat
+  save()
+  return values.flat
 end
 
 function M.workers()
