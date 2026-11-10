@@ -240,8 +240,21 @@ local function format_buffer_or_selection()
 end
 map({ "n", "x" }, "<M-F>", format_buffer_or_selection, { desc = "Format Selection / File" })
 
--- alt+cmd+z -> revert/reset hunk
+-- alt+cmd+z -> revert the hunk under the cursor. In a diff tab that is codediff's discard-hunk (working
+-- tree side, no confirmation: cmd+z / u bring it back); elsewhere gitsigns' reset hunk.
 map("n", "<D-M-z>", function()
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  if lifecycle and lifecycle.get_session(vim.api.nvim_get_current_tabpage()) then
+    local config = require("codediff.config")
+    local key = config.options.keymaps.view.discard_hunk
+    if key then
+      local before = config.options.diff.confirm_discard_hunk
+      config.options.diff.confirm_discard_hunk = false
+      pcall(vim.api.nvim_feedkeys, vim.keycode(key), "mx", false)
+      config.options.diff.confirm_discard_hunk = before
+      return
+    end
+  end
   require("gitsigns").reset_hunk()
 end, { desc = "Revert Hunk" })
 

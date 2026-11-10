@@ -29,6 +29,7 @@ keybind = super+shift+c=csi:99;10u
 keybind = super+slash=csi:47;9u
 keybind = super+z=csi:122;9u
 keybind = super+shift+z=csi:122;10u
+keybind = super+alt+z=csi:122;11u
 keybind = super+s=csi:115;9u
 keybind = super+r=csi:114;9u
 keybind = super+shift+e=csi:101;10u
