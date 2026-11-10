@@ -304,6 +304,32 @@ lib.test("http pane: Cmd+Shift+H opens the pane over the Explorer and closes it 
   screen:close()
 end)
 
+lib.test("http pane: a request row is only its name, and the search box does not repeat the title", function()
+  local screen = open_pane(project())
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "List users", 40) ~= nil
+  end, "the request did not show")
+  lib.ok(h.find_on_screen(screen, "example.com/login", 60) == nil, "the URL of a named request must not show in the pane")
+  lib.ok(h.find_on_screen(screen, "example.com/users", 40) ~= nil, "an unnamed request is shown by its URL")
+  screen:input("/")
+  h.wait(screen, function()
+    return screen:exec("return vim.fn.mode()") == "i"
+  end, "the search box did not open")
+  local titles = 0
+  for row = 1, 45 do
+    local line = screen:text(row, 1, 40)
+    if line:find("HTTP Requests", 1, true) then
+      titles = titles + 1
+    end
+  end
+  lib.eq(1, titles, "HTTP Requests must be on the screen once (the winbar), not again in the search box")
+  screen:input("log")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Login", 40) ~= nil and h.find_on_screen(screen, "List users", 40) == nil
+  end, "searching did not filter the requests")
+  screen:close()
+end)
+
 lib.test("http pane: an unsaved edit of an open file shows in the pane", function()
   local dir = project()
   local screen = open_pane(dir)

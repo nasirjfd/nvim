@@ -34,17 +34,16 @@ local function set_highlights()
     opts.default = true
     api.nvim_set_hl(0, name, opts)
   end
-  local badge = { fg = "#14161a", bold = true }
-  for method, bg in pairs({
-    GET = "#6fbf73", POST = "#e8a64f", PUT = "#5b9be6", PATCH = "#b48ad8", DELETE = "#e5646e",
-    HEAD = "#8aa0b0", OPTIONS = "#8aa0b0",
+  -- the method is only a coloured word (no badge): muted tones that do not shout next to the names
+  for method, fg in pairs({
+    GET = "#7fa585", POST = "#b59a72", PUT = "#7d9bbf", PATCH = "#9d8bb5", DELETE = "#b07a80",
+    HEAD = "#8a949c", OPTIONS = "#8a949c",
   }) do
-    hl("HttpPane" .. method, vim.tbl_extend("force", badge, { bg = bg }))
+    hl("HttpPane" .. method, { fg = fg })
   end
-  hl("HttpPaneOther", vim.tbl_extend("force", badge, { bg = "#8f949c" }))
+  hl("HttpPaneOther", { fg = "#8a949c" })
   hl("HttpPaneButtonNew", { fg = "#e8eaee", bg = "#2f6f4f", bold = true })
   hl("HttpPaneButtonCurl", { fg = "#e8eaee", bg = "#33507d", bold = true })
-  hl("HttpPaneUrl", { link = "Comment" })
   hl("HttpPaneCount", { link = "NonText" })
 end
 set_highlights()
@@ -210,12 +209,8 @@ local function format(item, picker)
     local method = item.req.method
     local group = "HttpPane" .. (vim.fn.hlexists("HttpPane" .. method) == 1 and method or "Other")
     ret[#ret + 1] = { " " .. method .. " ", group }
-    if item.req.name == method .. " " .. item.req.url then
-      ret[#ret + 1] = { " " .. item.req.url } -- unnamed: the URL is the name
-    else
-      ret[#ret + 1] = { " " .. item.req.name }
-      ret[#ret + 1] = { "  " .. item.req.url, "HttpPaneUrl" }
-    end
+    -- only the name; a request without one is known by its URL
+    ret[#ret + 1] = { item.req.name == method .. " " .. item.req.url and item.req.url or item.req.name }
   end
   return ret
 end
@@ -463,7 +458,7 @@ local function open()
   require("core.sidebars").make_room_for_http()
   return Snacks.picker.pick({
     source = SOURCE,
-    title = "HTTP Requests",
+    title = "", -- the title is the winbar (set_title); the search box must not repeat it
     finder = rows,
     format = format,
     tree = true,
