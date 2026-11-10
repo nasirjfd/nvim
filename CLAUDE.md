@@ -10,6 +10,8 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
   - This may bootstrap lazy.nvim, install/update plugins, and touch the network (see Startup side effects).
 - Format Lua: `stylua <files>` (config in `stylua.toml`: 2 spaces, 100 cols, prefer double quotes, always call parens).
 - Lint Lua: `luacheck <files>` (config in `.luacheckrc`; `vim` is a declared global).
+- Automated tests: `tests/run.sh [name filter]` (about 8 s). Each spec drives a real Neovim running this config in an embedded, rendered UI (`tests/screen.lua`) and asserts on the screen: grep toggles and hover, file names in pickers, find bar, Cmd+B sidebar toggling, `.http` startup, Cmd+Alt+Z. Run it after every change to the config; add a spec in `tests/specs/` for every new feature or fixed bug. `NVIM_CONFIG_TESTS=1` (set by the runner) disables the lazy.nvim update checker and the daily auto-sync.
+- The git plugin (`multi-repo-code-diff`) has its own suite: `./tests/run_tests.sh [spec|dir]` inside its folder (`integration/ui/conflict/scroll_sync_spec.lua`, `integration/ui/view/end_of_changes_spec.lua`, `e2e/conflict/scroll_sync_spec.lua` are the fast ones for the merge view and F7 behaviour; the `e2e/` specs that use the native watcher are slow). A few older specs fail on a clean checkout (`gutter_grid`, `move_keymap`, `keymap/golden_matrix`, `keymap/help`, `plugin/modules`, `plugin/setup`).
 - Broader runtime diagnostics are interactive only: `:checkhealth`, `:checkhealth vim.lsp`, `:Lazy`, `:Mason`.
 
 ## Architecture

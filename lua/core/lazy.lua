@@ -32,7 +32,7 @@ require("lazy").setup({ import = "plugins" }, {
     colorscheme = { "habamax" },
   },
   checker = {
-    enabled = true,
+    enabled = not vim.env.NVIM_CONFIG_TESTS, -- the automated tests (tests/) never touch the network
     notify = true,
     frequency = 3600 * 4, -- check for updates every 4 hours
   },
@@ -63,6 +63,9 @@ require("lazy").setup({ import = "plugins" }, {
 -- ════════════════════════════════════════════════════════════════════════════
 vim.api.nvim_create_autocmd("VimEnter", {
   callback = function()
+    if vim.env.NVIM_CONFIG_TESTS then
+      return
+    end
     vim.defer_fn(function()
       local stamp_file = vim.fn.stdpath("state") .. "/lazy-auto-update"
       local last = 0
