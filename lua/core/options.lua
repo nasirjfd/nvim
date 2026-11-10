@@ -113,6 +113,7 @@ vim.filetype.add({
     extension = {
         gotmpl = "gotmpl",  -- Go templates (registered for gopls)
         tmpl = "gotmpl",
+        rest = "http",  -- .rest files are HTTP request files too (Kulala, the HTTP Requests pane)
     },
     filename = {
         [".envrc"] = "sh",  -- direnv files use bash syntax

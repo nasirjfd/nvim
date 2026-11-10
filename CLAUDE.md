@@ -22,6 +22,13 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 - `lua/core/gui-keymaps.lua` holds `<D-…>` (Cmd) bindings mirroring VS Code muscle memory; they are inert in terminals that don't forward Cmd.
 - `snacks.nvim` is the central UI layer (picker, explorer, notifier, terminal). Many core and LSP keymaps call `Snacks.*` directly, and `gd`/`gD`/`gr`/`gi`/`gy` are defined in `lua/plugins/snacks.lua`, not in the LSP attach handler.
 
+### HTTP Requests pane (`<leader>h`)
+
+- `lua/modules/http_requests/` (self-contained, `require("modules.http_requests")` from `lua/core/init.lua`): a Snacks picker source with the sidebar layout. `parse.lua` (requests of an `.http`/`.rest` file, pure), `curl.lua` (clipboard curl -> request lines, the only place that touches Kulala's internal `kulala.parser.curl`), `edit.lua` (append a block through the buffer), `init.lua` (rows, actions, keys). The file list comes from the fd cache in `lua/core/http-files.lua`.
+- Keys in the pane: Enter/click go to the request, Ctrl+Enter or `r` run it (through the file's own `<CR>` mapping from `ftplugin/http.lua`), `a` new request, `P` request from the clipboard curl (invalid -> a message), `R` refresh, `q`/Esc close. Ctrl+Enter needs the Ghostty keybind `ctrl+enter=csi:13;5u` (in `ghostty/config`; reload Ghostty).
+- It is one of three sidebars (Explorer, Git, HTTP) shown one at a time per tab: the wiring is in `lua/core/sidebars.lua` (`last_sidebar`, `source_of`) and `<D-b>` in `lua/core/gui-keymaps.lua`.
+- Tests: `tests/specs/07_http_pane.lua`. The clipboard is read through `require("modules.http_requests").clipboard()` so tests can fake it.
+
 ### LSP (native 0.11 API, not nvim-lspconfig setup calls)
 
 - Per-server configs live in top-level `lsp/<name>.lua` and are activated by the `vim.lsp.enable({...})` list in `lua/plugins/lsp.lua`. The filename must exactly match the enabled name (e.g. `laravel_lsp` → `lsp/laravel_lsp.lua`); a mismatch fails silently.

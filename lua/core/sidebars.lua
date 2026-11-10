@@ -11,6 +11,31 @@ local M = {}
 local panels = {}
 -- Tabs where the file explorer was opened last: <D-b> toggles that instead of the codediff sidebar.
 local explorer_pref = {}
+-- The sidebar opened last in each tab: "explorer", "codediff" or "http" (the HTTP Requests pane).
+local last_sidebar = {}
+
+function M.last(tab)
+  return last_sidebar[tab]
+end
+
+-- The source ("explorer", "http_requests", …) of the picker whose list is shown in `buf`.
+local function source_of(buf)
+  if not _G.Snacks or not Snacks.picker then
+    return nil
+  end
+  for _, picker in ipairs(Snacks.picker.get()) do
+    local list = picker.list and picker.list.win
+    if list and list.buf == buf then
+      return picker.opts.source
+    end
+  end
+end
+
+-- The HTTP Requests panes shown in `tab`.
+local function http_panes(tab)
+  local ok, http = pcall(require, "modules.http_requests")
+  return ok and http.panes(tab) or {}
+end
 
 local function codediff_panel(tab)
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
@@ -66,10 +91,14 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
     end
     local tab = vim.api.nvim_get_current_tabpage()
     vim.schedule(function()
-      if not vim.api.nvim_tabpage_is_valid(tab) or #snacks_explorers(tab) == 0 then
+      if not vim.api.nvim_tabpage_is_valid(tab) or #snacks_explorers(tab) == 0 or source_of(args.buf) ~= "explorer" then
         return
       end
       explorer_pref[tab] = true
+      last_sidebar[tab] = "explorer"
+      for _, picker in ipairs(http_panes(tab)) do
+        picker:close()
+      end
       local panel = codediff_panel(tab)
       if panel_visible(panel) then
         local previous = vim.api.nvim_get_current_win()
@@ -96,9 +125,41 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
         return
       end
       explorer_pref[tab] = false
+      last_sidebar[tab] = "codediff"
       codediff_panel(tab)
       for _, picker in ipairs(snacks_explorers(tab)) do
         picker:close()
+      end
+      for _, picker in ipairs(http_panes(tab)) do
+        picker:close()
+      end
+    end)
+  end,
+})
+
+-- The HTTP Requests pane appeared: close the file explorer and hide the codediff sidebar of the tab.
+vim.api.nvim_create_autocmd("BufWinEnter", {
+  group = group,
+  callback = function(args)
+    if vim.bo[args.buf].filetype ~= "snacks_picker_list" then
+      return
+    end
+    local tab = vim.api.nvim_get_current_tabpage()
+    vim.schedule(function()
+      if not vim.api.nvim_tabpage_is_valid(tab) or #http_panes(tab) == 0 or source_of(args.buf) ~= "http_requests" then
+        return
+      end
+      last_sidebar[tab] = "http"
+      for _, picker in ipairs(snacks_explorers(tab)) do
+        picker:close()
+      end
+      local panel = codediff_panel(tab)
+      if panel_visible(panel) then
+        local previous = vim.api.nvim_get_current_win()
+        require("codediff.ui.explorer").toggle_visibility(panel)
+        if vim.api.nvim_win_is_valid(previous) then
+          vim.api.nvim_set_current_win(previous)
+        end
       end
     end)
   end,

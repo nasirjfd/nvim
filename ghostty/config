@@ -30,6 +30,8 @@ keybind = super+slash=csi:47;9u
 keybind = super+z=csi:122;9u
 keybind = super+shift+z=csi:122;10u
 keybind = super+alt+z=csi:122;11u
+# ctrl+enter runs the request under the cursor of the HTTP Requests pane (modules/http_requests)
+keybind = ctrl+enter=csi:13;5u
 keybind = super+s=csi:115;9u
 keybind = super+r=csi:114;9u
 keybind = super+shift+e=csi:101;10u

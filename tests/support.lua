@@ -72,11 +72,12 @@ function M.find_on_row(screen, row, text)
   end
 end
 
--- the first screen row (1-based) that has `text`, and its column
-function M.find_on_screen(screen, text)
+-- the first screen row (1-based) that has `text`, and its column; `max_col`: only look at the columns up to it
+-- (e.g. the sidebar, not the file next to it)
+function M.find_on_screen(screen, text, max_col)
   for row = 1, screen.height do
     local col = M.find_on_row(screen, row, text)
-    if col then
+    if col and (not max_col or col <= max_col) then
       return row, col
     end
   end

@@ -1,30 +1,27 @@
--- <leader>h: pick an .http file of the project, like cmd+e: the file opened last is at the top
--- (only when it was opened counts, not how often), then the rest by name.
+-- The .http / .rest files of the project (for the HTTP Requests pane, lua/modules/http_requests).
 --
--- Every .http file under the working directory is listed, hidden ones too, except what git ignores.
--- The list is cached per directory (in memory and on disk), so the picker opens with it at once; fd
--- runs in the background on each open and the list is updated in place if a file was added,
--- moved or removed. When each .http file was last opened is kept on disk too.
+-- Every file under the working directory is listed, hidden ones too, except what git ignores. The list is
+-- cached per directory (in memory and on disk), so the pane opens with it at once; fd runs in the
+-- background on each open and the pane is told if a file was added, moved or removed.
 local M = {}
 
 local api = vim.api
 local uv = vim.uv
 local state_file = vim.fn.stdpath("state") .. "/http-files.json"
 
-local state -- { lists = { [cwd] = { "rel/path.http", ... } }, opened = { [abs path] = epoch seconds } }
+local state -- { lists = { [cwd] = { "rel/path.http", ... } } }
 
 local function load()
   if state then
     return state
   end
-  state = { lists = {}, opened = {} }
+  state = { lists = {} }
   local fd = io.open(state_file, "r")
   if fd then
     local ok, data = pcall(vim.json.decode, fd:read("*a"))
     fd:close()
     if ok and type(data) == "table" then
       state.lists = type(data.lists) == "table" and data.lists or {}
-      state.opened = type(data.opened) == "table" and data.opened or {}
     end
   end
   return state
@@ -51,38 +48,10 @@ local function cwd()
   return uv.cwd() or vim.fn.getcwd()
 end
 
--- One spelling per file for `opened` (the same folder can be reached as ~/Can/… and ~/can/… on
--- macOS, whose disk ignores case)
-local function key(path)
-  return (uv.fs_realpath(path) or vim.fs.normalize(path)):lower()
-end
-
--- Rows for the picker: last opened first, then the others by name. `skip`: key() of a file to
--- leave out (the one being edited).
-local function items(dir, skip)
-  local s = load()
-  local list = s.lists[dir] or {}
-  local rows = {}
-  for _, rel in ipairs(list) do
-    local abs = dir .. "/" .. rel
-    local k = key(abs)
-    if k ~= skip then
-      rows[#rows + 1] = { file = abs, text = rel, opened = s.opened[k] or 0 }
-    end
-  end
-  table.sort(rows, function(a, b)
-    if a.opened ~= b.opened then
-      return a.opened > b.opened
-    end
-    return a.text < b.text
-  end)
-  return rows
-end
-
 -- List the .http files of `dir` again with fd; done(changed) on the main loop.
 local function scan(dir, done)
   vim.system(
-    { "fd", "--type", "f", "--extension", "http", "--hidden", "--exclude", ".git", "--color", "never", "." },
+    { "fd", "--type", "f", "--extension", "http", "--extension", "rest", "--hidden", "--exclude", ".git", "--color", "never", "." },
     { cwd = dir, text = true },
     vim.schedule_wrap(function(result)
       if result.code ~= 0 then
@@ -104,94 +73,18 @@ local function scan(dir, done)
   )
 end
 
--- The preview shows the file folded at each request ("### name"), one line per request: its name,
--- then its method and URL, so every request of the file is seen at once.
-function _G.HttpFilesFoldText()
-  local first = vim.fn.getline(vim.v.foldstart)
-  local request
-  for lnum = vim.v.foldstart + 1, math.min(vim.v.foldend, vim.v.foldstart + 8) do
-    local line = vim.fn.getline(lnum)
-    local method = line:match("^%u+%s+%S+")
-    if method then
-      request = method
-      break
-    end
-  end
-  return { { first, "Title" }, { request and ("   " .. request) or "", "Comment" } }
+--- The cached list of `dir` (relative paths), or nil when it was never listed.
+function M.cached(dir)
+  return load().lists[dir]
 end
 
-local function folded_preview(ctx)
-  Snacks.picker.preview.file(ctx)
-  local win = ctx.win
-  if not (win and vim.api.nvim_win_is_valid(win)) then
-    return
-  end
-  local wo = vim.wo[win]
-  wo.foldmethod = "expr"
-  wo.foldexpr = "getline(v:lnum) =~# '^###' ? '>1' : '='"
-  wo.foldtext = "v:lua.HttpFilesFoldText()"
-  wo.foldlevel = 0
-  wo.foldenable = true
-  wo.fillchars = "fold: "
-  vim.api.nvim_win_call(win, function()
-    vim.cmd("normal! zXgg")
-  end)
-end
-
-function M.pick()
-  if vim.fn.executable("fd") == 0 then
-    vim.notify("fd is not installed (brew install fd)", vim.log.levels.WARN)
-    return
-  end
-  local dir = cwd()
-  local current = vim.api.nvim_buf_get_name(0)
-  local skip = current ~= "" and key(current) or nil
-  local function open()
-    return Snacks.picker.pick({
-      source = "http_files",
-      title = "HTTP Files",
-      finder = function()
-        return items(dir, skip)
-      end,
-      format = "file",
-      preview = folded_preview,
-      show_empty = true,
-      -- keep this order (last opened first) until something is typed
-      matcher = { sort_empty = false, frecency = false },
-      sort = { fields = { "score:desc", "idx" } },
-    })
-  end
-  if not load().lists[dir] then
-    -- Nothing cached for this folder yet: list it first (fd takes a few tens of ms)
-    scan(dir, open)
-    return
-  end
-  local picker = open()
-  -- Bring the cache up to date; the open picker follows when a file was added, moved or removed
-  scan(dir, function(changed)
-    if changed and picker and not picker.closed then
-      picker:find()
-    end
-  end)
-end
+M.scan = scan
 
 local group = api.nvim_create_augroup("HttpFiles", { clear = true })
-api.nvim_create_autocmd("BufEnter", {
-  group = group,
-  pattern = "*.http",
-  callback = function(args)
-    local file = api.nvim_buf_get_name(args.buf)
-    if file ~= "" then
-      local sec, usec = uv.gettimeofday()
-      load().opened[key(file)] = sec + usec / 1e6
-      save()
-    end
-  end,
-})
 -- A new .http file shows up in the cached list right away
 api.nvim_create_autocmd("BufWritePost", {
   group = group,
-  pattern = "*.http",
+  pattern = { "*.http", "*.rest" },
   callback = function(args)
     local dir, file = cwd(), vim.fs.normalize(api.nvim_buf_get_name(args.buf))
     local list = load().lists[dir]
@@ -206,7 +99,5 @@ api.nvim_create_autocmd("BufWritePost", {
     end
   end,
 })
-
-vim.keymap.set("n", "<leader>h", M.pick, { desc = "HTTP files (last opened first)" })
 
 return M

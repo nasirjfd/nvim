@@ -2,7 +2,7 @@
 -- Every spec drives a real Neovim with this configuration, embedded and rendered, so what is asserted is
 -- what is on the screen.
 local root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h")
-package.path = root .. "/tests/?.lua;" .. package.path
+package.path = root .. "/tests/?.lua;" .. root .. "/lua/?.lua;" .. package.path
 vim.env.NVIM_CONFIG_TESTS = "1" -- no network, no automatic plugin updates (lua/core/lazy.lua)
 
 local lib = require("lib")
