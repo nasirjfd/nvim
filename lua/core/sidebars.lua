@@ -37,6 +37,27 @@ local function http_panes(tab)
   return ok and http.panes(tab) or {}
 end
 
+-- Close a Snacks picker *now*, windows included. picker:close() destroys its windows one tick later; a
+-- second sidebar opened in between makes Neovim split the screen between the two layouts and hand the
+-- rows it cannot place to the command line (cmdheight 20, the sidebar and the editor half as tall).
+local function close_now(picker)
+  if picker.closed then
+    return
+  end
+  picker:close()
+  pcall(function()
+    picker.layout:close()
+  end)
+end
+M.close_now = close_now
+
+-- Whatever happened, the command line is one row (the option in core/options.lua)
+local function restore_cmdheight()
+  if vim.o.cmdheight ~= 1 then
+    vim.o.cmdheight = 1
+  end
+end
+
 local function codediff_panel(tab)
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   local live = lifecycle and lifecycle.get_panel_view(tab)
@@ -97,8 +118,9 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       explorer_pref[tab] = true
       last_sidebar[tab] = "explorer"
       for _, picker in ipairs(http_panes(tab)) do
-        picker:close()
+        close_now(picker)
       end
+      restore_cmdheight()
       local panel = codediff_panel(tab)
       if panel_visible(panel) then
         local previous = vim.api.nvim_get_current_win()
@@ -128,11 +150,12 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       last_sidebar[tab] = "codediff"
       codediff_panel(tab)
       for _, picker in ipairs(snacks_explorers(tab)) do
-        picker:close()
+        close_now(picker)
       end
       for _, picker in ipairs(http_panes(tab)) do
-        picker:close()
+        close_now(picker)
       end
+      restore_cmdheight()
     end)
   end,
 })
@@ -151,7 +174,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       end
       last_sidebar[tab] = "http"
       for _, picker in ipairs(snacks_explorers(tab)) do
-        picker:close()
+        close_now(picker)
       end
       local panel = codediff_panel(tab)
       if panel_visible(panel) then
@@ -162,6 +185,46 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
         end
       end
     end)
+  end,
+})
+
+-- Called by the HTTP Requests pane right before it opens: nothing else may be a sidebar at that moment.
+function M.make_room_for_http(tab)
+  tab = tab or vim.api.nvim_get_current_tabpage()
+  for _, picker in ipairs(snacks_explorers(tab)) do
+    close_now(picker)
+  end
+  local panel = codediff_panel(tab)
+  if panel_visible(panel) then
+    local previous = vim.api.nvim_get_current_win()
+    pcall(require("codediff.ui.explorer").toggle_visibility, panel)
+    if vim.api.nvim_win_is_valid(previous) then
+      vim.api.nvim_set_current_win(previous)
+    end
+  end
+  restore_cmdheight()
+end
+
+-- The file explorer is about to open (Snacks.explorer(), <leader>e, cmd+b, …): close the HTTP pane first,
+-- for the same reason as in close_now. Every way of opening it goes through Snacks.picker.pick.
+vim.api.nvim_create_autocmd("VimEnter", {
+  group = group,
+  once = true,
+  callback = function()
+    if not (_G.Snacks and Snacks.picker and Snacks.picker.pick) or Snacks.picker._sidebars_wrapped then
+      return
+    end
+    local pick = Snacks.picker.pick
+    Snacks.picker.pick = function(source, opts)
+      local name = type(source) == "table" and source.source or source
+      if name == "explorer" and #snacks_explorers(vim.api.nvim_get_current_tabpage()) == 0 then
+        for _, picker in ipairs(http_panes(vim.api.nvim_get_current_tabpage())) do
+          close_now(picker)
+        end
+      end
+      return pick(source, opts)
+    end
+    Snacks.picker._sidebars_wrapped = true
   end,
 })
 

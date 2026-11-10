@@ -82,8 +82,9 @@ local function where(screen)
   return screen:exec("return { vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'), vim.api.nvim_win_get_cursor(0)[1] }")
 end
 
+-- (the pane is the 40 left columns; the file next to it may show the same words)
 local function click_on(screen, text)
-  local row, col = h.find_on_screen(screen, text)
+  local row, col = h.find_on_screen(screen, text, 40)
   lib.ok(row, "'" .. text .. "' is not on the screen")
   h.click(screen, row, col + 1)
 end
@@ -360,5 +361,223 @@ lib.test("http curl: commands become requests, anything else is invalid", functi
     lib.eq(vim.NIL, result.lines or vim.NIL, "'" .. bad .. "' must not convert")
     lib.eq("The clipboard does not hold a valid curl command", result.err, "'" .. bad .. "'")
   end
+  screen:close()
+end)
+
+-- ── switching sidebars: the layout must stay whole ─────────────────────────────────────────────
+-- (Two Snacks sidebars alive at the same moment made Neovim give half the screen to the command line.)
+local function layout(screen)
+  return screen:exec([[
+    local wins, boxes, lowest = {}, 0, 0
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      local cfg = vim.api.nvim_win_get_config(win)
+      if cfg.relative == "" then
+        wins[#wins + 1] = vim.api.nvim_win_get_height(win)
+        if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "snacks_layout_box" then boxes = boxes + 1 end
+      end
+    end
+    return { cmdheight = vim.o.cmdheight, lines = vim.o.lines, heights = wins, boxes = boxes,
+      http = #require("modules.http_requests").panes(), explorers = #Snacks.picker.get({ source = "explorer" }) }
+  ]])
+end
+
+local function expect_whole(screen, label, sidebar)
+  vim.wait(300) -- let the scheduled closes run
+  screen:flush()
+  local l = layout(screen)
+  lib.eq(1, l.cmdheight, label .. ": the command line grew (cmdheight " .. l.cmdheight .. ")")
+  for _, height in ipairs(l.heights) do
+    lib.ok(height >= l.lines - 3, label .. ": a window is only " .. height .. " rows tall of " .. l.lines .. " " .. vim.inspect(l.heights))
+  end
+  lib.eq(sidebar == "http" and 1 or 0, l.http, label .. ": http panes")
+  lib.eq(sidebar == "explorer" and 1 or 0, l.explorers, label .. ": explorers")
+  lib.eq(sidebar and 1 or 0, l.boxes, label .. ": sidebar windows left over: " .. vim.inspect(l))
+end
+
+for _, start in ipairs({ "the start screen", "a file" }) do
+  lib.test("http pane: switching between the pane and the explorer keeps the layout whole (from " .. start .. ")", function()
+    local dir = project()
+    local screen = h.nvim(dir)
+    h.wait(screen, function()
+      return screen:exec("return package.loaded['kulala'] ~= nil")
+    end, "kulala did not load")
+    if start == "a file" then
+      screen:exec("vim.cmd('edit api/health.http')")
+    end
+    local function wait_for(sidebar)
+      h.wait(screen, function()
+        local l = layout(screen)
+        return (sidebar == "http" and l.http == 1) or (sidebar == "explorer" and l.explorers == 1) or (not sidebar and l.http == 0 and l.explorers == 0)
+      end, "the " .. tostring(sidebar) .. " sidebar did not settle")
+    end
+    local steps = {
+      { "explorer", function() screen:exec("Snacks.explorer()") end },
+      { "http", function() screen:input("<Space>h") end },
+      { "explorer", function() screen:exec("Snacks.explorer()") end },
+      { "http", function() screen:exec("vim.fn.maparg('<leader>h', 'n', false, true).callback()") end },
+      { "explorer", function() screen:exec("vim.fn.maparg('<leader>e', 'n', false, true).callback()") end },
+      { "http", function() screen:exec("require('modules.http_requests').toggle()") end },
+      { nil, function() screen:exec("vim.fn.maparg('<D-b>', 'n', false, true).callback()") end }, -- cmd+b hides the pane
+      { "http", function() screen:exec("vim.fn.maparg('<D-b>', 'n', false, true).callback()") end },
+      { "explorer", function() screen:exec("vim.fn.maparg('<D-S-e>', 'n', false, true).callback()") end },
+      { "http", function() screen:input("<Space>h") end },
+    }
+    expect_whole(screen, "before anything", nil)
+    for i, step in ipairs(steps) do
+      step[2]()
+      wait_for(step[1])
+      expect_whole(screen, "step " .. i .. " (" .. tostring(step[1]) .. ")", step[1])
+    end
+    screen:close()
+  end)
+end
+
+-- ── in a diff tab (the Git sidebar) ─────────────────────────────────────────────────────────────
+local function diff_project()
+  local dir = h.repo({
+    ["api/users.http"] = { "### List users", "GET https://example.com/users" },
+    ["auth/login.http"] = { "### Login", "POST https://example.com/login" },
+  })
+  h.write(dir .. "/auth/login.http", { "### Login", "POST https://example.com/login", "", "### Extra", "GET https://example.com/extra" })
+  return dir
+end
+
+local function open_diff_tab(dir)
+  local screen = h.nvim(dir)
+  h.wait(screen, function()
+    return screen:exec("return package.loaded['kulala'] ~= nil")
+  end, "kulala did not load")
+  screen:exec("vim.cmd('edit auth/login.http'); vim.cmd('CodeDiff scm')")
+  h.wait(screen, function()
+    return screen:exec("local l = package.loaded['codediff.ui.lifecycle']; return l ~= nil and l.get_panel_view(vim.api.nvim_get_current_tabpage()) ~= nil")
+  end, "the Source Control pane never opened")
+  return screen
+end
+
+lib.test("http pane: from the Git sidebar and back, the layout stays whole", function()
+  local screen = open_diff_tab(diff_project())
+  local function hidden()
+    return screen:exec("local v = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage()); return v ~= nil and v.is_hidden == true")
+  end
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return layout(screen).http == 1 and hidden()
+  end, "the pane must replace the Git sidebar")
+  vim.wait(300)
+  local l = layout(screen)
+  lib.eq(1, l.cmdheight, "the command line grew")
+  screen:exec("vim.fn.maparg('<D-S-g>', 'n', false, true).callback()")
+  h.wait(screen, function()
+    return layout(screen).http == 0 and not hidden()
+  end, "cmd+shift+g must bring the Git sidebar back and close the pane")
+  vim.wait(300)
+  lib.eq(1, layout(screen).cmdheight, "the command line grew after going back to Git")
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return layout(screen).http == 1
+  end, "the pane did not open a second time")
+  screen:close()
+end)
+
+lib.test("http pane: a request chosen in a diff tab opens in another tab and leaves the diff alone", function()
+  local dir = diff_project()
+  local screen = open_diff_tab(dir)
+  local diff_tab = screen:exec("return vim.api.nvim_get_current_tabpage()")
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Extra", 40) ~= nil
+  end, "the requests are not on the screen")
+  click_on(screen, "Extra")
+  h.wait(screen, function()
+    return screen:exec("return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t')") == "login.http"
+      and screen:exec("return vim.api.nvim_get_current_tabpage()") ~= diff_tab
+  end, "the file did not open in another tab")
+  lib.eq(5, where(screen)[2], "the cursor must be on the request")
+  lib.ok(screen:exec("return require('codediff.ui.lifecycle').get_session(...) ~= nil", { diff_tab }), "the diff session was destroyed")
+  screen:close()
+end)
+
+-- ── other situations ────────────────────────────────────────────────────────────────────────────
+lib.test("http pane: with split windows the pane is full height and files open in the window it was opened from", function()
+  local screen = h.nvim(project())
+  h.wait(screen, function()
+    return screen:exec("return package.loaded['kulala'] ~= nil")
+  end, "kulala did not load")
+  screen:exec("vim.cmd('edit api/health.http'); vim.cmd('vsplit'); vim.cmd('split'); vim.cmd('edit auth/login.http')")
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return layout(screen).http == 1
+  end, "the pane never opened")
+  vim.wait(300)
+  local l = layout(screen)
+  lib.eq(1, l.cmdheight, "the command line grew")
+  lib.eq(1, l.boxes, "one sidebar")
+  -- every window of the sidebar column is as tall as the screen; the three editing windows share the rest
+  local tall = 0
+  for _, height in ipairs(l.heights) do
+    if height >= l.lines - 3 then
+      tall = tall + 1
+    end
+  end
+  lib.ok(tall >= 2, "the sidebar is not full height: " .. vim.inspect(l.heights))
+  click_on(screen, "make-user")
+  h.wait(screen, function()
+    return where(screen)[1] == "users.http"
+  end, "the file did not open")
+  screen:close()
+end)
+
+lib.test("http pane: closing and reopening keeps what was folded", function()
+  local screen = open_pane(project())
+  click_on(screen, "auth")
+  h.wait(screen, function()
+    return not h.find_on_screen(screen, "login.http", 40)
+  end, "the folder did not fold")
+  screen:input("q")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests').panes()") == 0
+  end, "q did not close the pane")
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "users.http", 40) ~= nil
+  end, "the pane did not reopen")
+  lib.ok(not h.find_on_screen(screen, "login.http", 40), "the folded folder opened itself again")
+  screen:close()
+end)
+
+lib.test("http pane: a project without .http files shows the buttons, and a new request creates the first file", function()
+  local dir = h.tmpdir()
+  local screen = h.nvim(dir)
+  h.wait(screen, function()
+    return screen:exec("return package.loaded['kulala'] ~= nil")
+  end, "kulala did not load")
+  screen:exec("vim.notify = function() end; vim.ui.input = function(opts, cb) cb('first') end")
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "New request", 40) ~= nil
+  end, "the pane did not open in an empty project")
+  lib.ok(not h.find_on_screen(screen, ".http", 40), "something is listed in an empty project")
+  click_on(screen, "New request")
+  h.wait(screen, function()
+    return vim.uv.fs_stat(dir .. "/first.http") ~= nil
+  end, "the first file was not created")
+  lib.eq({ "### New request", "GET https://" }, h.read(dir .. "/first.http"))
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "first.http", 40) ~= nil
+  end, "the new file did not show up in the pane")
+  screen:close()
+end)
+
+lib.test("http pane: each tab has its own pane", function()
+  local screen = open_pane(project())
+  screen:exec("vim.cmd('tabnew')")
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests').panes()") == 1
+  end, "the second tab got no pane")
+  screen:exec("vim.cmd('tabprevious')")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests').panes()") == 1
+  end, "the first tab lost its pane")
   screen:close()
 end)

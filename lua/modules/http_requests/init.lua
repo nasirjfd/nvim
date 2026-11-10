@@ -20,6 +20,7 @@ local SOURCE = "http_requests"
 local api = vim.api
 local uv = vim.uv
 
+local last_file -- the .http file last gone to from the pane
 local collapsed = {} -- item key -> true while folded
 local parsed = {} -- abs path -> { stamp, requests }
 
@@ -188,7 +189,18 @@ local function format(item, picker)
   local icons = picker.opts.icons.files
   if item.kind == "dir" then
     ret[#ret + 1] = { (item.open and icons.dir_open or icons.dir) .. " ", "SnacksPickerDirectory" }
-    ret[#ret + 1] = { item.text, "SnacksPickerDirectory" }
+    -- a long chain of folders ("a/b/c/d") keeps its end, where the folder that matters is
+    local label, room = item.text, 36
+    local depth = 0
+    local node = item.parent
+    while node do
+      depth, node = depth + 1, node.parent
+    end
+    room = room - 2 * depth
+    if vim.fn.strchars(label) > room then
+      label = "…" .. vim.fn.strcharpart(label, vim.fn.strchars(label) - room + 1)
+    end
+    ret[#ret + 1] = { label, "SnacksPickerDirectory" }
   elseif item.kind == "file" then
     local icon, hl = Snacks.util.icon(item.text, "file")
     ret[#ret + 1] = { (icon or "") .. " ", hl }
@@ -234,9 +246,35 @@ local function refresh_all(keep)
   end
 end
 
--- go to `line` of `file` in the window the pane belongs to (the editing window next to it)
-local function goto_line(picker, file, line)
+-- A tab that shows a diff (codediff: the Git sidebar, a merge) must keep showing it: files are not opened
+-- over its panes.
+local function is_diff_tab(tab)
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  return lifecycle ~= nil and lifecycle.get_session(tab) ~= nil
+end
+
+-- The window a file is opened in: the one next to the pane; in a diff tab, a window of an ordinary tab
+-- (a new tab when there is none).
+local function editing_window(picker)
   local win = picker.main
+  local tab = picker.list and picker.list.win and picker.list.win.win and api.nvim_win_is_valid(picker.list.win.win)
+    and api.nvim_win_get_tabpage(picker.list.win.win)
+  if win and api.nvim_win_is_valid(win) and not (tab and is_diff_tab(tab)) then
+    return win
+  end
+  for _, candidate in ipairs(api.nvim_list_tabpages()) do
+    if not is_diff_tab(candidate) then
+      api.nvim_set_current_tabpage(candidate)
+      return api.nvim_get_current_win()
+    end
+  end
+  vim.cmd("tabnew")
+  return api.nvim_get_current_win()
+end
+
+-- go to `line` of `file` in the editing window
+local function goto_line(picker, file, line)
+  local win = editing_window(picker)
   if not (win and api.nvim_win_is_valid(win)) then
     return false
   end
@@ -269,8 +307,6 @@ local function toggle(picker, item)
   end
   refresh(picker, item.key)
 end
-
-local last_file -- the .http file last gone to from the pane
 
 local function is_http(name)
   return name:find("%.http$") ~= nil or name:find("%.rest$") ~= nil
@@ -423,6 +459,8 @@ function M.panes(tab)
 end
 
 local function open()
+  -- nothing else may be a sidebar while this one is created (see core/sidebars.lua)
+  require("core.sidebars").make_room_for_http()
   return Snacks.picker.pick({
     source = SOURCE,
     title = "HTTP Requests",
