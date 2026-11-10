@@ -6,7 +6,7 @@ local M = {}
 -- (a test run of the configuration must not touch the options of the real one)
 local file = vim.env.NVIM_CONFIG_TESTS and (vim.fn.tempname() .. "-phpunit-options.json")
   or (vim.fn.stdpath("state") .. "/phpunit-options.json")
-local MIN, MAX = 2, 16
+local MIN, MAX = 2, 64
 
 local values ---@type { parallel: boolean, workers: integer }?
 
@@ -56,8 +56,16 @@ function M.toggle_parallel()
   return M.parallel()
 end
 
---- Change the number of workers by `delta` (kept between MIN and MAX); the first value of a project is
---- the one its .nvim.lua gives (configure({ workers = N })).
+--- The step of the + and - keys: one at a time up to 10, then five.
+function M.step(up)
+  local n = load().workers
+  if up then
+    return n < 10 and 1 or 5
+  end
+  return n <= 10 and 1 or 5
+end
+
+--- Set the number of workers (kept between MIN and MAX).
 function M.set_workers(count)
   load().workers = math.min(MAX, math.max(MIN, math.floor(count)))
   save()

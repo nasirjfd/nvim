@@ -511,11 +511,11 @@ local actions = {
     refresh(picker, "h:parallel")
   end,
   tests_more = function(picker)
-    options.set_workers(options.workers() + 1)
+    options.set_workers(options.workers() + options.step(true))
     refresh(picker, "h:parallel")
   end,
   tests_less = function(picker)
-    options.set_workers(options.workers() - 1)
+    options.set_workers(options.workers() - options.step(false))
     refresh(picker, "h:parallel")
   end,
   tests_stop = function()

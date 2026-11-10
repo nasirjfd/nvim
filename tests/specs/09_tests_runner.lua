@@ -197,6 +197,26 @@ lib.test("tests run: stopping ends the queue of a parallel run", function()
   screen:close()
 end)
 
+lib.test("tests options: up to 64 workers, the + and - keys step by 5 above 10, the choice is kept", function()
+  local screen = h.nvim(h.tmpdir())
+  lib.eq(50, screen:exec("local o = require('modules.phpunit.options'); return o.set_workers(50)"))
+  lib.eq(64, screen:exec("return require('modules.phpunit.options').set_workers(500)"), "the top is 64")
+  lib.eq(2, screen:exec("return require('modules.phpunit.options').set_workers(0)"), "the bottom is 2")
+  screen:exec("local o = require('modules.phpunit.options'); o.set_workers(8)")
+  lib.eq({ 1, 5, 5, 1 }, screen:exec([[
+    local o = require('modules.phpunit.options')
+    local out = {}
+    o.set_workers(9); out[1] = o.step(true)
+    o.set_workers(10); out[2] = o.step(true)
+    o.set_workers(15); out[3] = o.step(false)
+    o.set_workers(10); out[4] = o.step(false)
+    return out
+  ]]))
+  screen:exec("require('modules.phpunit.options').set_workers(50); require('modules.phpunit.options').reload()")
+  lib.eq(50, screen:exec("return require('modules.phpunit.options').workers()"), "kept")
+  screen:close()
+end)
+
 -- ── the pane ────────────────────────────────────────────────────────────────────────────────────
 local function pane_row(screen, text)
   local row, col = h.find_on_screen(screen, text, 54)
