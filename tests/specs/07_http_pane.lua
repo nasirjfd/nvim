@@ -282,6 +282,28 @@ lib.test("http pane: <leader>h focuses an open pane and closes it when it has th
   screen:close()
 end)
 
+lib.test("http pane: Cmd+Shift+H opens the pane over the Explorer and closes it again", function()
+  local screen = h.nvim(project())
+  h.wait(screen, function()
+    return screen:exec("return package.loaded['kulala'] ~= nil")
+  end, "kulala did not load")
+  screen:input("<D-S-e>") -- the Explorer first
+  h.wait(screen, function()
+    return screen:exec("return #Snacks.picker.get({ source = 'explorer' })") == 1
+  end, "the explorer did not open")
+  screen:input("<D-S-h>")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests').panes()") == 1
+      and screen:exec("return #Snacks.picker.get({ source = 'explorer' })") == 0
+      and screen:exec("return vim.o.cmdheight") == 1
+  end, "Cmd+Shift+H did not replace the explorer with the pane")
+  screen:input("<D-S-h>") -- the pane has the focus: close
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests').panes()") == 0
+  end, "Cmd+Shift+H did not close the pane")
+  screen:close()
+end)
+
 lib.test("http pane: an unsaved edit of an open file shows in the pane", function()
   local dir = project()
   local screen = open_pane(dir)

@@ -584,5 +584,6 @@ api.nvim_create_autocmd("BufWinEnter", {
 })
 
 vim.keymap.set("n", "<leader>h", M.toggle, { desc = "HTTP requests pane" })
+vim.keymap.set("n", "<D-S-h>", M.toggle, { desc = "HTTP requests pane" })
 
 return M
