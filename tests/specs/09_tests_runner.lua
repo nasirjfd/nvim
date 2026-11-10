@@ -242,20 +242,60 @@ lib.test("tests pane: counts and checkbox on top, then the parent folder, the fi
   screen:close()
 end)
 
-lib.test("tests pane: the Parallel checkbox toggles with a click and shows how many run at once", function()
+lib.test("tests pane: the Parallel row is a checkbox with a clickable number: - 4 + at a time", function()
   local dir = project()
   local screen = start(dir)
   h.wait(screen, function()
-    return pane_row(screen, "Parallel") ~= nil
-  end, "no checkbox")
-  lib.ok(not pane_row(screen, "at a time"))
-  h.click(screen, pane_row(screen, "Parallel"), 8)
+    return pane_row(screen, "at a time") ~= nil
+  end, "no Parallel row")
+  local function workers()
+    return screen:exec("return require('modules.phpunit.options').workers()")
+  end
+  local function parallel()
+    return screen:exec("return require('modules.phpunit.options').parallel()")
+  end
+  local row, plus = pane_row(screen, "+")
+  local _, minus = pane_row(screen, "−")
+  lib.ok(row and minus and minus < plus, "− and + buttons are on the row")
+  lib.eq(false, parallel())
+  h.click(screen, row, plus)
   h.wait(screen, function()
-    return pane_row(screen, "4 at a time") ~= nil
-  end, "the checkbox did not turn on")
-  lib.eq(true, screen:exec("return require('modules.phpunit.options').parallel()"))
+    return workers() == 5
+  end, "clicking + did not raise the number")
+  h.click(screen, row, minus)
+  h.click(screen, row, minus)
+  h.wait(screen, function()
+    return workers() == 3
+  end, "clicking − twice did not lower the number")
+  lib.eq(false, parallel(), "the buttons do not toggle Parallel")
+  h.click(screen, row, 6) -- the checkbox
+  h.wait(screen, parallel, "the checkbox did not turn Parallel on")
+  h.wait(screen, function()
+    return pane_row(screen, " 3 ") ~= nil
+  end, "the row does not show the number")
+  -- above ten the buttons step by five; the keys do the same
+  screen:exec("require('modules.phpunit.options').set_workers(10)")
+  screen:exec("require('modules.phpunit.pane').panes()[1]:find()")
+  h.wait(screen, function()
+    return pane_row(screen, " 10 ") ~= nil
+  end, "no 10")
+  row, plus = pane_row(screen, "+")
+  h.click(screen, row, plus)
+  h.wait(screen, function()
+    return workers() == 15
+  end, "+ above ten must step by five")
+  for _, key in ipairs({ "+", "=" }) do
+    screen:input(key)
+  end
+  h.wait(screen, function()
+    return workers() == 25
+  end, "the + and = keys must step too")
+  screen:input("-")
+  h.wait(screen, function()
+    return workers() == 20
+  end, "the - key must step down")
   screen:exec("require('modules.phpunit.options').reload()")
-  lib.eq(true, screen:exec("return require('modules.phpunit.options').parallel()"), "the choice is kept")
+  lib.eq(20, workers(), "the choice is kept")
   screen:close()
 end)
 

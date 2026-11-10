@@ -325,6 +325,8 @@ local function set_highlights()
   hl("PhpTestDim", { link = "Comment" })
   hl("PhpTestToggleOn", { fg = "#e8eaee", bg = "#2f6f4f", bold = true })
   hl("PhpTestToggleOff", { fg = "#aab0b8", bg = "#2b2f36" })
+  hl("PhpTestStepOn", { fg = "#ffffff", bg = "#46996f", bold = true })
+  hl("PhpTestStepOff", { fg = "#cfd3d9", bg = "#3b4048", bold = true })
   hl("PhpTestRun", { fg = "#e8eaee", bg = "#33507d", bold = true })
   hl("PhpTestRunFailed", { fg = "#e8eaee", bg = "#7a3b44", bold = true })
   hl("PhpTestRunIdle", { fg = "#7d838c", bg = "#2b2f36" })
@@ -342,6 +344,38 @@ local function status_chunk(status)
 end
 
 local WIDTH = 50
+
+-- The Parallel row: "󰄵 Parallel   −  50  +  at a time". The checkbox part toggles, − and + change the
+-- number; the same table draws the row and tells what a click at a column hit.
+local function toggle_parts()
+  local on = options.parallel()
+  local bar = on and "PhpTestToggleOn" or "PhpTestToggleOff"
+  local step = on and "PhpTestStepOn" or "PhpTestStepOff"
+  local parts = {
+    { text = "  " .. (on and "󰄵" or "󰄱") .. "  Parallel", hl = bar, zone = "toggle" },
+    { text = "    ", hl = bar, zone = "toggle" },
+    { text = " − ", hl = step, zone = "minus" },
+    { text = " " .. options.workers() .. " ", hl = bar, zone = "count" },
+    { text = " + ", hl = step, zone = "plus" },
+    { text = " at a time", hl = bar, zone = "toggle" },
+  }
+  local col = 1
+  for _, part in ipairs(parts) do
+    part.from, part.to = col, col + vim.fn.strdisplaywidth(part.text) - 1
+    col = part.to + 1
+  end
+  return parts
+end
+
+--- What a click at window column `col` of the Parallel row hits: "minus", "plus" or "toggle".
+local function zone_at(col)
+  for _, part in ipairs(toggle_parts()) do
+    if col >= part.from and col <= part.to then
+      return (part.zone == "count") and "toggle" or part.zone
+    end
+  end
+  return "toggle"
+end
 
 local function format(item, picker)
   local ret = {}
@@ -362,9 +396,13 @@ local function format(item, picker)
     end
     return ret
   elseif item.kind == "toggle" then
+    local width = 0
+    for _, part in ipairs(toggle_parts()) do
+      ret[#ret + 1] = { part.text, part.hl }
+      width = width + vim.fn.strdisplaywidth(part.text)
+    end
     local on = options.parallel()
-    local label = on and ("  󰄵  Parallel · " .. options.workers() .. " at a time") or "  󰄱  Parallel"
-    ret[#ret + 1] = { kit.pad(label, WIDTH), on and "PhpTestToggleOn" or "PhpTestToggleOff" }
+    ret[#ret + 1] = { string.rep(" ", math.max(0, WIDTH - width)), on and "PhpTestToggleOn" or "PhpTestToggleOff" }
     return ret
   elseif item.kind == "button" then
     if item.action == "all" then
@@ -541,7 +579,29 @@ local actions = {
   end,
   tests_press = kit.press,
   tests_click = function(picker)
-    kit.click(picker, "tests_confirm")
+    local mouse = vim.fn.getmousepos()
+    local list_win = picker.list and picker.list.win and picker.list.win.win
+    if mouse.winid ~= list_win then
+      return
+    end
+    vim.schedule(function()
+      if picker.closed then
+        return
+      end
+      local item = picker:current()
+      if item and item.kind == "toggle" then
+        local zone = zone_at(mouse.wincol)
+        if zone == "minus" then
+          picker:action("tests_less")
+        elseif zone == "plus" then
+          picker:action("tests_more")
+        else
+          picker:action("tests_parallel")
+        end
+        return
+      end
+      picker:action("tests_confirm")
+    end)
   end,
 }
 
@@ -587,7 +647,10 @@ local function open()
           ["F"] = "tests_failed",
           ["p"] = "tests_parallel",
           ["+"] = "tests_more",
+          ["="] = "tests_more",
+          ["<kPlus>"] = "tests_more",
           ["-"] = "tests_less",
+          ["<kMinus>"] = "tests_less",
           ["x"] = "tests_stop",
           ["o"] = "tests_output",
           ["e"] = "tests_expand_all",
