@@ -175,6 +175,31 @@ function M.move_to(picker, key)
   return false
 end
 
+--- Run the pane's finder again without the list jumping: `picker:find()` alone resets the list to its first row
+--- and Snacks scrolls back to the cursor a moment later (a visible flash). The cursor and the top row are kept
+--- as the target of the next render, and the cursor is only moved to `keep_key` when that row is not where
+--- it stays.
+---@param picker snacks.Picker
+---@param keep_key? string key of the row the cursor should end on (default: the row it is on now)
+function M.refresh(picker, keep_key)
+  if not picker or picker.closed then
+    return
+  end
+  local list = picker.list
+  keep_key = keep_key or (picker:current() or {}).key
+  list:set_target(list.cursor, list.top, { force = true })
+  picker:find({
+    on_done = function()
+      if keep_key and not picker.closed then
+        local current = picker:current()
+        if not (current and current.key == keep_key) then
+          M.move_to(picker, keep_key)
+        end
+      end
+    end,
+  })
+end
+
 --- Register a pane's source: its cursor is hidden while it has the focus and its title is drawn again
 --- whenever Snacks lays its window out again.
 ---@param source string

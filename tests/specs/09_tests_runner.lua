@@ -348,3 +348,62 @@ lib.test("tests pane: it replaces the Explorer and the HTTP pane, one sidebar at
   end, "the Explorer must replace the tests pane")
   screen:close()
 end)
+
+-- ── smoothness ──────────────────────────────────────────────────────────────────────────────────
+-- Every redraw of the screen is a frame the eye can see. A refresh used to put the list on its first row for a
+-- moment and back again (a flash); the rows of the pane must not move at all when a folder is folded.
+lib.test("tests pane: folding, unfolding and refreshing do not flash (the list never jumps)", function()
+  local dir = vim.fn.resolve(h.tmpdir())
+  h.write(dir .. "/app/tests.xml", { "<phpunit/>" })
+  for i = 1, 40 do
+    local name = string.format("D%02d", i)
+    h.write(dir .. "/app/tests/" .. name .. "/" .. name .. "Test.php", {
+      "<?php", "class " .. name .. "Test extends \\PHPUnit\\Framework\\TestCase", "{", "    public function testOne()", "    {", "    }", "}",
+    })
+  end
+  local screen = h.nvim(dir, 120, 30)
+  screen:exec(string.format([[
+    require("modules.phpunit").configure({ root = %q, projects = { "app" }, command = "true" })
+    require("modules.phpunit.pane").toggle()
+  ]], dir))
+  h.wait(screen, function()
+    return screen:exec("local p = require('modules.phpunit.pane'); return #(p.files_under(p.root_id() or '') or {}) == 40")
+  end, "the 40 test files were not found")
+  vim.wait(600)
+  screen:exec("require('modules.phpunit.pane').panes()[1].list:move(40, true)") -- far down the list
+  vim.wait(400)
+  local frames = {}
+  screen.on_flush = function()
+    local rows = {}
+    for row = 1, 29 do
+      rows[#rows + 1] = screen:text(row, 1, 54)
+    end
+    frames[#frames + 1] = rows
+  end
+  local function tops_during(keys)
+    frames = {}
+    if keys then
+      screen:input(keys)
+    else
+      screen:exec("require('modules.phpunit.pane').panes()[1]:find()")
+    end
+    vim.wait(600)
+    local seen, count = {}, 0
+    for _, rows in ipairs(frames) do
+      local row = rows[5]
+      if not seen[row] then
+        seen[row] = true
+        count = count + 1
+      end
+    end
+    return count, #frames
+  end
+  for _, keys in ipairs({ "<CR>", "<CR>", "h", "l" }) do
+    local distinct, n = tops_during(keys)
+    lib.ok(n >= 1, "no frame after " .. keys)
+    lib.eq(1, distinct, "the list jumped while handling " .. keys .. " (" .. distinct .. " different tops in " .. n .. " frames)")
+  end
+  local distinct = tops_during(nil)
+  lib.ok(distinct <= 1, "a plain refresh made the list jump")
+  screen:close()
+end)

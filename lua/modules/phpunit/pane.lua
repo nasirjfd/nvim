@@ -41,16 +41,7 @@ local function refresh_soon()
     0,
     vim.schedule_wrap(function()
       for _, picker in ipairs(M.panes()) do
-        if not picker.closed then
-          local current = picker:current()
-          picker:find({
-            on_done = function()
-              if current and not picker.closed then
-                kit.move_to(picker, current.key)
-              end
-            end,
-          })
-        end
+        kit.refresh(picker)
       end
     end)
   )
@@ -437,18 +428,7 @@ local function format(item, picker)
 end
 
 -- ── actions ─────────────────────────────────────────────────────────────────────────────────────
-local function refresh(picker, keep_key)
-  if not picker or picker.closed then
-    return
-  end
-  picker:find({
-    on_done = function()
-      if keep_key and not picker.closed then
-        kit.move_to(picker, keep_key)
-      end
-    end,
-  })
-end
+local refresh = kit.refresh
 
 local function toggle_fold(picker, item)
   if item.kind == "dir" then

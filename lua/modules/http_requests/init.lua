@@ -214,24 +214,7 @@ local function format(item, picker)
 end
 
 -- ── actions ─────────────────────────────────────────────────────────────────────────────────────
-local function refresh(picker, keep_key)
-  if not picker or picker.closed then
-    return
-  end
-  picker:find({
-    on_done = function()
-      if not keep_key or picker.closed then
-        return
-      end
-      for index, item in ipairs(picker:items()) do
-        if item.key == keep_key then
-          picker.list:move(index, true)
-          return
-        end
-      end
-    end,
-  })
-end
+local refresh = kit.refresh
 
 local function refresh_all(keep)
   for _, picker in ipairs(M.panes()) do

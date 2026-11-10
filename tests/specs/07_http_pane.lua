@@ -707,3 +707,41 @@ lib.test("http pane: each tab has its own pane", function()
   end, "the first tab lost its pane")
   screen:close()
 end)
+
+lib.test("http pane: folding and unfolding do not flash (the list never jumps)", function()
+  local dir = vim.fn.resolve(h.tmpdir())
+  for i = 1, 40 do
+    local name = string.format("d%02d", i)
+    h.write(dir .. "/" .. name .. "/" .. name .. ".http", { "### Req " .. name, "GET https://example.com/" .. name })
+  end
+  local screen = h.nvim(dir, 120, 30)
+  h.wait(screen, function()
+    return screen:exec("return package.loaded['kulala'] ~= nil")
+  end, "kulala did not load")
+  screen:exec("vim.fn.maparg('<leader>h', 'n', false, true).callback()")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests').panes() == 1 and #require('modules.http_requests').panes()[1]:items() > 40")
+  end, "the pane has no rows")
+  vim.wait(600)
+  screen:exec("require('modules.http_requests').panes()[1].list:move(40, true)")
+  vim.wait(400)
+  local frames = {}
+  screen.on_flush = function()
+    frames[#frames + 1] = screen:text(5, 1, 54)
+  end
+  for _, keys in ipairs({ "<CR>", "<CR>", "h", "l" }) do
+    frames = {}
+    screen:input(keys)
+    vim.wait(600)
+    local seen, count = {}, 0
+    for _, row in ipairs(frames) do
+      if not seen[row] then
+        seen[row] = true
+        count = count + 1
+      end
+    end
+    lib.ok(#frames >= 1, "no frame after " .. keys)
+    lib.eq(1, count, "the list jumped while handling " .. keys)
+  end
+  screen:close()
+end)
