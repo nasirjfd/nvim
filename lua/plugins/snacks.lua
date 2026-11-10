@@ -299,7 +299,8 @@ return {
       -- are not file lists (explorer sidebar, select popups, vscode-style command lists) keep
       -- their built-in layout.
       -- PhpStorm style in every list: file name first (bright), directory after it (dimmed)
-      formatters = { file = { filename_first = true, truncate = "center" } },
+      -- min_width: the path column never shrinks below it, so a long file name is not cut ("…lInPerson…")
+      formatters = { file = { filename_first = true, truncate = "center", min_width = 70 } },
       layout = function(source)
         return builtin_layouts[source] or lsp_layout
       end,
