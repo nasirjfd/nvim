@@ -93,9 +93,32 @@ function M.run(ids, only)
         end
       end
     end
+    -- a run of some tests only: only those show as running
+    local narrow
+    if only then
+      narrow = {}
+      for file, names in pairs(only) do
+        for id in pairs(pane().ids_for(file, names)) do
+          narrow[id] = true
+        end
+      end
+    else
+      for _, id in ipairs(ids) do
+        local node_ids = pane().test_ids(id)
+        if node_ids then
+          narrow = narrow or {}
+          narrow[id] = true
+        else
+          narrow = nil
+          break
+        end
+      end
+    end
+    pane().narrow(narrow)
     progress.start(planned)
     run_jobs(jobs)
     progress.clear()
+    pane().narrow(nil)
   end)
 end
 
@@ -151,6 +174,7 @@ end
 function M.stop()
   stopped = true
   progress.clear()
+  pane().narrow(nil)
   local nio = require("nio")
   nio.run(function()
     for _, id in ipairs(pane().running_ids()) do

@@ -692,6 +692,28 @@ lib.test("tests run: Run failed on one data set keeps the method's other data se
   screen:close()
 end)
 
+lib.test("tests run: running one failed test shows one test as running, the others keep their result", function()
+  local dir = project()
+  h.write(dir .. "/fail-A", { "x" })
+  local screen = start(dir)
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "✓ 7 passed", 54) ~= nil and h.find_on_screen(screen, "✗ 1 failed", 54) ~= nil
+  end, "the first run must give 7 passed, 1 failed", 20000)
+  vim.wait(300)
+  h.write(dir .. "/slow", { "x" })
+  screen:exec("require('modules.phpunit.runner').run_failed()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "● 1 runn", 54) ~= nil
+  end, "exactly one test must show as running", 10000)
+  lib.ok(h.find_on_screen(screen, "✓ 7 passed", 54) ~= nil, "the others keep their result while it runs (still 7 passed)")
+  lib.ok(h.find_on_screen(screen, "● 2 runn", 54) == nil and h.find_on_screen(screen, "● 8 runn", 54) == nil, "not the whole file")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "runn", 54) == nil and h.find_on_screen(screen, "✓ 7 passed", 54) ~= nil
+  end, "it did not finish", 20000)
+  screen:close()
+end)
+
 -- ── data sets ───────────────────────────────────────────────────────────────────────────────────
 lib.test("tests data sets: every data set counts and is listed on its own, the failed one in the Failed section", function()
   local dir = project()

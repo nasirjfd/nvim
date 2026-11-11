@@ -265,26 +265,77 @@ function M.last_result(id)
   return last_results[id]
 end
 
+--- Whether `id` is a single test (not a file or folder).
+function M.test_ids(id)
+  local node = node_of(id)
+  return node and node:data().type == "test" or nil
+end
+
 function M.running_ids()
   return vim.tbl_keys(snap.running or {})
 end
 
 -- ── rows ────────────────────────────────────────────────────────────────────────────────────────
+-- A run of just some tests of a file (Run failed, one test, one data set): neotest marks every test of the file as
+-- running and drops their results while it goes. Only the ones that really run show as running, the others keep
+-- what they were.
+local narrow ---@type table<string, boolean>?
+
+--- Limit what shows as running to these test ids (nil: everything neotest says runs).
+function M.narrow(ids)
+  narrow = ids
+  refresh_soon()
+end
+
+local function running_now(id)
+  return snap.running[id] and (not narrow or narrow[id])
+end
+
+local function result_of(id)
+  local result = snap.results[id]
+  if result then
+    return result
+  end
+  if narrow and snap.running[id] and not narrow[id] then
+    return last_results[id]
+  end
+end
+
+--- The ids of the tests of `file` that `names` ("method" or "method with data set LABEL") are.
+function M.ids_for(file, names)
+  local ids = {}
+  local node = node_of(file)
+  if not node then
+    return ids
+  end
+  for _, child in node:iter_nodes() do
+    local data = child:data()
+    if data.type == "test" then
+      for _, name in ipairs(names) do
+        if name == data.name or name:sub(1, #data.name + 15) == data.name .. " with data set " then
+          ids[data.id] = true
+        end
+      end
+    end
+  end
+  return ids
+end
+
 -- What a test counts as: one, or one per data set once PHPUnit has run it (the number of runs is what PHPUnit reports)
 local function sets_of(test)
-  local result = snap.results[test.id]
+  local result = result_of(test.id)
   return result and result.datasets or nil
 end
 
 local function counts_of(tests)
   local c = { passed = 0, failed = 0, skipped = 0, running = 0, total = 0 }
   for _, test in ipairs(tests) do
-    if snap.running[test.id] then
+    if running_now(test.id) then
       -- a test that runs counts as many runs as it had data sets last time (what progress counts too)
       local weight = known_sets[test.id] or 1
       c.running, c.total = c.running + weight, c.total + weight
     else
-      local result = snap.results[test.id]
+      local result = result_of(test.id)
       local sets = result and result.datasets
       if sets and #sets > 0 then
         for _, set in ipairs(sets) do
@@ -378,8 +429,8 @@ local function rows(_, ctx)
       id = test.id,
       file = test.path,
       line = test.line,
-      status = snap.running[test.id] and "running" or (snap.results[test.id] or {}).status or "none",
-      sets = (not snap.running[test.id]) and sets_of(test) and #sets_of(test) or nil,
+      status = running_now(test.id) and "running" or (result_of(test.id) or {}).status or "none",
+      sets = (not running_now(test.id)) and sets_of(test) and #sets_of(test) or nil,
     }, extra or {})
   end
 
@@ -404,7 +455,7 @@ local function rows(_, ctx)
 
   -- the rows of a test in a list that shows executions: the method, or one row per data set
   local function execution_rows(test, extra)
-    local sets = (not snap.running[test.id]) and sets_of(test)
+    local sets = (not running_now(test.id)) and sets_of(test)
     if sets and #sets > 0 then
       local rows = {}
       for _, set in ipairs(sets) do
