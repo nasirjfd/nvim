@@ -729,6 +729,66 @@ lib.test("tests run: an edit that is not written yet is written before the run (
   screen:close()
 end)
 
+lib.test("tests gutter: clicking the icon at the left of a test runs it again, whatever the icon", function()
+  local dir = project()
+  h.write(dir .. "/fail-B", { "x" })
+  local screen = start(dir)
+  screen:exec("vim.cmd('wincmd l')") -- BTest.php, in the editor
+  -- the click point: the first column of the gutter of a line
+  local function gutter(line)
+    return screen:exec([[
+      local pos = vim.fn.screenpos(0, ..., 1)
+      local info = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+      return { pos.row, pos.col - info.textoff }
+    ]], { line })
+  end
+  local function click_test(line)
+    local at = gutter(line)
+    h.click(screen, at[1], at[2])
+  end
+  -- before any run neotest shows its plain test icon: a click runs the test (line 4, testOne)
+  h.wait(screen, function()
+    return screen:exec("return #vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = 'neotest-status', lnum = 4 })[1].signs > 0")
+  end, "no sign at testOne")
+  click_test(4)
+  wait_runs(screen, dir, 1)
+  lib.matches("BTest%.php .*%-%-filter ::testOne%(", lines(dir .. "/args.log")[1])
+  -- after a run the icon is a check (testOne) or a cross (testTwo): both run again
+  h.wait(screen, function()
+    return screen:exec("return vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = 'neotest-status', lnum = 8 })[1].signs[1].name") == "neotest_failed"
+      or screen:exec("return vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = 'neotest-status', lnum = 8 })[1].signs[1].name") == "neotest_test"
+  end, "no sign at testTwo")
+  click_test(8)
+  wait_runs(screen, dir, 2)
+  lib.matches("BTest%.php .*%-%-filter ::testTwo%(", lines(dir .. "/args.log")[2])
+  h.wait(screen, function()
+    return screen:exec("return vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = 'neotest-status', lnum = 8 })[1].signs[1].name") == "neotest_failed"
+  end, "testTwo must show a cross")
+  click_test(8) -- the cross
+  wait_runs(screen, dir, 3)
+  lib.matches("BTest%.php .*%-%-filter ::testTwo%(", lines(dir .. "/args.log")[3])
+  screen:close()
+end)
+
+lib.test("tests gutter: a click in the text or on a line without an icon does what it always did", function()
+  local dir = project()
+  local screen = start(dir)
+  screen:exec("vim.cmd('wincmd l')")
+  h.wait(screen, function()
+    return screen:exec("return #vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = 'neotest-status', lnum = 4 })[1].signs > 0")
+  end, "no sign at testOne")
+  local at = screen:exec("local p = vim.fn.screenpos(0, 4, 1); return { p.row, p.col }")
+  h.click(screen, at[1], at[2] + 3) -- on the text of testOne's line
+  vim.wait(500)
+  lib.eq(0, #lines(dir .. "/args.log"), "a click in the text must not run anything")
+  lib.eq(4, screen:exec("return vim.api.nvim_win_get_cursor(0)[1]"), "and it moves the cursor as usual")
+  local blank = screen:exec("local p = vim.fn.screenpos(0, 1, 1); local i = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]; return { p.row, p.col - i.textoff }")
+  h.click(screen, blank[1], blank[2]) -- the gutter of a line without an icon
+  vim.wait(500)
+  lib.eq(0, #lines(dir .. "/args.log"), "no icon, no run")
+  screen:close()
+end)
+
 -- ── data sets ───────────────────────────────────────────────────────────────────────────────────
 lib.test("tests data sets: every data set counts and is listed on its own, the failed one in the Failed section", function()
   local dir = project()

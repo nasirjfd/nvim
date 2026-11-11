@@ -167,6 +167,15 @@ function M.run_nearest()
   M.run({ id })
 end
 
+--- The test at `row` (0-based) of `file`, wherever the cursor is (a click on its gutter icon).
+function M.run_at(file, row)
+  local id = pane().nearest(file, row)
+  if not id then
+    return notify("No tests here", vim.log.levels.WARN)
+  end
+  M.run({ id })
+end
+
 --- Only the tests that failed in their last run.
 function M.run_failed()
   local only, ids = pane().failed()
