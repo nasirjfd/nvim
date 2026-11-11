@@ -21,27 +21,37 @@ end
 
 -- One neotest run of `id` (a position id), waiting until it is over. `only` lists the test names to run in a
 -- file (the build_spec of the adapter turns them into --filter).
-local function run_one(id, only)
+local function run_one(id, only, slot)
   local args = { id, concurrent = false }
-  if only then
-    args.extra_args = { only = only }
+  if only or slot then
+    args.extra_args = { only = only, slot = slot }
   end
   require("neotest").run.run(args)
 end
 
--- Run all `jobs` (functions): in turn, or `workers` at a time when parallel is on.
+-- Run all `jobs` (functions of the worker slot): in turn, or `workers` at a time when parallel is on. A parallel
+-- job gets the number of its worker (1..workers), never shared by two jobs that run together: the project
+-- turns it into what keeps them apart (plan.lua, parallel_env).
 local function run_jobs(jobs)
   local nio = require("nio")
   stopped = false
   if options.parallel() and #jobs > 1 then
-    local gate = nio.control.semaphore(options.workers())
+    local workers = options.workers()
+    local gate = nio.control.semaphore(workers)
+    local free = {}
+    for slot = 1, workers do
+      free[slot] = slot
+    end
     local tasks = {}
     for _, job in ipairs(jobs) do
       tasks[#tasks + 1] = function()
         gate.with(function()
-          if not stopped then
-            job()
+          if stopped then
+            return
           end
+          local slot = table.remove(free, 1)
+          pcall(job, slot)
+          table.insert(free, slot)
         end)
       end
     end
@@ -51,7 +61,7 @@ local function run_jobs(jobs)
       if stopped then
         break
       end
-      job()
+      job(nil)
     end
   end
 end
@@ -69,13 +79,13 @@ function M.run(ids, only)
       local files = options.parallel() and pane().files_under(id) or nil
       if files and #files > 1 then
         for _, file in ipairs(files) do
-          jobs[#jobs + 1] = function()
-            run_one(file, only and only[file])
+          jobs[#jobs + 1] = function(slot)
+            run_one(file, only and only[file], slot)
           end
         end
       else
-        jobs[#jobs + 1] = function()
-          run_one(id, only and only[id])
+        jobs[#jobs + 1] = function(slot)
+          run_one(id, only and only[id], slot)
         end
       end
     end

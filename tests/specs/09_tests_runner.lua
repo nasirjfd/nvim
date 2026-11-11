@@ -37,9 +37,13 @@ local function project()
     'log="$ROOT${log#/ctr}"',
     'mkdir -p "$ROOT/running" "$(dirname "$log")"',
     'touch "$ROOT/running/$$"',
+    -- the worker slot (TEST_THREAD_ID): two runs at the same time must never have the same one
+    [[mkdir "$ROOT/slot-${TEST_THREAD_ID:-0}" 2>/dev/null || echo COLLISION >> "$ROOT/collisions.log"]],
+    [[echo "${TEST_THREAD_ID:-none}" >> "$ROOT/slots.log"]],
     'ls "$ROOT/running" | wc -l | tr -d " " >> "$ROOT/concurrency.log"',
     "sleep 0.5",
     'rm "$ROOT/running/$$"',
+    [[rmdir "$ROOT/slot-${TEST_THREAD_ID:-0}" 2>/dev/null]],
     -- no file given (a whole project): every class
     [[files="$file"; [ -z "$file" ] && files="$(ls "$ROOT"/app/tests/*Test.php | sed "s|^$ROOT|/ctr|")"]],
     [[echo "<testsuites>" > "$log"]],
@@ -63,7 +67,9 @@ local function start(dir)
       [[
     require("modules.phpunit").configure({
       root = %q, projects = { "app" }, paths = { [%q] = "/ctr" },
-      command = "ROOT=" .. %q .. " " .. %q .. "/fake-phpunit.sh ${phpunitargs}",
+      command = "ROOT=" .. %q .. " ${env} " .. %q .. "/fake-phpunit.sh ${phpunitargs}",
+      parallel_env = { TEST_THREAD_ID = "${slot}" },
+      max_workers = vim.g.test_max_workers,
     })
     vim.cmd("edit " .. %q)
     require("modules.phpunit.options").set_parallel(false)
@@ -111,6 +117,7 @@ lib.test("tests run: all tests one after the other when Parallel is off (one php
   vim.wait(800)
   lib.eq(1, #lines(dir .. "/args.log"), "a project is run as a whole")
   lib.eq(1, max_concurrency(dir))
+  lib.eq({ "none" }, lines(dir .. "/slots.log"), "a run that is not parallel has no worker slot (the project's default)")
   h.wait(screen, function()
     return counts(screen).passed == 8
   end, "all eight tests must have passed")
@@ -125,9 +132,44 @@ lib.test("tests run: with Parallel on every file is its own phpunit, `workers` a
   wait_runs(screen, dir, 4)
   lib.eq(4, #lines(dir .. "/args.log"), "one phpunit per file")
   lib.eq(2, max_concurrency(dir), "two at a time, not more and not fewer")
+  local slots = lines(dir .. "/slots.log")
+  table.sort(slots)
+  lib.eq(4, #slots)
+  lib.ok(vim.tbl_contains({ "1", "2" }, slots[1]) and vim.tbl_contains({ "1", "2" }, slots[4]), "slots are 1..workers: " .. table.concat(slots, ","))
+  lib.eq(0, #lines(dir .. "/collisions.log"), "two runs at the same time had the same worker slot")
   h.wait(screen, function()
     return counts(screen).passed == 8
   end, "all eight tests must have passed")
+  screen:close()
+end)
+
+lib.test("tests run: a project's max_workers caps the workers, and slots stay within it", function()
+  local dir = project()
+  local screen = h.nvim(dir)
+  screen:exec(string.format([[
+    vim.g.test_max_workers = 3
+    require("modules.phpunit").configure({
+      root = %q, projects = { "app" }, paths = { [%q] = "/ctr" }, max_workers = 3,
+      command = "ROOT=" .. %q .. " ${env} " .. %q .. "/fake-phpunit.sh ${phpunitargs}",
+      parallel_env = { TEST_THREAD_ID = "${slot}" },
+    })
+    vim.cmd("edit " .. %q)
+    local o = require("modules.phpunit.options")
+    o.set_parallel(true)
+  ]], dir, dir, dir, dir, dir .. "/app/tests/BTest.php"))
+  lib.eq(3, screen:exec("return require('modules.phpunit.options').set_workers(50)"), "the number never goes above max_workers")
+  lib.eq(3, screen:exec("return require('modules.phpunit.options').workers()"))
+  screen:exec("require('modules.phpunit.pane').toggle()")
+  h.wait(screen, function()
+    return screen:exec("local p = require('modules.phpunit.pane'); return #(p.files_under(p.root_id() or '') or {}) == 4")
+  end, "the four test files were not found")
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  wait_runs(screen, dir, 4)
+  lib.ok(max_concurrency(dir) <= 3, "more than max_workers at a time")
+  for _, slot in ipairs(lines(dir .. "/slots.log")) do
+    lib.ok(tonumber(slot) and tonumber(slot) >= 1 and tonumber(slot) <= 3, "slot out of range: " .. slot)
+  end
+  lib.eq(0, #lines(dir .. "/collisions.log"))
   screen:close()
 end)
 

@@ -77,7 +77,14 @@ require("codediff").setup({
 -- (each one is run with its own tests.xml).
 require("modules.phpunit").configure({
   root = root,
-  command = 'docker compose exec -T -w /var/www/vendor worker /bin/sh -c "${php} ${phpargs} /var/www/vendor/bin/phpunit ${phpunitargs}"',
+  -- ${env} is where the variables of a parallel worker (parallel_env) go: inside the container
+  command = 'docker compose exec -T -w /var/www/vendor worker /bin/sh -c "${env} ${php} ${phpargs} /var/www/vendor/bin/phpunit ${phpunitargs}"',
   paths = { [root] = "/var/www/vendor" },
   args = { "--configuration=digikala/supernova-digiexpress/tests.xml" },
+  -- Tests that run at the same time must not share a database: Supernova's TEST_THREAD_ID picks the databases
+  -- digiexpress_<N> and digiexpress_log_<N> (and the container cache, cache keys, redis db). Worker N of a
+  -- parallel run gets TEST_THREAD_ID=N. The databases 1..15 exist (local-projects/supernova-digiexpress-test-dbs.sh
+  -- clones digiexpress_1 into them); redis has 16 dbs, so 15 is the most.
+  parallel_env = { TEST_THREAD_ID = "${slot}" },
+  max_workers = 15,
 })

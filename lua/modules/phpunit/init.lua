@@ -82,7 +82,7 @@ function ADAPTER.build_spec(args)
     local test = position.type == "test" and position.name or only
     local argv = plan.args(target, results, test)
     specs[#specs + 1] = {
-      command = { "/bin/sh", "-c", plan.command(argv) },
+      command = { "/bin/sh", "-c", plan.command(argv, args.extra_args and args.extra_args.slot) },
       cwd = plan.get().root or vim.uv.cwd(),
       env = args.env or plan.get().env,
       context = { results_path = results },

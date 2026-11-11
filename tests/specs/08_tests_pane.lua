@@ -86,6 +86,25 @@ lib.test("phpunit plan: the VS Code command template is filled in and the argume
   plan.reset()
 end)
 
+lib.test("phpunit plan: parallel_env gives each worker its own variables, inside the container through ${env}", function()
+  local dir = h.tmpdir()
+  plan.configure({
+    root = dir,
+    command = [[/bin/sh -c "${env} /usr/bin/env"]],
+    parallel_env = { TEST_THREAD_ID = "${slot}", OTHER = "w-${slot}" },
+  })
+  local out = vim.system({ "/bin/sh", "-c", plan.command({}, 7) }, { text = true }):wait()
+  lib.matches("\nTEST_THREAD_ID=7\n", "\n" .. out.stdout)
+  lib.matches("\nOTHER=w%-7\n", "\n" .. out.stdout)
+  local alone = vim.system({ "/bin/sh", "-c", plan.command({}) }, { text = true }):wait()
+  lib.ok(not alone.stdout:find("TEST_THREAD_ID=", 1, true), "no slot, no variables")
+  -- a command without ${env}: the variables are put in front of it
+  plan.configure({ root = dir, command = "/usr/bin/env", parallel_env = { TEST_THREAD_ID = "${slot}" } })
+  local front = vim.system({ "/bin/sh", "-c", plan.command({}, 3) }, { text = true }):wait()
+  lib.matches("\nTEST_THREAD_ID=3\n", "\n" .. front.stdout)
+  plan.reset()
+end)
+
 -- ── the junit log ───────────────────────────────────────────────────────────────────────────────
 local JUNIT = [[<?xml version="1.0" encoding="UTF-8"?>
 <testsuites>

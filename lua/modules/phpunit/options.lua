@@ -8,6 +8,7 @@ local M = {}
 local file = vim.env.NVIM_CONFIG_TESTS and (vim.fn.tempname() .. "-phpunit-options.json")
   or (vim.fn.stdpath("state") .. "/phpunit-options.json")
 local MIN, MAX = 2, 64
+local limit = MAX -- what the project can run at once (configure({ max_workers = N }))
 
 local values ---@type { parallel: boolean, workers: integer }?
 
@@ -55,7 +56,16 @@ function M.toggle_flat()
 end
 
 function M.workers()
-  return load().workers
+  return math.min(load().workers, limit)
+end
+
+--- The most workers the project can use (its databases, say); the number of workers never goes above it.
+function M.set_limit(count)
+  limit = math.min(MAX, math.max(MIN, math.floor(count or MAX)))
+end
+
+function M.limit()
+  return limit
 end
 
 function M.set_parallel(on)
@@ -70,7 +80,7 @@ end
 
 --- The step of the + and - keys: one at a time up to 10, then five.
 function M.step(up)
-  local n = load().workers
+  local n = M.workers()
   if up then
     return n < 10 and 1 or 5
   end
@@ -79,7 +89,7 @@ end
 
 --- Set the number of workers (kept between MIN and MAX).
 function M.set_workers(count)
-  load().workers = math.min(MAX, math.max(MIN, math.floor(count)))
+  load().workers = math.min(limit, math.max(MIN, math.floor(count)))
   save()
   return values.workers
 end

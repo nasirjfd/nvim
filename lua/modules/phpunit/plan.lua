@@ -9,6 +9,10 @@
 --                 project: the search for tests is limited to it
 --   config_files  names of the phpunit config looked for in a project, first one found wins
 --   env           environment of the command
+--   parallel_env  variables given to each worker of a parallel run, `${slot}` is the number of the worker (1, 2,
+--                 ...): what keeps the tests of two workers apart (a database each, say). Put `${env}` in
+--                 `command` where they belong (inside the container), else they are put in front of it.
+--   max_workers   the most workers at a time
 local M = {}
 
 local uv = vim.uv
@@ -49,6 +53,7 @@ function M.configure(opts)
   settings.paths = mapped(opts.paths)
   settings.configs = {}
   configured = opts.root ~= nil
+  require("modules.phpunit.options").set_limit(opts.max_workers)
 
   -- `--configuration=<file>` in args: the project of that file, run with that config
   local args, from_args = {}, {}
@@ -213,20 +218,36 @@ end
 --- The command line (for `sh -c`) that runs phpunit with `args`: the template of the settings with its
 --- ${…} variables filled in. The arguments are quoted for the innermost shell, and escaped once more
 --- when the template puts them inside double quotes.
-function M.command(args)
+---@param args string[]
+---@param slot? integer the number of the worker of a parallel run
+function M.command(args, slot)
   local all = vim.list_extend(vim.deepcopy(settings.args or {}), args)
   local quoted = {}
   for _, arg in ipairs(all) do
     quoted[#quoted + 1] = sh_quote(arg)
   end
   local joined = table.concat(quoted, " ")
+  -- the variables of this worker: NAME=value NAME=value
+  local assignments = {}
+  if slot and settings.parallel_env then
+    local names = vim.tbl_keys(settings.parallel_env)
+    table.sort(names)
+    for _, name in ipairs(names) do
+      local value = tostring(settings.parallel_env[name]):gsub("%${slot}", tostring(slot))
+      assignments[#assignments + 1] = name .. "=" .. sh_quote(value)
+    end
+  end
   local values = {
+    env = table.concat(assignments, " "),
     php = "php",
     phpargs = "",
     phpunitargs = joined,
     workspaceFolder = settings.root or vim.uv.cwd(),
   }
   local text = settings.command
+  if #assignments > 0 and not text:find("${env}", 1, true) then
+    text = table.concat(assignments, " ") .. " " .. text
+  end
   local out, from = {}, 1
   while true do
     local s, e, name = text:find("%${(%w+)}", from)
