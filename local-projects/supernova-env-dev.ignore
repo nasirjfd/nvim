@@ -1,0 +1,4 @@
+# machine-local: search inside these packages although the parent .gitignore hides them
+# (vendor/digiexpress/*); fd and rg read this file before the parent's .gitignore.
+!/digiexpress/
+!/digiexpress/**

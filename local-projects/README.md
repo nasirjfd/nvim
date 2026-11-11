@@ -5,10 +5,19 @@ Copies of the machine-local `.nvim.lua` files (exrc) of projects, so every machi
 | File here | Lives at (in the project) |
 | --- | --- |
 | `supernova-env-dev.nvim.lua` | `supernova-env-dev/vendor/.nvim.lua` |
+| `supernova-env-dev.ignore` | `supernova-env-dev/vendor/.ignore` |
 
 On a new machine: copy the file to its place (rename to `.nvim.lua`), adjust the root path at the top if the project lives elsewhere, then open nvim there and `:trust` it.
 
 This repo is the synced copy. Whenever a project's `.nvim.lua` changes, copy it back here and commit and push in the same turn.
+
+## `.ignore` files
+
+The parent repo ignores `vendor/*`, so the pickers (fd, rg) inside `vendor/` would not see the packages it does not
+allow-list (e.g. `vendor/digiexpress/drop-shipping-contract`). A local `.ignore` in the folder unignores just those
+(fd and rg read it before the parent's `.gitignore`; list the directory *and* its content: `!/pkg/` + `!/pkg/**`). Nothing
+else is loaded by default: about 8.7k files instead of 63k, so file search is ~5x and grep ~9x faster. `<leader>uI` still
+shows everything. Copy `supernova-env-dev.ignore` to `supernova-env-dev/vendor/.ignore`; add a package by adding its two lines.
 
 ## supernova-digiexpress-test-dbs.sh
 

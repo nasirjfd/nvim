@@ -68,6 +68,10 @@ The user's herdr (terminal workspace manager) setup is versioned in `herdr/` so 
 - Nvim-side pieces (`lua/core/herdr-ref.lua`, the `<D-l>` mapping in `lua/core/keymaps.lua`) live here too; `<leader>al` / `cmd+l` send `@file#Lx-y` to the herdr pane labelled `claude` via `send-ref.sh`.
 - Commit messages: one short line, never any `Co-Authored-By` or Claude attribution.
 
+## Search inside a folder the parent repo ignores
+
+Pickers never load ignored or hidden files by default (`<leader>uI` toggles it). Where a parent repo ignores most of the folder (supernova's `vendor/*`), put a local `.ignore` in that folder with `!/pkg/` and `!/pkg/**` for each package to search: fd and rg read it before the parent's `.gitignore`, so only those packages are added (no `--no-ignore-parent`, which loaded everything: 63k files, grep 9x slower). The `.ignore` is synced in `local-projects/` (see its README). Spec: `tests/specs/10_parent_ignore.lua`.
+
 ## Project-local `.nvim.lua` files are synced here
 
 Machine-local `.nvim.lua` files of projects (e.g. `supernova-env-dev/vendor/.nvim.lua`) are copied into `local-projects/` (see its README) so other machines get them.
