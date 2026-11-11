@@ -26,6 +26,7 @@ local snap = {
   adapter = nil, ---@type string?
 }
 local last_status = {} -- test id -> what it last was (passed/failed/skipped): a test that runs keeps its place
+local last_results = {} -- test id -> its last result (kept while a run clears it)
 local known_sets = {} -- test id -> how many data sets it had last time (a run's size is counted in these)
 local expanded = {} -- file key -> true while its tests are shown
 local collapsed = {} -- folder key -> true while folded
@@ -66,6 +67,9 @@ function M.attach(client)
     snap.results = client:get_results(adapter_id) or {}
     for id, result in pairs(snap.results) do
       last_status[id] = result.status
+      if id:find("::", 1, true) then
+        last_results[id] = result
+      end
       if result.datasets then
         known_sets[id] = #result.datasets
       end
@@ -254,6 +258,11 @@ function M.weight(id, only)
     end
   end
   return total
+end
+
+--- The last result of a test (nil when it never had one).
+function M.last_result(id)
+  return last_results[id]
 end
 
 function M.running_ids()

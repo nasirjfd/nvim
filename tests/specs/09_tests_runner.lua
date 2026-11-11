@@ -29,6 +29,7 @@ local function project()
     "#!/bin/sh",
     'echo "$@" >> "$ROOT/args.log"',
     'for a in "$@"; do',
+    '  case "$prev" in --filter) filter="$a";; esac; prev="$a"',
     '  case "$a" in',
     '    --log-junit=*) log="${a#--log-junit=}";;',
     '    *Test.php) file="$a";;',
@@ -58,11 +59,15 @@ local function project()
     [[  if [ -f "$ROOT/sets-${class%Test}" ]; then]],
     [[    two_cases=""]],
     [[    for n in 0 1 2; do]],
+    -- a filter for one data set ("... with data set #1$") runs only that one
+    [[      case "$filter" in *"with data set #"*) case "$filter" in *"#$n"*) ;; *) continue;; esac;; esac]],
     [[      f=""; [ "$n" = 1 ] && f="$failure"]],
     [[      two_cases="$two_cases$(printf '<testcase name="testTwo with data set #%s" class="%s" file="%s" line="8">%s</testcase>' "$n" "$class" "$file" "$f")"]],
     "    done",
     "  fi",
-    [[  printf '<testsuite name="%s" file="%s"><testcase name="testOne" class="%s" file="%s" line="4"/>%s</testsuite>\n' "$class" "$file" "$class" "$file" "$two_cases" >> "$log"]],
+    -- a --filter runs testTwo only
+    [[  one=""; [ -z "$filter" ] && one="$(printf '<testcase name="testOne" class="%s" file="%s" line="4"/>' "$class" "$file")"]],
+    [[  printf '<testsuite name="%s" file="%s">%s%s</testsuite>\n' "$class" "$file" "$one" "$two_cases" >> "$log"]],
     "done",
     [[echo "</testsuites>" >> "$log"]],
     "exit 0",
@@ -646,6 +651,45 @@ lib.test("tests memory: after a restart the failed tests are still known and onl
   lib.eq(1, #runs, "only the failed test's file runs")
   lib.matches("BTest%.php .*%-%-filter ::testTwo%(", runs[1])
   second:close()
+end)
+
+lib.test("tests run: Run failed keeps the other tests of the file as they were (one failure stays one failure)", function()
+  local dir = project()
+  h.write(dir .. "/fail-A", { "x" })
+  local screen = start(dir)
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    local c = counts(screen)
+    return c.passed == 7 and c.failed == 1 and c.running == 0
+  end, "the first run must give 7 passed, 1 failed", 20000)
+  vim.wait(300)
+  screen:exec("require('modules.phpunit.runner').run_failed()")
+  wait_runs(screen, dir, 2)
+  vim.wait(800)
+  local c = counts(screen)
+  lib.eq({ 7, 1 }, { c.passed, c.failed }, "ATest's testOne passed before and was not run again: it must not become failed")
+  screen:close()
+end)
+
+lib.test("tests run: Run failed on one data set keeps the method's other data sets", function()
+  local dir = project()
+  h.write(dir .. "/sets-A", { "x" })
+  h.write(dir .. "/fail-A", { "x" })
+  local screen = start(dir)
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "✓ 9 passed", 54) ~= nil and h.find_on_screen(screen, "✗ 1 failed", 54) ~= nil
+  end, "the first run must give 9 passed, 1 failed", 20000)
+  vim.wait(300)
+  screen:exec("require('modules.phpunit.runner').run_failed()")
+  wait_runs(screen, dir, 2)
+  vim.wait(800)
+  -- still 10 runs, 9 passed, 1 failed: the run of data set #1 alone did not make the method one data set
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "10 tests (8 methods) · all run", 54) ~= nil and h.find_on_screen(screen, "✓ 9 passed", 54) ~= nil
+      and h.find_on_screen(screen, "✗ 1 failed", 54) ~= nil
+  end, "after Run failed it must still be 9 passed, 1 failed of 10")
+  screen:close()
 end)
 
 -- ── data sets ───────────────────────────────────────────────────────────────────────────────────

@@ -88,7 +88,7 @@ function ADAPTER.build_spec(args)
       command = { "/bin/sh", "-c", plan.command(argv, args.extra_args and args.extra_args.slot) },
       cwd = plan.get().root or vim.uv.cwd(),
       env = args.env or plan.get().env,
-      context = { results_path = results, progress_key = key, progress_sub = index },
+      context = { results_path = results, progress_key = key, progress_sub = index, filtered = test ~= nil },
       -- "  61 / 1122 (  5%)": how far PHPUnit is (progress.lua)
       stream = function(data)
         return function()
@@ -115,6 +115,53 @@ end
 
 local function failed(position_id, message, output)
   return { [position_id] = { status = "failed", short = message, output = output } }
+end
+
+-- A run with a --filter (Run failed, one test) reports only the tests it ran. neotest gives every test of the file that
+-- is missing from the results the status of the file ("failed" when one test failed): the tests that did not run
+-- would turn failed. They keep what they were. A data set that ran again replaces its own entry in the method's data
+-- sets, the other data sets stay.
+local function keep_the_others(tree, results, output)
+  local pane = require("modules.phpunit.pane")
+  for _, node in tree:iter_nodes() do
+    local data = node:data()
+    if data.type == "test" then
+      local previous = pane.last_result(data.id)
+      local now = results[data.id]
+      if not now then
+        local copy = previous and vim.deepcopy(previous) or { status = "skipped", short = "not run" }
+        copy.output = output
+        results[data.id] = copy
+      elseif now.datasets and previous and previous.datasets then
+        local by_label = {}
+        for _, set in ipairs(now.datasets) do
+          by_label[set.label] = set
+        end
+        local merged, any_failed = {}, false
+        for _, set in ipairs(previous.datasets) do
+          local use = by_label[set.label] or set
+          by_label[set.label] = nil
+          merged[#merged + 1] = use
+          any_failed = any_failed or use.status == "failed"
+        end
+        for _, set in ipairs(now.datasets) do
+          if by_label[set.label] then
+            merged[#merged + 1] = set
+            any_failed = any_failed or set.status == "failed"
+          end
+        end
+        now.datasets = merged
+        if any_failed then
+          now.status = "failed"
+          if now.status ~= "failed" or not now.errors then
+            now.short, now.errors = previous.short, previous.errors
+          end
+        elseif now.status ~= "skipped" then
+          now.status = "passed"
+        end
+      end
+    end
+  end
 end
 
 ---@param spec neotest.RunSpec
@@ -146,6 +193,9 @@ function ADAPTER.results(spec, result, tree)
   end
   if next(results) == nil then
     return failed(id, "PHPUnit ran no tests, see the output", result.output)
+  end
+  if spec.context.filtered then
+    keep_the_others(tree, results, result.output)
   end
   return results
 end
