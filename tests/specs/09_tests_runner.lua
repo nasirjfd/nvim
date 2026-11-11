@@ -478,6 +478,63 @@ lib.test("tests pane: the buttons at the top are quiet (dark tints, nothing bold
   screen:close()
 end)
 
+-- ── the failure message ─────────────────────────────────────────────────────────────────────────
+lib.test("tests messages: a failed test's message is shown under the failing line, not as a diagnostic at its end", function()
+  local dir = project()
+  h.write(dir .. "/fail-B", { "x" })
+  local screen = start(dir)
+  local function marks()
+    return screen:exec([[
+      local ns = require("modules.phpunit.messages").namespace
+      local out = {}
+      for _, m in ipairs(vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })) do
+        out[#out + 1] = { row = m[2], lines = #(m[4].virt_lines or {}), sign = m[4].sign_text }
+      end
+      return out
+    ]])
+  end
+  screen:exec("vim.cmd('wincmd l')") -- BTest.php is open in the editor window
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return #marks() == 1
+  end, "no message appeared under the failing line", 20000)
+  local mark = marks()[1]
+  lib.eq(8, mark.row, "under the line the failure points at (PHPUnit says BTest.php:9, 0-based 8)")
+  lib.ok(mark.lines >= 1, "the message is virtual lines below the line")
+  lib.matches("󰅚", mark.sign, "an error sign in the gutter")
+  lib.eq(0, screen:exec([[
+    local ns = vim.api.nvim_get_namespaces().neotest
+    return ns and #vim.diagnostic.get(0, { namespace = ns }) or 0
+  ]]), "neotest's own diagnostic is off (tiny-inline-diagnostic would draw it at the end of the line)")
+  -- the message is on the screen, under line 9 (row of line 10)
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "BTest::testTwo", 200) ~= nil
+  end, "the message is not on the screen")
+  -- it goes when the test passes
+  vim.fn.delete(dir .. "/fail-B")
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return #marks() == 0
+  end, "the message stayed after the test passed", 20000)
+  screen:close()
+end)
+
+lib.test("tests messages: the message is the test name, the error and no stack trace", function()
+  local screen = h.nvim(h.tmpdir())
+  local lines = screen:exec([[
+    local text = "FooTest::testIt\nError: Call to a member function x() on null\n\n/var/www/Foo.php:12\n/var/www/Bar.php:99"
+    local out = {}
+    for _, line in ipairs(require("modules.phpunit.messages").format(text)) do
+      local joined = ""
+      for _, chunk in ipairs(line) do joined = joined .. chunk[1] end
+      out[#out + 1] = joined
+    end
+    return out
+  ]])
+  lib.eq({ " ● FooTest::testIt", " └ Error: Call to a member function x() on null" }, lines)
+  screen:close()
+end)
+
 -- ── smoothness ──────────────────────────────────────────────────────────────────────────────────
 -- Every redraw of the screen is a frame the eye can see. A refresh used to put the list on its first row for a
 -- moment and back again (a flash); the rows of the pane must not move at all when a folder is folded.

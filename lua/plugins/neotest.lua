@@ -44,7 +44,13 @@ return {
         running = { concurrent = false }, -- the pane (modules/phpunit/runner.lua) decides what runs at once
         -- the tests pane is ours (modules/phpunit/pane.lua), fed by this consumer
         summary = { enabled = false },
+        -- the failure message is drawn under the line (modules/phpunit/messages.lua), not at its end
+        diagnostic = { enabled = false },
         consumers = {
+          phpunit_messages = function(client)
+            require("modules.phpunit.messages").attach(client)
+            return {}
+          end,
           phpunit_pane = function(client)
             require("modules.phpunit.pane").attach(client)
             return {}
