@@ -71,6 +71,16 @@ local function keep(result)
       entry.errors[#entry.errors + 1] = { line = err.line, message = trim(err.message) }
     end
   end
+  if result.datasets then
+    entry.datasets = {}
+    for _, set in ipairs(result.datasets) do
+      local kept = { label = set.label, status = set.status }
+      if set.status == "failed" then
+        kept.short = trim(set.short) and trim(set.short):sub(1, 300)
+      end
+      entry.datasets[#entry.datasets + 1] = kept
+    end
+  end
   return entry
 end
 

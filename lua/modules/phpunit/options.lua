@@ -49,6 +49,11 @@ function M.flat()
   return load().flat
 end
 
+function M.set_flat(on)
+  load().flat = on and true or false
+  save()
+end
+
 function M.toggle_flat()
   load().flat = not values.flat
   save()

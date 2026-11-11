@@ -283,15 +283,37 @@ function M.args(target, results, test)
     args[#args + 1] = M.to_container(target.path)
   end
   args[#args + 1] = "--log-junit=" .. M.to_container(results)
-  if type(test) == "table" and #test == 1 then
-    test = test[1]
+  if type(test) == "string" then
+    test = { test }
   end
-  if test then
+  if test and #test > 0 then
     args[#args + 1] = "--filter"
-    local names = type(test) == "table" and ("(" .. table.concat(test, "|") .. ")") or test
-    args[#args + 1] = "::" .. names .. "( with data set .*)?$"
+    args[#args + 1] = M.filter(test)
   end
   return args
+end
+
+-- escape what a regular expression would read as syntax (PHPUnit's --filter is one; "/" it escapes itself)
+local function regex_escape(text)
+  return (text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?%{%}%|\\]", "\\%0"))
+end
+
+--- The --filter of PHPUnit for tests: names of methods (all their data sets run) and "method with data set LABEL"
+--- (that one data set).
+---@param tests string[]
+function M.filter(tests)
+  local parts = {}
+  for _, test in ipairs(tests) do
+    if test:find(" with data set ", 1, true) then
+      parts[#parts + 1] = regex_escape(test)
+    else
+      parts[#parts + 1] = test .. "( with data set .*)?"
+    end
+  end
+  if #parts == 1 then
+    return "::" .. parts[1] .. "$"
+  end
+  return "::(?:" .. table.concat(parts, "|") .. ")$"
 end
 
 --- Where the junit log of a run goes: a folder the container sees too when paths are mapped, else tmp.

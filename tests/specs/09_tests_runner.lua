@@ -49,9 +49,18 @@ local function project()
     [[echo "<testsuites>" > "$log"]],
     "for file in $files; do",
     [[  class="$(basename "$file" .php)"]],
-    [[  two=""]],
-    [[  if [ -f "$ROOT/fail-${class%Test}" ]; then two="$(printf '<failure type="X">%s::testTwo nope %s:9</failure>' "$class" "$file")"; fi]],
-    [[  printf '<testsuite name="%s" file="%s"><testcase name="testOne" class="%s" file="%s" line="4"/><testcase name="testTwo" class="%s" file="%s" line="8">%s</testcase></testsuite>\n' "$class" "$file" "$class" "$file" "$class" "$file" "$two" >> "$log"]],
+    [[  failure=""]],
+    [[  if [ -f "$ROOT/fail-${class%Test}" ]; then failure="$(printf '<failure type="X">%s::testTwo nope %s:9</failure>' "$class" "$file")"; fi]],
+    -- testTwo is one test, or three data sets (#1 is the one that fails) when "sets-<Class>" exists
+    [[  two_cases="$(printf '<testcase name="testTwo" class="%s" file="%s" line="8">%s</testcase>' "$class" "$file" "$failure")"]],
+    [[  if [ -f "$ROOT/sets-${class%Test}" ]; then]],
+    [[    two_cases=""]],
+    [[    for n in 0 1 2; do]],
+    [[      f=""; [ "$n" = 1 ] && f="$failure"]],
+    [[      two_cases="$two_cases$(printf '<testcase name="testTwo with data set #%s" class="%s" file="%s" line="8">%s</testcase>' "$n" "$class" "$file" "$f")"]],
+    "    done",
+    "  fi",
+    [[  printf '<testsuite name="%s" file="%s"><testcase name="testOne" class="%s" file="%s" line="4"/>%s</testsuite>\n' "$class" "$file" "$class" "$file" "$two_cases" >> "$log"]],
     "done",
     [[echo "</testsuites>" >> "$log"]],
     "exit 0",
@@ -549,6 +558,7 @@ lib.test("tests memory: results are kept per project, messages shortened, tests 
     [file .. "::testA"] = { status = "passed", output = "/tmp/out" },
     [file .. "::testB"] = { status = "failed", short = "boom", errors = { { line = 3, message = long } } },
     [file .. "::testC"] = { status = "skipped" },
+    [file .. "::testE"] = { status = "failed", short = "x", errors = {}, datasets = { { label = "#0", status = "passed" }, { label = "#1", status = "failed", short = "bad" } } },
     [file] = { status = "failed" }, -- a file, not a test
     [dir .. "/gone/BTest.php::testD"] = { status = "failed" }, -- its file does not exist
   }, function(id)
@@ -561,6 +571,8 @@ lib.test("tests memory: results are kept per project, messages shortened, tests 
   lib.eq(3, back[file .. "::testB"].errors[1].line)
   lib.ok(#back[file .. "::testB"].errors[1].message < 2000, "a long message is cut")
   lib.eq("skipped", back[file .. "::testC"].status)
+  lib.eq(2, #back[file .. "::testE"].datasets, "the data sets are kept")
+  lib.eq({ "#1", "failed" }, { back[file .. "::testE"].datasets[2].label, back[file .. "::testE"].datasets[2].status })
   lib.eq(nil, back[file], "a file is not a test")
   lib.eq(nil, back[dir .. "/gone/BTest.php::testD"], "a test of a deleted file is forgotten")
   lib.eq({}, memory.recall("/other/project"), "another project has its own")
@@ -632,6 +644,68 @@ lib.test("tests memory: after a restart the failed tests are still known and onl
   lib.eq(1, #runs, "only the failed test's file runs")
   lib.matches("BTest%.php .*%-%-filter ::testTwo%(", runs[1])
   second:close()
+end)
+
+-- ── data sets ───────────────────────────────────────────────────────────────────────────────────
+lib.test("tests data sets: every data set counts and is listed on its own, the failed one in the Failed section", function()
+  local dir = project()
+  h.write(dir .. "/sets-A", { "x" })
+  h.write(dir .. "/fail-A", { "x" })
+  local screen = start(dir)
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "8 tests", 54) ~= nil
+  end, "before a run every method counts once: 8")
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "10 tests", 54) ~= nil and h.find_on_screen(screen, "✓ 9", 54) ~= nil and h.find_on_screen(screen, "✗ 1", 54) ~= nil
+  end, "the header must count 10 runs: 9 passed, 1 failed", 20000)
+  -- the Failed section lists the data set that failed, not the method
+  local failed_row = h.find_on_screen(screen, "✗ Failed", 54)
+  local set_row = h.find_on_screen(screen, "#1", 54)
+  lib.ok(failed_row and set_row and set_row == failed_row + 1, "the failed data set #1 is the row under Failed")
+  lib.ok(not h.find_on_screen(screen, "#0", 54), "the passing data sets are not in the Failed section")
+  -- in the tree the method says how many it has and unfolds
+  -- the file's own row (the failed data set shows the file name too)
+  local row
+  for r = 1, 29 do
+    local text = screen:text(r, 1, 54)
+    if text:find("ATest.php", 1, true) and not text:find("test", 1, true) then
+      row = r
+    end
+  end
+  lib.ok(row, "the file is in the tree")
+  h.click(screen, row, 8)
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "×3", 54) ~= nil
+  end, "the method must show ×3")
+  h.click(screen, h.find_on_screen(screen, "×3", 54), 8)
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "with data set #0", 54) ~= nil and h.find_on_screen(screen, "with data set #2", 54) ~= nil
+  end, "clicking the method did not show its data sets")
+  screen:close()
+end)
+
+lib.test("tests data sets: Run failed runs only the failed data set, the Flat list shows each one", function()
+  local dir = project()
+  h.write(dir .. "/sets-A", { "x" })
+  h.write(dir .. "/fail-A", { "x" })
+  local screen = start(dir)
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "10 tests", 54) ~= nil and h.find_on_screen(screen, "Run failed tests (1)", 54) ~= nil
+  end, "the run did not finish", 20000)
+  vim.fn.delete(dir .. "/args.log")
+  screen:exec("require('modules.phpunit.runner').run_failed()")
+  wait_runs(screen, dir, 1)
+  local run = lines(dir .. "/args.log")[1]
+  lib.matches("ATest%.php .*%-%-filter ::testTwo with data set #1%$", run)
+  -- flat: testTwo three times, #0 #1 #2
+  screen:exec("require('modules.phpunit.options').set_flat(true)")
+  screen:exec("require('modules.phpunit.pane').panes()[1]:find()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "testTwo #0", 54) ~= nil and h.find_on_screen(screen, "testTwo #1", 54) ~= nil and h.find_on_screen(screen, "testTwo #2", 54) ~= nil
+  end, "the flat list must show each data set")
+  screen:close()
 end)
 
 -- ── smoothness ──────────────────────────────────────────────────────────────────────────────────

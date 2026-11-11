@@ -125,6 +125,11 @@ function M.attach(client)
 end
 
 -- ── what the keys need to know ──────────────────────────────────────────────────────────────────
+--- What the pane knows of neotest right now (for tests).
+function M.snapshot()
+  return snap
+end
+
 function M.root_id()
   return snap.tree and snap.tree:data().id
 end
@@ -187,7 +192,18 @@ function M.failed()
         only[data.path] = {}
         files[#files + 1] = data.path
       end
-      table.insert(only[data.path], data.name)
+      -- a method with data sets: only the data sets that failed
+      local failed_sets = {}
+      for _, set in ipairs(result.datasets or {}) do
+        if set.status == "failed" then
+          failed_sets[#failed_sets + 1] = data.name .. " with data set " .. set.label
+        end
+      end
+      if #failed_sets > 0 and #failed_sets < #result.datasets then
+        vim.list_extend(only[data.path], failed_sets)
+      else
+        table.insert(only[data.path], data.name)
+      end
     end
   end
   table.sort(files)
@@ -199,15 +215,32 @@ function M.running_ids()
 end
 
 -- ── rows ────────────────────────────────────────────────────────────────────────────────────────
+-- What a test counts as: one, or one per data set once PHPUnit has run it (the number of runs is what PHPUnit reports)
+local function sets_of(test)
+  local result = snap.results[test.id]
+  return result and result.datasets or nil
+end
+
 local function counts_of(tests)
-  local c = { passed = 0, failed = 0, skipped = 0, running = 0, total = #tests }
+  local c = { passed = 0, failed = 0, skipped = 0, running = 0, total = 0 }
   for _, test in ipairs(tests) do
     if snap.running[test.id] then
-      c.running = c.running + 1
+      c.running, c.total = c.running + 1, c.total + 1
     else
       local result = snap.results[test.id]
-      if result and c[result.status] then
-        c[result.status] = c[result.status] + 1
+      local sets = result and result.datasets
+      if sets and #sets > 0 then
+        for _, set in ipairs(sets) do
+          c.total = c.total + 1
+          if c[set.status] then
+            c[set.status] = c[set.status] + 1
+          end
+        end
+      else
+        c.total = c.total + 1
+        if result and c[result.status] then
+          c[result.status] = c[result.status] + 1
+        end
       end
     end
   end
@@ -283,7 +316,40 @@ local function rows(_, ctx)
       file = test.path,
       line = test.line,
       status = snap.running[test.id] and "running" or (snap.results[test.id] or {}).status or "none",
+      sets = (not snap.running[test.id]) and sets_of(test) and #sets_of(test) or nil,
     }, extra or {})
+  end
+
+  -- one data set of a method, as a row of its own
+  local function set_item(test, set, extra)
+    local base = vim.fs.basename(test.path)
+    return vim.tbl_extend("force", {
+      text = test.name .. " " .. set.label .. " " .. base,
+      name = test.name,
+      label = set.label,
+      kind = "dataset",
+      key = "s:" .. test.id .. ":" .. set.label,
+      ids = { test.id },
+      only_name = test.name .. " with data set " .. set.label,
+      id = test.id,
+      file = test.path,
+      line = test.line,
+      status = set.status,
+      short = set.short,
+    }, extra or {})
+  end
+
+  -- the rows of a test in a list that shows executions: the method, or one row per data set
+  local function execution_rows(test, extra)
+    local sets = (not snap.running[test.id]) and sets_of(test)
+    if sets and #sets > 0 then
+      local rows = {}
+      for _, set in ipairs(sets) do
+        rows[#rows + 1] = set_item(test, set, extra)
+      end
+      return rows
+    end
+    return { test_item(test, extra) }
   end
 
   -- flat: every test on its own row, the failed ones first
@@ -291,7 +357,7 @@ local function rows(_, ctx)
     local list = {}
     for _, file in ipairs(files) do
       for _, test in ipairs(file.tests) do
-        list[#list + 1] = test_item(test, { flat = true, file_name = vim.fs.basename(test.path) })
+        vim.list_extend(list, execution_rows(test, { flat = true, file_name = vim.fs.basename(test.path) }))
       end
     end
     local rank = { failed = 0, running = 1 }
@@ -313,24 +379,28 @@ local function rows(_, ctx)
   end
 
   -- the failed tests first, in a section of their own
-  local failed_tests = {}
+  local failed_rows = {}
   for _, file in ipairs(files) do
     for _, test in ipairs(file.tests) do
-      if not snap.running[test.id] and (snap.results[test.id] or {}).status == "failed" then
-        failed_tests[#failed_tests + 1] = test
+      if not snap.running[test.id] then
+        for _, row in ipairs(execution_rows(test, { file_name = vim.fs.basename(test.path) })) do
+          if row.status == "failed" then
+            row.key = "x:" .. row.key
+            failed_rows[#failed_rows + 1] = row
+          end
+        end
       end
     end
   end
-  if #failed_tests > 0 then
+  if #failed_rows > 0 then
     local header = {
-      text = "Failed", kind = "failed", key = "x:failed", open = searching or not collapsed["x:failed"], count = #failed_tests,
+      text = "Failed", kind = "failed", key = "x:failed", open = searching or not collapsed["x:failed"], count = #failed_rows,
     }
     items[#items + 1] = header
     if header.open then
-      for i, test in ipairs(failed_tests) do
-        items[#items + 1] = test_item(test, {
-          key = "x:" .. test.id, parent = header, last = i == #failed_tests, file_name = vim.fs.basename(test.path),
-        })
+      for i, row in ipairs(failed_rows) do
+        row.parent, row.last = header, i == #failed_rows
+        items[#items + 1] = row
       end
     end
   end
@@ -391,7 +461,18 @@ local function rows(_, ctx)
         items[#items + 1] = fitem
         if fitem.open then
           for ti, test in ipairs(file.tests) do
-            items[#items + 1] = test_item(test, { text = test.name, parent = fitem, last = ti == #file.tests })
+            local titem = test_item(test, {
+              text = test.name,
+              parent = fitem,
+              last = ti == #file.tests,
+              open = searching or expanded["t:" .. test.id] == true,
+            })
+            items[#items + 1] = titem
+            if titem.sets and titem.open then
+              for si, set in ipairs(sets_of(test)) do
+                items[#items + 1] = set_item(test, set, { parent = titem, last = si == #sets_of(test), text = test.name .. " " .. set.label })
+              end
+            end
           end
         end
       end
@@ -534,9 +615,22 @@ local function format(item, picker)
     ret[#ret + 1] = { (icon or "") .. " ", hl }
     ret[#ret + 1] = { item.text, "SnacksPickerFile" }
     ret[#ret + 1] = { "  " .. item.counts.total, "PhpTestDim" }
+  elseif item.kind == "dataset" then
+    ret[#ret + 1] = status_chunk(item.status)
+    -- in a list of executions the method is named too; under its method only the data set
+    if item.file_name then
+      ret[#ret + 1] = { item.name, item.status == "failed" and "PhpTestFailed" or nil }
+      ret[#ret + 1] = { " " .. item.label, "PhpTestDim" }
+      ret[#ret + 1] = { "  " .. item.file_name, "PhpTestDim" }
+    else
+      ret[#ret + 1] = { "with data set " .. item.label, item.status == "failed" and "PhpTestFailed" or "PhpTestDim" }
+    end
   else
     ret[#ret + 1] = status_chunk(item.status)
     ret[#ret + 1] = { item.name or item.text, item.status == "failed" and "PhpTestFailed" or nil }
+    if item.sets then
+      ret[#ret + 1] = { " ×" .. item.sets, "PhpTestDim" }
+    end
     if item.file_name then
       ret[#ret + 1] = { "  " .. item.file_name, "PhpTestDim" }
     end
@@ -550,19 +644,29 @@ local refresh = kit.refresh
 local function toggle_fold(picker, item)
   if item.kind == "dir" or item.kind == "failed" then
     collapsed[item.key] = (not collapsed[item.key]) or nil
+  elseif item.kind == "test" then
+    local key = "t:" .. item.id
+    expanded[key] = (not expanded[key]) or nil
   else
     expanded[item.key] = (not expanded[item.key]) or nil
   end
   refresh(picker, item.key)
 end
 
+-- a test row that can be unfolded into its data sets
+local function foldable(item)
+  return item.kind == "dir" or item.kind == "file" or item.kind == "failed" or (item.kind == "test" and item.sets ~= nil and not item.flat and not item.file_name)
+end
+
 local function open_node(picker, item)
-  if not item or (item.kind ~= "dir" and item.kind ~= "file" and item.kind ~= "failed") then
+  if not item or not foldable(item) then
     return
   end
   if not item.open then
     if item.kind == "dir" or item.kind == "failed" then
       collapsed[item.key] = nil
+    elseif item.kind == "test" then
+      expanded["t:" .. item.id] = true
     else
       expanded[item.key] = true
     end
@@ -582,7 +686,7 @@ local function close_node(picker, item)
   if not item then
     return
   end
-  if (item.kind == "dir" or item.kind == "file" or item.kind == "failed") and item.open then
+  if foldable(item) and item.open then
     toggle_fold(picker, item)
   elseif item.parent and item.parent.key then
     kit.move_to(picker, item.parent.key)
@@ -608,6 +712,9 @@ local function run_item(item)
     else
       runner().run_failed()
     end
+  elseif item.kind == "dataset" then
+    -- only that data set (PHPUnit's filter), in its file
+    runner().run({ item.file }, { [item.file] = { item.only_name } })
   elseif item.ids then
     runner().run(item.ids)
   end
@@ -627,10 +734,16 @@ local actions = {
       refresh(picker, item.key)
     elseif item.kind == "button" then
       run_item(item)
-    elseif item.kind == "test" then
-      kit.goto_line(picker, item.file, item.line)
-    elseif item.kind == "dir" or item.kind == "file" or item.kind == "failed" then
+    elseif foldable(item) then
       toggle_fold(picker, item)
+    elseif item.kind == "test" or item.kind == "dataset" then
+      kit.goto_line(picker, item.file, item.line)
+    end
+  end,
+  tests_jump = function(picker, item)
+    item = item or picker:current()
+    if item and item.file and (item.kind == "test" or item.kind == "dataset" or item.kind == "file") then
+      kit.goto_line(picker, item.file, item.line or 1)
     end
   end,
   tests_run = function(picker, item)
@@ -745,6 +858,7 @@ local function open()
       list = {
         keys = vim.tbl_extend("error", kit.mouse_keys("tests_press", "tests_click"), {
           ["<CR>"] = "tests_confirm",
+          ["i"] = "tests_jump",
           ["l"] = "tests_open",
           ["h"] = "tests_close",
           ["<C-CR>"] = "tests_run",

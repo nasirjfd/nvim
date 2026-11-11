@@ -146,6 +146,40 @@ lib.test("phpunit junit: pass, fail with its line, skip, data sets, a case witho
   screen:close()
 end)
 
+lib.test("phpunit junit: every data set is kept with its label, status and message", function()
+  local screen = h.nvim(h.tmpdir())
+  local xml = [[<testsuites><testsuite name="S" file="/p/ATest.php">
+    <testcase name="testSheba with data set #0" file="/p/ATest.php" line="4"/>
+    <testcase name="testSheba with data set #1" file="/p/ATest.php" line="4"><failure type="X">ATest::testSheba with data set #1
+Failed asserting that false is true.
+
+/p/ATest.php:6</failure></testcase>
+    <testcase name='testSheba with data set "empty string"' file="/p/ATest.php" line="4"/>
+    <testcase name="testPlain" file="/p/ATest.php" line="9"/>
+    <testcase name='testColon with data set "ride: nobody came"' file="/p/ATest.php" line="12"/>
+    <testcase name='Ns\ATest::testColon with data set "point: late"' file="/p/ATest.php" line="12"/>
+  </testsuite></testsuites>]]
+  local r = screen:exec("return require('modules.phpunit.junit').from_text(...)", { xml })
+  local sheba = r["/p/ATest.php::testSheba"]
+  lib.eq("failed", sheba.status, "one failing data set fails the method")
+  lib.eq(3, #sheba.datasets)
+  lib.eq({ "#0", "#1", '"empty string"' }, { sheba.datasets[1].label, sheba.datasets[2].label, sheba.datasets[3].label })
+  lib.eq({ "passed", "failed", "passed" }, { sheba.datasets[1].status, sheba.datasets[2].status, sheba.datasets[3].status })
+  lib.matches("Failed asserting", sheba.datasets[2].short)
+  lib.eq(nil, r["/p/ATest.php::testPlain"].datasets, "a method without data sets has none")
+  local colon = r["/p/ATest.php::testColon"]
+  lib.eq(2, colon and #colon.datasets, "a label with a colon in it still belongs to its method")
+  lib.eq({ '"ride: nobody came"', '"point: late"' }, { colon.datasets[1].label, colon.datasets[2].label })
+  screen:close()
+end)
+
+lib.test("phpunit plan: the filter of data sets is exact and escaped, of methods covers all their data sets", function()
+  lib.eq("::testA( with data set .*)?$", plan.filter({ "testA" }))
+  lib.eq("::testB with data set #3$", plan.filter({ "testB with data set #3" }))
+  lib.eq('::testX with data set "a\\.b \\(1\\)"$', plan.filter({ 'testX with data set "a.b (1)"' }))
+  lib.eq("::(?:testA( with data set .*)?|testB with data set #3)$", plan.filter({ "testA", "testB with data set #3" }))
+end)
+
 lib.test("phpunit junit: a single testcase or a single suite (not a list) is read too", function()
   local screen = h.nvim(h.tmpdir())
   local one = [[<testsuites><testsuite name="S" file="/p/ATest.php"><testcase name="testOne" file="/p/ATest.php" line="3"/></testsuite></testsuites>]]

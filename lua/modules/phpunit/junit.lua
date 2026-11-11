@@ -59,9 +59,15 @@ local function walk(node, file, out)
   end
 end
 
---- The results of a parsed junit log.
+local function status_of_case(kind)
+  return (kind == "skipped") and "skipped" or kind and "failed" or "passed"
+end
+
+--- The results of a parsed junit log, one per test method. A method with a data provider runs once per data set:
+--- its result has `datasets` ({ label, status, short?, errors? } in the order of the log, label as PHPUnit
+--- names it: `#3` or `"name"`), its own status is failed when any data set failed.
 ---@param parsed table
----@return table<string, { status: string, short: string, errors?: { line: integer, message: string }[] }>
+---@return table<string, { status: string, short: string, errors?: table[], datasets?: table[] }>
 function M.results(parsed)
   local cases = {}
   walk(parsed, nil, cases)
@@ -69,30 +75,41 @@ function M.results(parsed)
   for _, entry in ipairs(cases) do
     local attr = entry.case._attr or {}
     -- "Class::method" (no file attribute) or "method with data set #1"
-    local method = (attr.name or ""):match("([^:]+)$") or attr.name
-    method = (method or ""):gsub(" with data set .*$", "")
+    -- (the label of a data set may have colons in it: split off the label first)
+    local name = attr.name or ""
+    local method, label = name:match("^(.-) with data set (.*)$")
+    method = (method or name):match("([^:]+)$") or ""
     local file = entry.file
     if file and method ~= "" then
       local id = file .. "::" .. method
       local kind, message = problem(entry.case)
-      local status = (kind == "skipped") and "skipped" or kind and "failed" or "passed"
-      local previous = results[id]
-      -- a method with data sets: one failing set fails it
-      if not previous or previous.status == "passed" or (previous.status == "skipped" and status == "failed") then
-        local result = { status = status, short = kind and (message:match("[^\n]*\n?[^\n]*") or message) or "passed" }
-        if status == "failed" then
-          local errors = {}
-          for line_file, line in message:gmatch("([^%s:]+%.php):(%d+)") do
-            if line_file == file then
-              errors[#errors + 1] = { line = tonumber(line) - 1, message = message }
-            end
+      local status = status_of_case(kind)
+      local detail = { status = status, short = kind and (message:match("[^\n]*\n?[^\n]*") or message) or "passed" }
+      if status == "failed" then
+        local errors = {}
+        for line_file, line in message:gmatch("([^%s:]+%.php):(%d+)") do
+          if line_file == file then
+            errors[#errors + 1] = { line = tonumber(line) - 1, message = message }
           end
-          if #errors == 0 and tonumber(attr.line) then
-            errors[1] = { line = tonumber(attr.line) - 1, message = message }
-          end
-          result.errors = errors
         end
+        if #errors == 0 and tonumber(attr.line) then
+          errors[1] = { line = tonumber(attr.line) - 1, message = message }
+        end
+        detail.errors = errors
+      end
+      local result = results[id]
+      if not result then
+        result = { status = status, short = detail.short, errors = detail.errors }
         results[id] = result
+      elseif status == "failed" and result.status ~= "failed" then
+        -- one failing data set fails the method; its message is the first failure
+        result.status, result.short, result.errors = "failed", detail.short, detail.errors
+      elseif status == "passed" and result.status == "skipped" then
+        result.status = "passed"
+      end
+      if label then
+        result.datasets = result.datasets or {}
+        table.insert(result.datasets, { label = label, status = status, short = detail.short, errors = detail.errors })
       end
     end
   end
