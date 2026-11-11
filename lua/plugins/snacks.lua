@@ -356,8 +356,16 @@ return {
           regex = false,
           args = { "--ignore-case" },
           toggles = { regex = false }, -- the title's "R" flag: the regex button replaces it
+          config = function(opts)
+            return require("core.file-cache").skip_parent_ignore(opts)
+          end,
           on_show = function(picker)
             require("core.grep-toggles").attach(picker)
+          end,
+        },
+        grep_word = {
+          config = function(opts)
+            return require("core.file-cache").skip_parent_ignore(opts)
           end,
         },
         -- LSP location lists: only file:line, the code is already in the preview; list on top, preview below
@@ -386,6 +394,9 @@ return {
         files = {
           git_status = false,
           ignored = false,
+          config = function(opts)
+            return require("core.file-cache").skip_parent_ignore(opts)
+          end,
           diagnostics = false,
           -- Rank recently-opened files to the top, even before typing anything. Case never matters
           -- (no smartcase): POST also finds PostController.php, the whole word ranked above P…O…S…T.

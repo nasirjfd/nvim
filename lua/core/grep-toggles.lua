@@ -60,6 +60,7 @@ local function apply(picker)
   if st.word then
     args[#args + 1] = "--word-regexp"
   end
+  vim.list_extend(args, picker._extra_args or {}) -- what else the source asked for (--no-ignore-parent)
   picker.opts.args = args
   picker.opts.regex = st.regex
   render(picker)
@@ -94,7 +95,12 @@ end
 function M.attach(picker)
   set_hl()
   picker._toggles = { case = false, word = false, regex = false }
-  picker.opts.args = { "--ignore-case" }
+  -- the flags the buttons own are rebuilt on every toggle; any other argument stays
+  local owned = { ["--ignore-case"] = true, ["--case-sensitive"] = true, ["--word-regexp"] = true }
+  picker._extra_args = vim.tbl_filter(function(a)
+    return not owned[a]
+  end, picker.opts.args or {})
+  picker.opts.args = vim.list_extend({ "--ignore-case" }, picker._extra_args)
   picker.opts.regex = false
   local buf = picker.input.win.buf
   render(picker)

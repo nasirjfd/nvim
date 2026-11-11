@@ -16,6 +16,24 @@ local function now()
   return vim.uv.now()
 end
 
+--- Is `cwd` ignored by its parent repo (e.g. supernova's `vendor/*`)? Looked up once per folder.
+local function is_ignored_by_parent(cwd)
+  if ignored_parent[cwd] == nil then
+    ignored_parent[cwd] = vim.system({ "git", "check-ignore", "-q", "." }, { cwd = cwd }):wait().code == 0
+  end
+  return ignored_parent[cwd]
+end
+
+--- Picker `config` for sources that search files or their contents (fd / rg): in a folder the parent
+--- repo ignores, the parent's ignore files hide most of it (vendor/digiexpress/*), so skip them there.
+function M.skip_parent_ignore(opts)
+  local cwd = opts.cwd or vim.fn.getcwd()
+  if cwd ~= "" and is_ignored_by_parent(cwd) and not vim.tbl_contains(opts.args or {}, "--no-ignore-parent") then
+    opts.args = vim.list_extend(vim.deepcopy(opts.args or {}), { "--no-ignore-parent" })
+  end
+  return opts
+end
+
 --- Options of the file picker for the current folder (what <leader><space> passes to the picker).
 function M.opts()
   local cwd = vim.fn.getcwd()
@@ -25,15 +43,13 @@ function M.opts()
   end
   -- A cwd ignored by its parent repo (e.g. vendor/) would list nothing, so skip the parent's ignore
   -- files there; its own .gitignore files still apply. Looked up once per folder, not per open.
-  if ignored_parent[cwd] == nil then
-    ignored_parent[cwd] = vim.system({ "git", "check-ignore", "-q", "." }, { cwd = cwd }):wait().code == 0
-  end
+  local skip = is_ignored_by_parent(cwd)
   return {
     cwd = cwd,
     -- Ignored files stay hidden until <a-i> in the picker or <leader>uI
     ignored = vim.g.show_ignored == true,
     hidden = vim.g.show_ignored or false,
-    args = ignored_parent[cwd] and { "--no-ignore-parent" } or nil,
+    args = skip and { "--no-ignore-parent" } or nil,
     finder = M.finder,
   }
 end
