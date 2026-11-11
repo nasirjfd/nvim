@@ -49,6 +49,15 @@ end
 
 --- Called by neotest (a consumer, see lua/plugins/neotest.lua) with its client: follow its state.
 function M.attach(client)
+  local memory = require("modules.phpunit.memory")
+  local pending ---@type table<string, table>? remembered results not put back yet
+  local saving
+
+  local function is_test(id)
+    local node = snap.tree and snap.tree:get_key(id)
+    return node ~= nil and node:data().type == "test"
+  end
+
   local function update(adapter_id)
     local tree = client:get_position(nil, { adapter = adapter_id })
     snap.adapter, snap.tree = adapter_id, tree
@@ -58,9 +67,43 @@ function M.attach(client)
     end)
     snap.running = ok and running or {}
     refresh_soon()
+    -- keep what the tests did for the next session
+    if tree and not saving then
+      saving = true
+      vim.defer_fn(function()
+        saving = false
+        if snap.tree then
+          pcall(memory.remember, snap.tree:data().id, snap.results, is_test)
+        end
+      end, 800)
+    end
   end
+
+  -- Put back what the last session knew, for the tests found so far that have no result yet.
+  local function restore(adapter_id)
+    if not snap.tree then
+      return
+    end
+    pending = pending or memory.recall(snap.tree:data().id)
+    local back = {}
+    for id, result in pairs(pending) do
+      if is_test(id) then
+        pending[id] = nil
+        if not snap.results[id] then
+          back[id] = result
+        end
+      end
+    end
+    if next(back) then
+      pcall(function()
+        client._state:update_results(adapter_id, back)
+      end)
+    end
+  end
+
   client.listeners.discover_positions = function(adapter_id)
     update(adapter_id)
+    restore(adapter_id)
   end
   client.listeners.run = function(adapter_id)
     update(adapter_id)
@@ -74,6 +117,7 @@ function M.attach(client)
       local ids = client:get_adapters()
       if ids[1] then
         update(ids[1])
+        restore(ids[1])
       end
     end)
   end

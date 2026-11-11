@@ -535,6 +535,105 @@ lib.test("tests messages: the message is the test name, the error and no stack t
   screen:close()
 end)
 
+-- ── memory between sessions ─────────────────────────────────────────────────────────────────────
+package.path = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h:h") .. "/lua/?.lua;" .. package.path
+
+lib.test("tests memory: results are kept per project, messages shortened, tests of deleted files forgotten", function()
+  local memory = require("modules.phpunit.memory")
+  local dir = h.tmpdir()
+  memory.set_file(dir .. "/results.json")
+  h.write(dir .. "/ATest.php", { "x" })
+  local file = dir .. "/ATest.php"
+  local long = string.rep("x", 5000)
+  memory.remember("/root", {
+    [file .. "::testA"] = { status = "passed", output = "/tmp/out" },
+    [file .. "::testB"] = { status = "failed", short = "boom", errors = { { line = 3, message = long } } },
+    [file .. "::testC"] = { status = "skipped" },
+    [file] = { status = "failed" }, -- a file, not a test
+    [dir .. "/gone/BTest.php::testD"] = { status = "failed" }, -- its file does not exist
+  }, function(id)
+    return id:find("::", 1, true) ~= nil
+  end)
+  memory.set_file(dir .. "/results.json") -- a new session reads the file
+  local back = memory.recall("/root")
+  lib.eq({ status = "passed" }, back[file .. "::testA"], "nothing but the status of a passed test")
+  lib.eq("failed", back[file .. "::testB"].status)
+  lib.eq(3, back[file .. "::testB"].errors[1].line)
+  lib.ok(#back[file .. "::testB"].errors[1].message < 2000, "a long message is cut")
+  lib.eq("skipped", back[file .. "::testC"].status)
+  lib.eq(nil, back[file], "a file is not a test")
+  lib.eq(nil, back[dir .. "/gone/BTest.php::testD"], "a test of a deleted file is forgotten")
+  lib.eq({}, memory.recall("/other/project"), "another project has its own")
+  -- what is not in a later run stays
+  memory.remember("/root", { [file .. "::testA"] = { status = "failed", short = "now", errors = {} } }, function()
+    return true
+  end)
+  local again = memory.recall("/root")
+  lib.eq("failed", again[file .. "::testA"].status)
+  lib.eq("failed", again[file .. "::testB"].status, "the other results are still there")
+end)
+
+lib.test("tests memory: after a restart the failed tests are still known and only they run again", function()
+  local dir = project()
+  h.write(dir .. "/fail-B", { "x" })
+  local memory_file = dir .. "/remembered.json"
+  local function session()
+    local screen = h.nvim(dir)
+    screen:exec(string.format("require('modules.phpunit.memory').set_file(%q)", memory_file))
+    return screen
+  end
+  -- first session: run everything, one test fails
+  local first = session()
+  first:exec(string.format([[
+    require("modules.phpunit").configure({
+      root = %q, projects = { "app" }, paths = { [%q] = "/ctr" },
+      command = "ROOT=" .. %q .. " ${env} " .. %q .. "/fake-phpunit.sh ${phpunitargs}",
+    })
+    vim.cmd("edit " .. %q)
+    require("modules.phpunit.pane").toggle()
+  ]], dir, dir, dir, dir, dir .. "/app/tests/BTest.php"))
+  h.wait(first, function()
+    return first:exec("local p = require('modules.phpunit.pane'); return #(p.files_under(p.root_id() or '') or {}) == 4")
+  end, "the files were not found")
+  first:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(first, function()
+    local c = counts(first)
+    return c.passed == 7 and c.failed == 1 and c.running == 0
+  end, "the run did not give 7 passed and 1 failed", 20000)
+  vim.wait(1200) -- the results are saved a moment after they come in
+  first:close()
+  lib.ok(vim.fn.filereadable(memory_file) == 1, "nothing was remembered")
+  vim.fn.delete(dir .. "/args.log")
+  vim.fn.delete(dir .. "/fail-B") -- it would pass now, if it ran
+
+  -- second session: nothing has run, yet the pane knows
+  local second = session()
+  second:exec(string.format([[
+    require("modules.phpunit").configure({
+      root = %q, projects = { "app" }, paths = { [%q] = "/ctr" },
+      command = "ROOT=" .. %q .. " ${env} " .. %q .. "/fake-phpunit.sh ${phpunitargs}",
+    })
+    vim.cmd("edit " .. %q)
+    require("modules.phpunit.pane").toggle()
+  ]], dir, dir, dir, dir, dir .. "/app/tests/BTest.php"))
+  h.wait(second, function()
+    return h.find_on_screen(second, "Run failed tests (1)", 54) ~= nil and h.find_on_screen(second, "✓ 7", 54) ~= nil
+  end, "the pane does not remember 7 passed and 1 failed", 20000)
+  lib.eq(0, #lines(dir .. "/args.log"), "remembering must not run anything")
+  -- and its message is under the line again
+  second:exec("vim.cmd('wincmd l')")
+  h.wait(second, function()
+    return #second:exec("return vim.api.nvim_buf_get_extmarks(0, require('modules.phpunit.messages').namespace, 0, -1, {})") == 1
+  end, "the failure message did not come back")
+  second:exec("require('modules.phpunit.runner').run_failed()")
+  wait_runs(second, dir, 1)
+  vim.wait(500)
+  local runs = lines(dir .. "/args.log")
+  lib.eq(1, #runs, "only the failed test's file runs")
+  lib.matches("BTest%.php .*%-%-filter ::testTwo%(", runs[1])
+  second:close()
+end)
+
 -- ── smoothness ──────────────────────────────────────────────────────────────────────────────────
 -- Every redraw of the screen is a frame the eye can see. A refresh used to put the list on its first row for a
 -- moment and back again (a flash); the rows of the pane must not move at all when a folder is folded.
