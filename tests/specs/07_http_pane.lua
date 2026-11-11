@@ -826,3 +826,17 @@ lib.test("http pane: the toolbar is three icons, no text", function()
   lib.ok(not h.find_on_screen(screen, "New request", 40) and not h.find_on_screen(screen, "clipboard", 40), "no button text")
   screen:close()
 end)
+
+lib.test("http pane: ? shows the keys in a small window, Esc closes it", function()
+  local screen = open_pane(project())
+  screen:input("?")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "HTTP pane keys") ~= nil and h.find_on_screen(screen, "hide / unhide folder") ~= nil
+  end, "? did not show the keys")
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "HTTP pane keys") == nil
+  end, "Esc did not close the help")
+  lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "the pane itself stays open")
+  screen:close()
+end)

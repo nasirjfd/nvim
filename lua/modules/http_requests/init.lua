@@ -460,6 +460,33 @@ local actions = {
       refresh(picker)
     end
   end,
+  -- a small window with the keys of the pane
+  http_help = function()
+    local lines = {
+      " HTTP pane keys",
+      "",
+      " Enter / click   go to the request",
+      " r  Ctrl+Enter   run request",
+      " a               new request",
+      " P               request from clipboard curl",
+      " x               hide / unhide folder",
+      " H               show hidden folders",
+      " l / h           open / close",
+      " R               refresh",
+      " q  Esc          close",
+      " ?               this help",
+    }
+    Snacks.win({
+      text = lines,
+      width = 40,
+      height = #lines,
+      border = "rounded",
+      backdrop = false,
+      wo = { wrap = false },
+      bo = { modifiable = false },
+      keys = { q = "close", ["<Esc>"] = "close", ["?"] = "close" },
+    })
+  end,
   -- show the hidden folders (dimmed) or not
   http_show_hidden = function(picker)
     hidden.toggle_show()
@@ -512,6 +539,7 @@ local function open()
           ["H"] = "http_show_hidden",
           ["P"] = "http_curl",
           ["R"] = "http_refresh",
+          ["?"] = "http_help",
           ["q"] = "close",
           ["<Esc>"] = "close",
         }),
