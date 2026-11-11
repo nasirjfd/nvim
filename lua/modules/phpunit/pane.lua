@@ -25,6 +25,7 @@ local snap = {
   running = {}, ---@type table<string, any>
   adapter = nil, ---@type string?
 }
+local known_sets = {} -- test id -> how many data sets it had last time (a run's size is counted in these)
 local expanded = {} -- file key -> true while its tests are shown
 local collapsed = {} -- folder key -> true while folded
 
@@ -62,6 +63,11 @@ function M.attach(client)
     local tree = client:get_position(nil, { adapter = adapter_id })
     snap.adapter, snap.tree = adapter_id, tree
     snap.results = client:get_results(adapter_id) or {}
+    for id, result in pairs(snap.results) do
+      if result.datasets then
+        known_sets[id] = #result.datasets
+      end
+    end
     local ok, running = pcall(function()
       return client._state:running(adapter_id)
     end)
@@ -99,6 +105,10 @@ function M.attach(client)
         client._state:update_results(adapter_id, back)
       end)
     end
+  end
+
+  require("modules.phpunit.progress").on_change = function()
+    refresh_soon()
   end
 
   client.listeners.discover_positions = function(adapter_id)
@@ -210,6 +220,40 @@ function M.failed()
   return only, files
 end
 
+--- How many runs of tests a position probably is: each test counts for its data sets as of last time. With `only`
+--- (names, as of `failed()`) just those.
+function M.weight(id, only)
+  local node = node_of(id)
+  if not node then
+    return 0
+  end
+  local wanted
+  if only then
+    wanted = {}
+    for _, name in ipairs(only) do
+      wanted[name] = true
+    end
+  end
+  local total = 0
+  for _, child in node:iter_nodes() do
+    local data = child:data()
+    if data.type == "test" then
+      if not wanted then
+        total = total + (known_sets[data.id] or 1)
+      elseif wanted[data.name] then
+        total = total + (known_sets[data.id] or 1)
+      else
+        for name in pairs(wanted) do
+          if name:sub(1, #data.name + 15) == data.name .. " with data set " then
+            total = total + 1
+          end
+        end
+      end
+    end
+  end
+  return total
+end
+
 function M.running_ids()
   return vim.tbl_keys(snap.running or {})
 end
@@ -225,7 +269,9 @@ local function counts_of(tests)
   local c = { passed = 0, failed = 0, skipped = 0, running = 0, total = 0 }
   for _, test in ipairs(tests) do
     if snap.running[test.id] then
-      c.running, c.total = c.running + 1, c.total + 1
+      -- a test that runs counts as many runs as it had data sets last time (what progress counts too)
+      local weight = known_sets[test.id] or 1
+      c.running, c.total = c.running + weight, c.total + weight
     else
       local result = snap.results[test.id]
       local sets = result and result.datasets
@@ -237,7 +283,7 @@ local function counts_of(tests)
           end
         end
       else
-        c.total = c.total + 1
+        c.total = c.total + (result and 1 or (known_sets[test.id] or 1))
         if result and c[result.status] then
           c[result.status] = c[result.status] + 1
         end
@@ -304,6 +350,11 @@ local function rows(_, ctx)
     { text = "Run all tests", kind = "button", action = "all", key = "h:all" },
     { text = "Run failed tests", kind = "button", action = "failed", failed = total.failed, key = "h:failed" },
   }
+  -- while tests run: how far, from 0 to the last one
+  local running = require("modules.phpunit.progress").state()
+  if running then
+    table.insert(items, 3, { text = "Progress", kind = "progress", progress = running, key = "h:progress" })
+  end
 
   local function test_item(test, extra)
     local base = vim.fs.basename(test.path)
@@ -551,6 +602,17 @@ end
 
 local function format(item, picker)
   local ret = {}
+  if item.kind == "progress" then
+    local p = item.progress
+    local width = 20
+    local filled = math.floor(p.fraction * width + 0.5)
+    ret[#ret + 1] = { "  ▶ ", "PhpTestRunning" }
+    ret[#ret + 1] = { string.rep("█", filled), "PhpTestRunning" }
+    ret[#ret + 1] = { string.rep("░", width - filled), "PhpTestNone" }
+    ret[#ret + 1] = { string.format("  %d / %d", p.done, p.total), "PhpTestRunning" }
+    ret[#ret + 1] = { string.format("  %d%%", math.floor(p.fraction * 100)), "PhpTestDim" }
+    return ret
+  end
   if item.kind == "info" then
     -- what the tests did, in words: passed, failed, skipped (a number that is 0 is dimmed), and running
     local c = item.counts

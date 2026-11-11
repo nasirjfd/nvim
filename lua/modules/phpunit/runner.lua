@@ -5,6 +5,7 @@
 -- PHPUnit cannot run one run in parallel, so "parallel" means one phpunit per test file, `workers` of them
 -- at a time.
 local options = require("modules.phpunit.options")
+local progress = require("modules.phpunit.progress")
 
 local M = {}
 
@@ -75,21 +76,26 @@ function M.run(ids, only)
   last = { ids = ids, only = only }
   nio.run(function()
     local jobs = {}
+    local planned = {} -- what progress.lua is told before anything starts
     for _, id in ipairs(ids) do
       local files = options.parallel() and pane().files_under(id) or nil
       if files and #files > 1 then
         for _, file in ipairs(files) do
+          planned[#planned + 1] = { key = file, estimate = pane().weight(file, only and only[file]) }
           jobs[#jobs + 1] = function(slot)
             run_one(file, only and only[file], slot)
           end
         end
       else
+        planned[#planned + 1] = { key = id, estimate = pane().weight(id, only and only[id]) }
         jobs[#jobs + 1] = function(slot)
           run_one(id, only and only[id], slot)
         end
       end
     end
+    progress.start(planned)
     run_jobs(jobs)
+    progress.clear()
   end)
 end
 
@@ -144,6 +150,7 @@ end
 --- Stop what runs now (and the files waiting for a free worker).
 function M.stop()
   stopped = true
+  progress.clear()
   local nio = require("nio")
   nio.run(function()
     for _, id in ipairs(pane().running_ids()) do

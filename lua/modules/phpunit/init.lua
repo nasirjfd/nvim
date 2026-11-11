@@ -75,6 +75,9 @@ function ADAPTER.build_spec(args)
   local dir = plan.results_dir()
   vim.fn.mkdir(dir, "p")
   local specs = {}
+  local progress = require("modules.phpunit.progress")
+  local key = position.id
+  progress.expect(key, #targets)
   for index, target in ipairs(targets) do
     local results = string.format("%s/%d-%d-%s.xml", dir, vim.uv.os_getpid(), index, nio.fn.tempname():match("[^/]+$"))
     -- one test, or the tests of a file that the pane picked (the ones that failed last time)
@@ -85,7 +88,25 @@ function ADAPTER.build_spec(args)
       command = { "/bin/sh", "-c", plan.command(argv, args.extra_args and args.extra_args.slot) },
       cwd = plan.get().root or vim.uv.cwd(),
       env = args.env or plan.get().env,
-      context = { results_path = results },
+      context = { results_path = results, progress_key = key, progress_sub = index },
+      -- "  61 / 1122 (  5%)": how far PHPUnit is (progress.lua)
+      stream = function(data)
+        return function()
+          local chunk = data()
+          if chunk == nil then
+            return nil
+          end
+          local text = type(chunk) == "table" and table.concat(chunk, "\n") or chunk
+          local done, total
+          for d, t in text:gmatch("(%d+) / (%d+)") do
+            done, total = tonumber(d), tonumber(t)
+          end
+          if done then
+            progress.update(key, index, done, total)
+          end
+          return {}
+        end
+      end,
       strategy = nil,
     }
   end
@@ -102,6 +123,7 @@ end
 function ADAPTER.results(spec, result, tree)
   local lib = require("neotest.lib")
   local path = spec.context.results_path
+  require("modules.phpunit.progress").finish(spec.context.progress_key, spec.context.progress_sub)
   local ok, data = pcall(lib.files.read, path)
   pcall(vim.uv.fs_unlink, path)
   pcall(vim.uv.fs_rmdir, vim.fs.dirname(path)) -- only when nothing else is in it

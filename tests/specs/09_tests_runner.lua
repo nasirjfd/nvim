@@ -41,6 +41,8 @@ local function project()
     [[mkdir "$ROOT/slot-${TEST_THREAD_ID:-0}" 2>/dev/null || echo COLLISION >> "$ROOT/collisions.log"]],
     [[echo "${TEST_THREAD_ID:-none}" >> "$ROOT/slots.log"]],
     'ls "$ROOT/running" | wc -l | tr -d " " >> "$ROOT/concurrency.log"',
+    -- a slow run ("slow" exists) says how far it is, like PHPUnit does: half of its tests after a moment
+    [[if [ -f "$ROOT/slow" ]; then sleep 0.4; if [ -z "$file" ]; then t=8; h=4; else t=2; h=1; fi; printf '....  %s / %s ( 50%%)\n' "$h" "$t"; sleep 1.5; fi]],
     "sleep 0.5",
     'rm "$ROOT/running/$$"',
     [[rmdir "$ROOT/slot-${TEST_THREAD_ID:-0}" 2>/dev/null]],
@@ -743,6 +745,107 @@ lib.test("tests pane: with data sets the top says how many methods the tests are
   h.wait(screen, function()
     return vim.trim(screen:text(3, 1, 54)):find("10 tests (8 methods) · all run", 1, true) ~= nil
   end, "the top must say 10 tests (8 methods), got " .. vim.trim(screen:text(3, 1, 54)), 20000)
+  screen:close()
+end)
+
+-- ── progress ────────────────────────────────────────────────────────────────────────────────────
+lib.test("tests progress: pure numbers start at zero, grow with PHPUnit's own, and end at the last test", function()
+  local progress = require("modules.phpunit.progress")
+  lib.eq(nil, progress.state(), "nothing runs")
+  progress.start({ { key = "a", estimate = 10 }, { key = "b", estimate = 30 } })
+  lib.eq({ done = 0, total = 40, fraction = 0 }, progress.state(), "it starts at 0 of the estimate")
+  progress.expect("a", 1)
+  progress.update("a", 1, 5, 12) -- PHPUnit says a has 12 tests, 5 done
+  local s = progress.state()
+  lib.eq({ 5, 42 }, { s.done, s.total }, "its own total replaces the estimate")
+  progress.finish("a", 1)
+  s = progress.state()
+  lib.eq({ 12, 42 }, { s.done, s.total }, "a finished run counts all of its tests")
+  progress.expect("b", 2) -- b is two processes (two projects)
+  progress.update("b", 1, 10, 20)
+  s = progress.state()
+  lib.eq({ 22, 42 }, { s.done - 0, s.total }, "one process of two: the other is still the estimate")
+  progress.update("b", 2, 4, 8)
+  progress.finish("b", 1)
+  progress.finish("b", 2)
+  s = progress.state()
+  lib.eq({ 40, 40 }, { s.done, s.total })
+  lib.eq(1, s.fraction)
+  progress.clear()
+  lib.eq(nil, progress.state())
+end)
+
+lib.test("tests progress: the pane shows 0 / 8 as a run starts, 4 / 8 halfway and nothing when it is over", function()
+  local dir = project()
+  h.write(dir .. "/slow", { "x" })
+  local screen = start(dir)
+  local function row()
+    for r = 1, 12 do
+      local text = screen:text(r, 1, 54)
+      if text:find("▶", 1, true) and text:find(" / ", 1, true) then
+        return vim.trim(text)
+      end
+    end
+    return nil
+  end
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    local text = row()
+    return text and text:find("0 / 8", 1, true) and text:find("0%", 1, true)
+  end, "the bar must start at 0 / 8, got " .. tostring(row()), 10000)
+  h.wait(screen, function()
+    local text = row()
+    return text and text:find("4 / 8", 1, true) and text:find("50%", 1, true) and text:find("█", 1, true)
+  end, "the bar must reach 4 / 8 (50%) while PHPUnit runs, got " .. tostring(row()), 10000)
+  h.wait(screen, function()
+    return row() == nil and counts(screen).passed == 8
+  end, "the bar must be gone when the run is over, got " .. tostring(row()), 20000)
+  screen:close()
+end)
+
+lib.test("tests progress: a parallel run counts its files, each done file is its tests", function()
+  local dir = project()
+  h.write(dir .. "/slow", { "x" })
+  local screen = start(dir)
+  screen:exec("local o = require('modules.phpunit.options'); o.set_parallel(true); o.set_workers(2)")
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  local seen = {}
+  h.wait(screen, function()
+    for r = 1, 12 do
+      local text = screen:text(r, 1, 54)
+      local done, total = text:match("▶.-(%d+) / (%d+)")
+      if done then
+        seen[#seen + 1] = tonumber(done)
+        lib.eq(8, tonumber(total), "the total stays 8 all the way")
+      end
+    end
+    return counts(screen).passed == 8 and counts(screen).running == 0
+  end, "the run did not finish", 30000)
+  lib.ok(#seen > 0 and seen[1] <= 2, "it starts near zero, started at " .. tostring(seen[1]))
+  for i = 2, #seen do
+    lib.ok(seen[i] >= seen[i - 1], "it never goes back: " .. table.concat(seen, ","))
+  end
+  screen:close()
+end)
+
+lib.test("tests progress: the totals do not change while a run goes (data sets known from last time still count)", function()
+  local dir = project()
+  h.write(dir .. "/sets-A", { "x" })
+  local screen = start(dir)
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "10 tests (8 methods) · all run", 54) ~= nil
+  end, "the first run did not finish", 20000)
+  h.write(dir .. "/slow", { "x" })
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "4 / 10", 54) ~= nil or h.find_on_screen(screen, "0 / 10", 54) ~= nil
+  end, "the second run must be counted in 10 from its first moment")
+  lib.ok(h.find_on_screen(screen, "10 tests", 54) ~= nil, "the summary must still say 10 tests during the run")
+  lib.ok(h.find_on_screen(screen, "10 runn", 54) ~= nil, "10 running, not 8")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "10 tests (8 methods) · all run", 54) ~= nil
+  end, "the second run did not finish", 20000)
   screen:close()
 end)
 
