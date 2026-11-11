@@ -798,7 +798,7 @@ lib.test("http pane: x hides a folder, the eye icon counts the hidden ones and s
   screen:close()
 end)
 
-lib.test("http pane: p pins a request under Pinned (a reference, it leaves the tree), p there unpins it, pins are remembered", function()
+lib.test("http pane: p pins a request under Pinned (a reference, it also stays in its folder), p there unpins it, pins are remembered", function()
   local dir = project()
   local memory = dir .. "/pinned.json"
   local screen = open_pane(dir)
@@ -823,9 +823,9 @@ lib.test("http pane: p pins a request under Pinned (a reference, it leaves the t
   local req_row = h.find_on_screen(screen, "make-user", 40)
   lib.ok(req_row == pin_row + 1, "the pinned request must be right under Pinned")
   lib.ok(select(1, h.find_on_screen(screen, "users.http  ", 40)) ~= nil or h.find_on_screen(screen, "users.http", 40), "its file is shown next to it")
-  -- a reference: the request is only listed once
+  -- a reference: the request stays in its file too, so it is listed twice
   local count = screen:exec("local n = 0; for _, i in ipairs(require('modules.http_requests').panes()[1]:items()) do if i.kind == 'request' and i.req.name == 'make-user' then n = n + 1 end end; return n")
-  lib.eq(1, count)
+  lib.eq(2, count)
   -- the pin is remembered
   lib.eq(1, screen:exec("return #require('modules.http_requests.pinned').list(vim.uv.cwd())"))
   -- p on the pinned row unpins

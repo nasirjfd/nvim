@@ -171,12 +171,7 @@ local function rows()
         end
       else
         local abs = dir .. "/" .. entry.file.rel
-        local requests = {}
-        for _, req in ipairs(requests_of(abs, loaded)) do
-          if not pinned.is_pinned(dir, entry.file.rel, req) then -- a pinned one is shown under Pinned only
-            requests[#requests + 1] = req
-          end
-        end
+        local requests = requests_of(abs, loaded) -- a pinned request stays here too (and is marked)
         local key = "f:" .. entry.file.rel
         local item = {
           text = entry.file.name, kind = "file", key = key, parent = parent, last = last, file = abs,
@@ -188,7 +183,7 @@ local function rows()
             items[#items + 1] = {
               text = req.name .. " " .. req.method .. " " .. req.url, kind = "request", file = abs, req = req,
               parent = item, last = j == #requests, key = "r:" .. entry.file.rel .. ":" .. req.line,
-              rel = entry.file.rel, dim = dim,
+              rel = entry.file.rel, dim = dim, pinned = pinned.is_pinned(dir, entry.file.rel, req),
             }
           end
         end
@@ -304,6 +299,8 @@ local function format(item, picker)
     ret[#ret + 1] = { item.req.name == method .. " " .. item.req.url and item.req.url or item.req.name, item.dim and "HttpPaneDim" or nil }
     if item.in_pins then
       ret[#ret + 1] = { "  " .. vim.fn.fnamemodify(item.rel, ":t"), "HttpPaneCount" }
+    elseif item.pinned then
+      ret[#ret + 1] = { " 󰐃", "HttpPanePin" }
     end
   end
   return ret
