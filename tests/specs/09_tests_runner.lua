@@ -714,6 +714,21 @@ lib.test("tests run: running one failed test shows one test as running, the othe
   screen:close()
 end)
 
+lib.test("tests run: an edit that is not written yet is written before the run (the run uses what is on disk)", function()
+  local dir = project()
+  local screen = start(dir)
+  screen:exec("vim.cmd('wincmd l')") -- BTest.php, in the editor
+  screen:exec("vim.api.nvim_buf_set_lines(0, 4, 4, false, { '        // edited, not written' })")
+  lib.eq(true, screen:exec("return vim.bo.modified"))
+  lib.ok(not table.concat(lines(dir .. "/app/tests/BTest.php"), "\n"):find("edited, not written", 1, true), "it is not on disk yet")
+  screen:exec("vim.api.nvim_win_set_cursor(0, { 9, 0 })")
+  screen:exec("require('modules.phpunit.runner').run_nearest()")
+  wait_runs(screen, dir, 1)
+  lib.eq(false, screen:exec("return vim.bo.modified"), "the buffer was written")
+  lib.ok(table.concat(lines(dir .. "/app/tests/BTest.php"), "\n"):find("edited, not written", 1, true), "the edit is on disk when the run starts")
+  screen:close()
+end)
+
 -- ── data sets ───────────────────────────────────────────────────────────────────────────────────
 lib.test("tests data sets: every data set counts and is listed on its own, the failed one in the Failed section", function()
   local dir = project()

@@ -16,6 +16,18 @@ local function notify(message, level)
   vim.notify(message, level or vim.log.levels.INFO, { title = "Tests" })
 end
 
+-- The tests run what is on disk (inside the container): an edit not written yet is not in the run. Everything
+-- modified is written first, like an IDE does before it runs a test.
+local function save_modified()
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.bo[buf].modified and vim.bo[buf].buftype == "" and vim.api.nvim_buf_get_name(buf) ~= "" and vim.bo[buf].modifiable then
+      vim.api.nvim_buf_call(buf, function()
+        pcall(vim.cmd, "silent write")
+      end)
+    end
+  end
+end
+
 local function pane()
   return require("modules.phpunit.pane")
 end
@@ -72,6 +84,7 @@ end
 ---@param ids string[]
 ---@param only? table<string, string[]> test names to run, by file
 function M.run(ids, only)
+  save_modified()
   local nio = require("nio")
   last = { ids = ids, only = only }
   nio.run(function()
@@ -147,6 +160,7 @@ function M.run_nearest()
   if not id then
     -- the pane does not know this file yet (neotest is still looking through the project, or the pane was
     -- never opened): neotest reads the file in this window itself and runs the test under the cursor
+    save_modified()
     require("neotest").run.run({ concurrent = false })
     return
   end
