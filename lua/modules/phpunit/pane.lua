@@ -876,6 +876,36 @@ local actions = {
   tests_collapse_all = function(picker)
     set_all(picker, false)
   end,
+  tests_help = function()
+    local lines = {
+      " Tests pane keys",
+      "",
+      " Enter / click   open, fold, press",
+      " r  Ctrl+Enter   run this row",
+      " a               run all",
+      " F               run failed",
+      " p               parallel on/off",
+      " + / -           workers",
+      " v               flat list",
+      " x               stop",
+      " o               output",
+      " i               jump to code",
+      " l / h           open / close",
+      " e / E           expand / collapse all",
+      " q  Esc          close",
+      " ?               this help",
+    }
+    Snacks.win({
+      text = lines,
+      width = 40,
+      height = #lines,
+      border = "rounded",
+      backdrop = false,
+      wo = { wrap = false },
+      bo = { modifiable = false },
+      keys = { q = "close", ["<Esc>"] = "close", ["?"] = "close" },
+    })
+  end,
   tests_press = kit.press,
   tests_click = function(picker)
     local mouse = vim.fn.getmousepos()
@@ -956,6 +986,7 @@ local function open()
           ["o"] = "tests_output",
           ["e"] = "tests_expand_all",
           ["E"] = "tests_collapse_all",
+          ["?"] = "tests_help",
           ["q"] = "close",
           ["<Esc>"] = "close",
         }),

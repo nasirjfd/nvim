@@ -907,3 +907,17 @@ lib.test("tests pane: folding, unfolding and refreshing do not flash (the list n
   lib.ok(distinct <= 1, "a plain refresh made the list jump")
   screen:close()
 end)
+
+lib.test("tests pane: ? shows the keys in a small window, Esc closes it", function()
+  local screen = start(project())
+  screen:input("?")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Tests pane keys") ~= nil and h.find_on_screen(screen, "run failed") ~= nil
+  end, "? did not show the keys")
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Tests pane keys") == nil
+  end, "Esc did not close the help")
+  lib.eq(1, screen:exec("return #require('modules.phpunit.pane').panes()"), "the pane itself stays open")
+  screen:close()
+end)
