@@ -789,6 +789,34 @@ lib.test("tests gutter: a click in the text or on a line without an icon does wh
   screen:close()
 end)
 
+lib.test("tests gutter: a test with data sets has its own icon, in the gutter and in the pane, and a click still runs it", function()
+  local dir = project()
+  h.write(dir .. "/sets-B", { "x" })
+  local screen = start(dir)
+  screen:exec("vim.cmd('wincmd l')")
+  local function sign_name(line)
+    return screen:exec("local s = vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = 'neotest-status', lnum = ... })[1].signs[1]; return s and s.name", { line })
+  end
+  h.wait(screen, function()
+    return sign_name(8) ~= nil
+  end, "no sign at testTwo")
+  lib.matches("^neotest_", sign_name(8)) -- not run yet: it has no data sets as far as we know
+  screen:exec("require('modules.phpunit.runner').run_file()")
+  h.wait(screen, function()
+    return (sign_name(8) or ""):match("^phpunit_sets_") ~= nil
+  end, "testTwo ran with data sets: it must have the data set icon")
+  lib.matches("^neotest_", sign_name(4)) -- testOne has none: the usual icon
+  local at = screen:exec("local p = vim.fn.screenpos(0, 8, 1); local i = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]; return { p.row, p.col - i.textoff }")
+  local before = #lines(dir .. "/args.log")
+  h.click(screen, at[1], at[2])
+  wait_runs(screen, dir, before + 1)
+  lib.matches("%-%-filter ::testTwo", lines(dir .. "/args.log")[before + 1])
+  h.wait(screen, function()
+    return (sign_name(8) or ""):match("^phpunit_sets_") ~= nil
+  end, "the data set icon stays after the run")
+  screen:close()
+end)
+
 -- ── data sets ───────────────────────────────────────────────────────────────────────────────────
 lib.test("tests data sets: every data set counts and is listed on its own, the failed one in the Failed section", function()
   local dir = project()

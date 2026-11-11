@@ -772,7 +772,12 @@ local function format(item, picker)
       ret[#ret + 1] = { "with data set " .. item.label, item.status == "failed" and "PhpTestFailed" or "PhpTestDim" }
     end
   else
-    ret[#ret + 1] = status_chunk(item.status)
+    if item.sets then
+      ret[#ret + 1] = { require("modules.phpunit.dataset_signs").ICON[item.status] or "󰙅", STATUS_HL[item.status] }
+      ret[#ret + 1] = { " ", nil }
+    else
+      ret[#ret + 1] = status_chunk(item.status)
+    end
     ret[#ret + 1] = { item.name or item.text, item.status == "failed" and "PhpTestFailed" or nil }
     if item.sets then
       ret[#ret + 1] = { " ×" .. item.sets, "PhpTestDim" }

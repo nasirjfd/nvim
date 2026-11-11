@@ -51,6 +51,10 @@ return {
             require("modules.phpunit.messages").attach(client)
             return {}
           end,
+          phpunit_dataset_signs = function(client)
+            require("modules.phpunit.dataset_signs").attach(client)
+            return {}
+          end,
           phpunit_pane = function(client)
             require("modules.phpunit.pane").attach(client)
             return {}
