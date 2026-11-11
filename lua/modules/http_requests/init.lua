@@ -14,6 +14,7 @@ local curl = require("modules.http_requests.curl")
 local edit = require("modules.http_requests.edit")
 local files = require("core.http-files")
 local kit = require("modules.pane_kit")
+local hidden = require("modules.http_requests.hidden")
 
 local M = {}
 
@@ -43,8 +44,11 @@ local function set_highlights()
     hl("HttpPane" .. method, { fg = fg })
   end
   hl("HttpPaneOther", { fg = "#8a949c" })
-  hl("HttpPaneButtonNew", { fg = "#e8eaee", bg = "#2f6f4f", bold = true })
-  hl("HttpPaneButtonCurl", { fg = "#e8eaee", bg = "#33507d", bold = true })
+  hl("HttpPaneIconNew", { fg = "#7fa585" })
+  hl("HttpPaneIconCurl", { fg = "#7d9bbf" })
+  hl("HttpPaneIconHidden", { fg = "#b59a72" })
+  hl("HttpPaneIconHiddenOn", { fg = "#e0c08a", bold = true })
+  hl("HttpPaneHiddenDir", { link = "Comment" })
   hl("HttpPaneCount", { link = "NonText" })
 end
 set_highlights()
@@ -102,10 +106,10 @@ local function rows()
   local dir = cwd()
   local list = files.cached(dir) or {}
   local loaded = loaded_buffers()
-  local items = {
-    { text = "New request", kind = "button", action = "new" },
-    { text = "Request from clipboard curl", kind = "button", action = "curl" },
-  }
+  -- the toolbar: new request, request from the clipboard curl, the hidden folders (their number)
+  local toolbar = { text = "Toolbar", kind = "button", toolbar = true, hidden_count = 0, showing = hidden.showing(), key = "h:toolbar" }
+  local items = { toolbar }
+  local hidden_set = hidden.set(dir)
 
   local root = { dirs = {}, files = {}, path = "" }
   for _, rel in ipairs(list) do
@@ -140,13 +144,20 @@ local function rows()
       local last = i == #entries
       if entry.kind == "dir" then
         local key = "d:" .. entry.node.path
-        local item = {
-          text = entry.label, kind = "dir", key = key, parent = parent, last = last,
-          open = not collapsed[key], dirpath = dir .. "/" .. entry.node.path,
-        }
-        items[#items + 1] = item
-        if item.open then
-          emit(entry.node, item)
+        local is_hidden = hidden_set[entry.node.path] == true
+        if is_hidden then
+          toolbar.hidden_count = toolbar.hidden_count + 1
+        end
+        if not is_hidden or toolbar.showing then
+          local item = {
+            text = entry.label, kind = "dir", key = key, parent = parent, last = last,
+            open = not is_hidden and not collapsed[key], dirpath = dir .. "/" .. entry.node.path,
+            relpath = entry.node.path, hidden = is_hidden,
+          }
+          items[#items + 1] = item
+          if item.open then
+            emit(entry.node, item)
+          end
         end
       else
         local abs = dir .. "/" .. entry.file.rel
@@ -175,11 +186,40 @@ end
 -- ── how a row looks ─────────────────────────────────────────────────────────────────────────────
 local pad = kit.pad
 
+-- The toolbar row is only icons: new request, request from the clipboard curl, the hidden folders (and how many).
+-- The same table draws the row and tells what a click at a column hit.
+function M.toolbar_parts(item)
+  local count = item.hidden_count or 0
+  local parts = {
+    { text = "  ", hl = "HttpPaneCount" },
+    { text = "󰐕 ", hl = "HttpPaneIconNew", zone = "new" },
+    { text = "  ", hl = "HttpPaneCount" },
+    { text = "󰅍 ", hl = "HttpPaneIconCurl", zone = "curl" },
+    { text = "  ", hl = "HttpPaneCount" },
+    { text = (item.showing and "󰈈 " or "󰈉 ") .. count, hl = item.showing and "HttpPaneIconHiddenOn" or "HttpPaneIconHidden", zone = "hidden" },
+  }
+  local col = 1
+  for _, part in ipairs(parts) do
+    part.from, part.to = col, col + vim.fn.strdisplaywidth(part.text) - 1
+    col = part.to + 1
+  end
+  return parts
+end
+
+local function toolbar_zone(item, col)
+  for _, part in ipairs(M.toolbar_parts(item)) do
+    if part.zone and col >= part.from and col <= part.to then
+      return part.zone
+    end
+  end
+end
+
 local function format(item, picker)
   local ret = {}
   if item.kind == "button" then
-    local new = item.action == "new"
-    ret[#ret + 1] = { pad(new and "  ＋  New request" or "  ⎘  Request from clipboard curl", 38), new and "HttpPaneButtonNew" or "HttpPaneButtonCurl" }
+    for _, part in ipairs(M.toolbar_parts(item)) do
+      ret[#ret + 1] = { part.text, part.hl }
+    end
     return ret
   end
   vim.list_extend(ret, Snacks.picker.format.tree(item, picker))
@@ -197,7 +237,10 @@ local function format(item, picker)
     if vim.fn.strchars(label) > room then
       label = "…" .. vim.fn.strcharpart(label, vim.fn.strchars(label) - room + 1)
     end
-    ret[#ret + 1] = { label, "SnacksPickerDirectory" }
+    ret[#ret + 1] = { label, item.hidden and "HttpPaneHiddenDir" or "SnacksPickerDirectory" }
+    if item.hidden then
+      ret[#ret + 1] = { "  󰈉", "HttpPaneIconHidden" }
+    end
   elseif item.kind == "file" then
     local icon, hl = Snacks.util.icon(item.text, "file")
     ret[#ret + 1] = { (icon or "") .. " ", hl }
@@ -345,8 +388,6 @@ local function add_from_curl(picker, item)
   end)
 end
 
-local BUTTONS = { new = add_request, curl = add_from_curl }
-
 local actions = {
   -- Enter, double click, single click on a row
   http_confirm = function(picker, item)
@@ -355,7 +396,7 @@ local actions = {
       return
     end
     if item.kind == "button" then
-      BUTTONS[item.action](picker, nil)
+      return -- the toolbar acts on clicks (http_click) and on its keys
     elseif item.kind == "request" then
       goto_line(picker, item.file, item.req.line)
     else
@@ -387,7 +428,42 @@ local actions = {
   end,
   http_press = kit.press,
   http_click = function(picker)
-    kit.click(picker, "http_confirm")
+    local mouse = vim.fn.getmousepos()
+    local list_win = picker.list and picker.list.win and picker.list.win.win
+    if mouse.winid ~= list_win then
+      return
+    end
+    vim.schedule(function()
+      if picker.closed then
+        return
+      end
+      local item = picker:current()
+      if item and item.kind == "button" then
+        local zone = toolbar_zone(item, mouse.wincol)
+        if zone == "new" then
+          picker:action("http_new")
+        elseif zone == "curl" then
+          picker:action("http_curl")
+        elseif zone == "hidden" then
+          picker:action("http_show_hidden")
+        end
+        return
+      end
+      picker:action("http_confirm")
+    end)
+  end,
+  -- hide the folder under the cursor (or show it again when it is hidden); kept between sessions
+  http_hide = function(picker, item)
+    item = item or picker:current()
+    if item and item.kind == "dir" and item.relpath then
+      hidden.toggle(cwd(), item.relpath)
+      refresh(picker)
+    end
+  end,
+  -- show the hidden folders (dimmed) or not
+  http_show_hidden = function(picker)
+    hidden.toggle_show()
+    refresh(picker, "h:toolbar")
   end,
 }
 
@@ -432,6 +508,8 @@ local function open()
           ["<C-CR>"] = "http_run",
           ["r"] = "http_run",
           ["a"] = "http_new",
+          ["x"] = "http_hide",
+          ["H"] = "http_show_hidden",
           ["P"] = "http_curl",
           ["R"] = "http_refresh",
           ["q"] = "close",

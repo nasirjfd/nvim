@@ -97,6 +97,15 @@ local function click_request(screen, text, file)
   end, "clicking '" .. text .. "' did not open " .. file)
 end
 
+-- the toolbar icons of the pane (new request, request from the clipboard curl, hidden folders)
+local ICON = { new = "\u{F0415}", curl = "\u{F014D}", hidden = "\u{F0209}", hidden_on = "\u{F0208}" }
+
+local function click_tool(screen, name)
+  local row, col = h.find_on_screen(screen, ICON[name], 40)
+  lib.ok(row, "the " .. name .. " icon is not on the screen")
+  h.click(screen, row, col)
+end
+
 local function focus_pane(screen)
   if screen:exec("return vim.bo.filetype") ~= "snacks_picker_list" then
     screen:input("<Space>h")
@@ -108,7 +117,7 @@ end
 
 lib.test("http pane: shows folders, files and their requests; folders and files fold", function()
   local screen = open_pane(project())
-  for _, text in ipairs({ "New request", "Request from clipboard curl", "api", "users", "users.http", "List users", "make-user", "health.http", "auth", "login.http", "Login" }) do
+  for _, text in ipairs({ ICON.new, ICON.curl, ICON.hidden, "api", "users", "users.http", "List users", "make-user", "health.http", "auth", "login.http", "Login" }) do
     lib.ok(h.find_on_screen(screen, text), "'" .. text .. "' is missing from the pane")
   end
   lib.ok(not h.find_on_screen(screen, "notes.txt"), "a non-http file is listed")
@@ -213,7 +222,7 @@ lib.test("http pane: the clipboard curl button adds it as a request, or says it 
   -- not a curl command: a message, nothing written
   local before = h.read(dir .. "/api/users/users.http")
   screen:exec("_G.clip = 'hello world'")
-  click_on(screen, "Request from clipboard curl")
+  click_tool(screen, "curl")
   h.wait(screen, function()
     return screen:exec("return #_G.notes") == 1
   end, "no message for an invalid curl")
@@ -683,10 +692,10 @@ lib.test("http pane: a project without .http files shows the buttons, and a new 
   screen:exec("vim.notify = function() end; vim.ui.input = function(opts, cb) cb('first') end")
   screen:input("<Space>h")
   h.wait(screen, function()
-    return h.find_on_screen(screen, "New request", 40) ~= nil
+    return h.find_on_screen(screen, ICON.new, 40) ~= nil
   end, "the pane did not open in an empty project")
   lib.ok(not h.find_on_screen(screen, ".http", 40), "something is listed in an empty project")
-  click_on(screen, "New request")
+  click_tool(screen, "new")
   h.wait(screen, function()
     return vim.uv.fs_stat(dir .. "/first.http") ~= nil
   end, "the first file was not created")
@@ -746,5 +755,74 @@ lib.test("http pane: folding and unfolding do not flash (the list never jumps)",
     lib.ok(#frames >= 1, "no frame after " .. keys)
     lib.eq(1, count, "the list jumped while handling " .. keys)
   end
+  screen:close()
+end)
+
+-- ── hiding folders ──────────────────────────────────────────────────────────────────────────────
+local function select_dir(screen, text)
+  local row, col = h.find_on_screen(screen, text, 40)
+  lib.ok(row, "'" .. text .. "' is not on the screen")
+  h.click(screen, row, col + 1)
+  -- a click on a folder folds it: unfold again so the rows stay as they were
+  h.wait(screen, function()
+    return screen:exec("local c = require('modules.http_requests').panes()[1]:current(); return c and c.kind == 'dir'")
+  end, "no folder under the cursor")
+  screen:input("l")
+end
+
+lib.test("http pane: x hides a folder, the eye icon counts the hidden ones and shows them dimmed, x again brings it back", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.hidden').set_file(...)", { dir .. "/hidden.json" })
+  lib.ok(h.find_on_screen(screen, "login.http", 40), "the file of the folder is there")
+  select_dir(screen, "auth")
+  screen:input("x")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "login.http", 40) == nil and h.find_on_screen(screen, "auth", 40) == nil
+  end, "x did not hide the folder")
+  lib.ok(h.find_on_screen(screen, ICON.hidden .. " 1", 40), "the eye must show 1 hidden folder")
+  -- the eye shows them, dimmed, without their content
+  local row, col = h.find_on_screen(screen, ICON.hidden, 40)
+  h.click(screen, row, col)
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "auth", 40) ~= nil and h.find_on_screen(screen, ICON.hidden_on .. " 1", 40) ~= nil
+  end, "the eye did not show the hidden folder")
+  lib.ok(h.find_on_screen(screen, "login.http", 40) == nil, "a hidden folder shows no content")
+  -- x on it brings it back
+  select_dir(screen, "auth")
+  screen:input("x")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, ICON.hidden_on .. " 0", 40) ~= nil
+  end, "the count must go back to 0")
+  lib.ok(h.find_on_screen(screen, "login.http", 40), "the folder has its content again")
+  screen:close()
+end)
+
+lib.test("http pane: hidden folders are remembered after closing Neovim", function()
+  local dir = project()
+  local memory = dir .. "/hidden.json"
+  local first = open_pane(dir)
+  first:exec("require('modules.http_requests.hidden').set_file(...)", { memory })
+  select_dir(first, "auth")
+  first:input("x")
+  h.wait(first, function()
+    return h.find_on_screen(first, "login.http", 40) == nil
+  end, "the folder was not hidden")
+  first:close()
+  local second = open_pane(dir) -- a new Neovim, same project
+  second:exec("require('modules.http_requests.hidden').set_file(...)", { memory })
+  second:exec("require('modules.http_requests').panes()[1]:find()")
+  h.wait(second, function()
+    return h.find_on_screen(second, ICON.hidden .. " 1", 40) ~= nil
+  end, "the second session does not know the hidden folder")
+  lib.ok(h.find_on_screen(second, "login.http", 40) == nil and h.find_on_screen(second, "auth", 40) == nil, "it must stay hidden")
+  lib.ok(h.find_on_screen(second, "health.http", 40), "the other folders are there")
+  second:close()
+end)
+
+lib.test("http pane: the toolbar is three icons, no text", function()
+  local screen = open_pane(project())
+  lib.ok(h.find_on_screen(screen, ICON.new, 40) and h.find_on_screen(screen, ICON.curl, 40) and h.find_on_screen(screen, ICON.hidden .. " 0", 40), "the three icons")
+  lib.ok(not h.find_on_screen(screen, "New request", 40) and not h.find_on_screen(screen, "clipboard", 40), "no button text")
   screen:close()
 end)
