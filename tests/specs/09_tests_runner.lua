@@ -710,6 +710,90 @@ lib.test("tests data sets: Run failed runs only the failed data set, the Flat li
   screen:close()
 end)
 
+lib.test("tests pane: running a row keeps it where it is (it does not go up and come back), in the tree and in the flat list", function()
+  local dir = vim.fn.resolve(h.tmpdir())
+  h.write(dir .. "/app/tests.xml", { "<phpunit/>" })
+  for i = 1, 30 do
+    local name = string.format("D%02d", i)
+    h.write(dir .. "/app/tests/" .. name .. "/" .. name .. "Test.php", {
+      "<?php", "class " .. name .. "Test extends \\PHPUnit\\Framework\\TestCase", "{", "    public function testOne()", "    {", "    }", "}",
+    })
+  end
+  -- the fake fails every class that has a marker; D05 and D06 do, so the Failed section has rows above the tree
+  h.write(dir .. "/fake-phpunit.sh", {
+    "#!/bin/sh",
+    'echo "$@" >> "$ROOT/args.log"',
+    'for a in "$@"; do case "$a" in --log-junit=*) log="${a#--log-junit=}";; *Test.php) file="$a";; esac; done',
+    'log="$ROOT${log#/ctr}"; mkdir -p "$(dirname "$log")"',
+    '[ -f "$ROOT/slow" ] && sleep 1.2',
+    'files="$file"; [ -z "$file" ] && files="$(ls "$ROOT"/app/tests/*/*Test.php | sed "s|^$ROOT|/ctr|")"',
+    'echo "<testsuites>" > "$log"',
+    "for file in $files; do",
+    '  class="$(basename "$file" .php)"; f=""',
+    [[  case "$class" in D05Test|D06Test) f="$(printf '<failure type="X">%s::testOne nope %s:4</failure>' "$class" "$file")";; esac]],
+    [[  printf '<testsuite name="%s" file="%s"><testcase name="testOne" class="%s" file="%s" line="4">%s</testcase></testsuite>\n' "$class" "$file" "$class" "$file" "$f" >> "$log"]],
+    "done",
+    'echo "</testsuites>" >> "$log"',
+  })
+  vim.fn.system({ "chmod", "+x", dir .. "/fake-phpunit.sh" })
+  local screen = h.nvim(dir, 120, 30)
+  screen:exec(string.format([[
+    require("modules.phpunit").configure({ root = %q, projects = { "app" }, paths = { [%q] = "/ctr" },
+      command = "ROOT=" .. %q .. " " .. %q .. "/fake-phpunit.sh ${phpunitargs}" })
+    require("modules.phpunit.pane").toggle()
+  ]], dir, dir, dir, dir))
+  h.wait(screen, function()
+    return screen:exec("local p = require('modules.phpunit.pane'); return #(p.files_under(p.root_id() or '') or {}) == 30")
+  end, "the files were not found")
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "✗ Failed", 54) ~= nil
+  end, "no Failed section", 20000)
+  vim.wait(500)
+  for _, flat in ipairs({ false, true }) do
+  screen:exec("require('modules.phpunit.options').set_flat(...)", { flat })
+  screen:exec("require('modules.phpunit.pane').panes()[1]:find()")
+  vim.wait(500)
+  -- the cursor on a passing test/file (below the Failed section, or in the middle of the flat list)
+  screen:exec([[
+    local pk = require("modules.phpunit.pane").panes()[1]
+    for i, item in ipairs(pk:items()) do
+      if item.key and item.key:find("D20Test.php", 1, true) and item.kind == (]]..(flat and '"test"' or '"file"')..[[) and not item.key:find("^x:") then pk.list:move(i, true) end
+    end
+  ]])
+  vim.wait(300)
+  h.write(dir .. "/slow", { "x" }) -- a run that takes a moment: the row is seen while it runs
+  local frames = {}
+  screen.on_flush = function()
+    for row = 1, 29 do
+      local text = screen:text(row, 1, 54)
+      if text:find("D20Test.php", 1, true) and (flat or not text:find("test", 1, true)) then
+        frames[#frames + 1] = row
+      end
+    end
+  end
+  screen:input("r")
+  h.wait(screen, function()
+    return screen:exec("return #require('neotest').state.adapter_ids() > 0") and #frames >= 2
+  end, "no frames")
+  vim.wait(2500)
+  vim.fn.delete(dir .. "/slow")
+  local current = screen:exec("local c = require('modules.phpunit.pane').panes()[1]:current(); return c and c.key")
+  lib.matches("D20Test%.php", current, "the cursor must still be on the row that ran")
+  -- the row of the file may move when the Failed section shrinks and grows again, but it never goes somewhere and back
+  -- before it settles: its screen row changes at most once to its final place
+  local changes, last = 0, nil
+  for _, row in ipairs(frames) do
+    if row ~= last then
+      changes = changes + 1
+      last = row
+    end
+  end
+  lib.ok(changes <= 1, (flat and "flat: " or "tree: ") .. "the row jumped around: " .. table.concat(frames, ","))
+  end
+  screen:close()
+end)
+
 -- ── the numbers at the top ──────────────────────────────────────────────────────────────────────
 lib.test("tests pane: the numbers at the top add up: passed + failed + skipped + not run yet = all", function()
   local dir = project()

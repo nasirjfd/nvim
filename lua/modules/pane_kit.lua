@@ -187,7 +187,24 @@ function M.refresh(picker, keep_key)
   end
   local list = picker.list
   keep_key = keep_key or (picker:current() or {}).key
-  list:set_target(list.cursor, list.top, { force = true })
+  -- Where the row will be: rows can appear or vanish above it (a test that starts running leaves the Failed
+  -- section), so the old row number would put the cursor on another row first and Snacks would then move it
+  -- back (the cursor goes up and comes back). The pane's finder says where the row is going to be.
+  local target = list.cursor
+  local filter = picker.input and picker.input.filter
+  local searching = filter and ((filter.pattern or "") ~= "" or (filter.search or "") ~= "")
+  if keep_key and not searching and type(picker.opts.finder) == "function" then
+    local ok, items = pcall(picker.opts.finder, picker.opts, nil)
+    if ok and type(items) == "table" then
+      for index, item in ipairs(items) do
+        if item.key == keep_key then
+          target = index
+          break
+        end
+      end
+    end
+  end
+  list:set_target(target, math.max(1, target - (list.cursor - list.top)), { force = true })
   picker:find({
     on_done = function()
       if keep_key and not picker.closed then

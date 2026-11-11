@@ -25,6 +25,7 @@ local snap = {
   running = {}, ---@type table<string, any>
   adapter = nil, ---@type string?
 }
+local last_status = {} -- test id -> what it last was (passed/failed/skipped): a test that runs keeps its place
 local known_sets = {} -- test id -> how many data sets it had last time (a run's size is counted in these)
 local expanded = {} -- file key -> true while its tests are shown
 local collapsed = {} -- folder key -> true while folded
@@ -64,6 +65,7 @@ function M.attach(client)
     snap.adapter, snap.tree = adapter_id, tree
     snap.results = client:get_results(adapter_id) or {}
     for id, result in pairs(snap.results) do
+      last_status[id] = result.status
       if result.datasets then
         known_sets[id] = #result.datasets
       end
@@ -412,13 +414,18 @@ local function rows(_, ctx)
         vim.list_extend(list, execution_rows(test, { flat = true, file_name = vim.fs.basename(test.path) }))
       end
     end
-    local rank = { failed = 0, running = 1 }
+    -- failed first; a test that runs stays where it was (it must not jump to the top and back)
+    local rank = { failed = 0 }
+    local function rank_of(item)
+      local status = item.status == "running" and last_status[item.id] or item.status
+      return rank[status] or 1
+    end
     local indexed = {}
     for i, item in ipairs(list) do
       indexed[i] = { item = item, i = i }
     end
     table.sort(indexed, function(a, b)
-      local ra, rb = rank[a.item.status] or 2, rank[b.item.status] or 2
+      local ra, rb = rank_of(a.item), rank_of(b.item)
       if ra ~= rb then
         return ra < rb
       end
@@ -434,12 +441,11 @@ local function rows(_, ctx)
   local failed_rows = {}
   for _, file in ipairs(files) do
     for _, test in ipairs(file.tests) do
-      if not snap.running[test.id] then
-        for _, row in ipairs(execution_rows(test, { file_name = vim.fs.basename(test.path) })) do
-          if row.status == "failed" then
-            row.key = "x:" .. row.key
-            failed_rows[#failed_rows + 1] = row
-          end
+      for _, row in ipairs(execution_rows(test, { file_name = vim.fs.basename(test.path) })) do
+        -- (a failed test that runs again stays in the section, running, until its result is in)
+        if row.status == "failed" or (row.status == "running" and last_status[test.id] == "failed") then
+          row.key = "x:" .. row.key
+          failed_rows[#failed_rows + 1] = row
         end
       end
     end
