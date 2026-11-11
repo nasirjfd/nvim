@@ -20,4 +20,4 @@ docker cp supernova-digiexpress-test-dbs.sh supernova-env-dev-mysql-1:/tmp/clone
 docker exec supernova-env-dev-mysql-1 sh /tmp/clonedb.sh 2 3 4 5 6 7 8 9 10 11 12 13 14 15
 ```
 
-Needed once per machine (and again after the mysql volume is rebuilt). `supernova-env-dev.nvim.lua` uses worker slots 1..15.
+Needed once per machine (and again after the mysql volume is rebuilt). `supernova-env-dev.nvim.lua` uses worker slots 1..32 (`2 3 ... 32`).

@@ -86,5 +86,5 @@ require("modules.phpunit").configure({
   -- parallel run gets TEST_THREAD_ID=N. The databases 1..15 exist (local-projects/supernova-digiexpress-test-dbs.sh
   -- clones digiexpress_1 into them); redis has 16 dbs, so 15 is the most.
   parallel_env = { TEST_THREAD_ID = "${slot}" },
-  max_workers = 15,
+  max_workers = 32,
 })
