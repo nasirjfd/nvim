@@ -298,6 +298,7 @@ local function rows(_, ctx)
   local total = counts_of(all)
   local items = {
     { text = "Tests", kind = "info", counts = total, discovering = snap.tree == nil, key = "h:info" },
+    { text = "Summary", kind = "summary", counts = total, methods = #all, discovering = snap.tree == nil, key = "h:summary" },
     { text = "Parallel", kind = "toggle", key = "h:parallel" },
     { text = "Flat list", kind = "view", key = "h:view" },
     { text = "Run all tests", kind = "button", action = "all", key = "h:all" },
@@ -551,19 +552,36 @@ end
 local function format(item, picker)
   local ret = {}
   if item.kind == "info" then
+    -- what the tests did, in words: passed, failed, skipped (a number that is 0 is dimmed), and running
     local c = item.counts
     if item.discovering then
       ret[#ret + 1] = { "  Looking for tests…", "PhpTestDim" }
     elseif c.total == 0 then
       ret[#ret + 1] = { "  No tests found", "PhpTestDim" }
     else
-      ret[#ret + 1] = { "  ✓ " .. c.passed, "PhpTestPassed" }
-      ret[#ret + 1] = { "   ✗ " .. c.failed, c.failed > 0 and "PhpTestFailed" or "PhpTestNone" }
-      ret[#ret + 1] = { "   ○ " .. c.skipped, c.skipped > 0 and "PhpTestSkipped" or "PhpTestNone" }
+      ret[#ret + 1] = { "  ✓ " .. c.passed .. " passed", c.passed > 0 and "PhpTestPassed" or "PhpTestNone" }
+      ret[#ret + 1] = { "   ✗ " .. c.failed .. " failed", c.failed > 0 and "PhpTestFailed" or "PhpTestNone" }
+      ret[#ret + 1] = { "   ○ " .. c.skipped .. " skipped", c.skipped > 0 and "PhpTestSkipped" or "PhpTestNone" }
       if c.running > 0 then
-        ret[#ret + 1] = { "   ● " .. c.running, "PhpTestRunning" }
+        ret[#ret + 1] = { "   ● " .. c.running .. " running", "PhpTestRunning" }
       end
-      ret[#ret + 1] = { "   " .. c.total .. " tests", "PhpTestDim" }
+    end
+    return ret
+  elseif item.kind == "summary" then
+    -- how many there are, and how many of them have not run yet: passed + failed + skipped + not run = all
+    local c = item.counts
+    if not item.discovering and c.total > 0 then
+      local text = "  " .. c.total .. " tests"
+      if c.total ~= item.methods then
+        text = text .. " (" .. item.methods .. " methods)"
+      end
+      local not_run = c.total - c.passed - c.failed - c.skipped - c.running
+      if not_run > 0 then
+        text = text .. " · " .. not_run .. " not run yet"
+      elseif c.running == 0 then
+        text = text .. " · all run"
+      end
+      ret[#ret + 1] = { text, "PhpTestDim" }
     end
     return ret
   elseif item.kind == "toggle" then

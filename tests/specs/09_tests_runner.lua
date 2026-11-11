@@ -708,6 +708,44 @@ lib.test("tests data sets: Run failed runs only the failed data set, the Flat li
   screen:close()
 end)
 
+-- ── the numbers at the top ──────────────────────────────────────────────────────────────────────
+lib.test("tests pane: the numbers at the top add up: passed + failed + skipped + not run yet = all", function()
+  local dir = project()
+  h.write(dir .. "/fail-B", { "x" })
+  local screen = start(dir)
+  local function header()
+    return vim.trim(screen:text(2, 1, 54)), vim.trim(screen:text(3, 1, 54)) -- row 1 is the title
+  end
+  h.wait(screen, function()
+    local counts_row, summary_row = header()
+    return counts_row:find("0 passed", 1, true) and summary_row:find("8 tests · 8 not run yet", 1, true)
+  end, "before a run: 8 tests, 8 not run yet, got " .. table.concat({ header() }, " | "))
+  -- one file runs: its two tests are accounted for, the other six are not run yet
+  screen:exec(string.format("require('modules.phpunit.runner').run({ %q })", dir .. "/app/tests/ATest.php"))
+  h.wait(screen, function()
+    local counts_row, summary_row = header()
+    return counts_row:find("2 passed", 1, true) and counts_row:find("0 failed", 1, true) and summary_row:find("8 tests · 6 not run yet", 1, true)
+  end, "after one file: 2 passed and 6 not run yet, got " .. table.concat({ header() }, " | "), 20000)
+  -- everything runs, one fails
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    local counts_row, summary_row = header()
+    return counts_row:find("7 passed", 1, true) and counts_row:find("1 failed", 1, true) and summary_row:find("8 tests · all run", 1, true)
+  end, "after all: 7 passed, 1 failed, all run, got " .. table.concat({ header() }, " | "), 20000)
+  screen:close()
+end)
+
+lib.test("tests pane: with data sets the top says how many methods the tests are", function()
+  local dir = project()
+  h.write(dir .. "/sets-A", { "x" })
+  local screen = start(dir)
+  screen:exec("require('modules.phpunit.runner').run_all()")
+  h.wait(screen, function()
+    return vim.trim(screen:text(3, 1, 54)):find("10 tests (8 methods) · all run", 1, true) ~= nil
+  end, "the top must say 10 tests (8 methods), got " .. vim.trim(screen:text(3, 1, 54)), 20000)
+  screen:close()
+end)
+
 -- ── smoothness ──────────────────────────────────────────────────────────────────────────────────
 -- Every redraw of the screen is a frame the eye can see. A refresh used to put the list on its first row for a
 -- moment and back again (a flash); the rows of the pane must not move at all when a folder is folded.
