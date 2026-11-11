@@ -618,7 +618,10 @@ lib.test("http pane: a request chosen in a diff tab opens in another tab and lea
     return screen:exec("return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t')") == "login.http"
       and screen:exec("return vim.api.nvim_get_current_tabpage()") ~= diff_tab
   end, "the file did not open in another tab")
-  lib.eq(5, where(screen)[2], "the cursor must be on the request")
+  -- (the cursor is set right after the file opens: wait for it, do not race it)
+  h.wait(screen, function()
+    return where(screen)[2] == 5
+  end, "the cursor must be on the request (line 5)")
   lib.ok(screen:exec("return require('codediff.ui.lifecycle').get_session(...) ~= nil", { diff_tab }), "the diff session was destroyed")
   screen:close()
 end)
