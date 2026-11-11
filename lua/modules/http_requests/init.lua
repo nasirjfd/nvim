@@ -15,6 +15,7 @@ local edit = require("modules.http_requests.edit")
 local files = require("core.http-files")
 local kit = require("modules.pane_kit")
 local hidden = require("modules.http_requests.hidden")
+local pinned = require("modules.http_requests.pinned")
 
 local M = {}
 
@@ -49,6 +50,8 @@ local function set_highlights()
   hl("HttpPaneIconHidden", { fg = "#b59a72" })
   hl("HttpPaneIconHiddenOn", { fg = "#e0c08a", bold = true })
   hl("HttpPaneHiddenDir", { link = "Comment" })
+  hl("HttpPaneDim", { link = "Comment" })
+  hl("HttpPanePin", { fg = "#e0c08a" })
   hl("HttpPaneCount", { link = "NonText" })
 end
 set_highlights()
@@ -111,6 +114,13 @@ local function rows()
   local items = { toolbar }
   local hidden_set = hidden.set(dir)
 
+  local pins = pinned.list(dir)
+  local pin_header
+  if #pins > 0 then
+    pin_header = { text = "Pinned", kind = "section", key = "pin:header", last = false, open = true }
+    items[#items + 1] = pin_header
+  end
+
   local root = { dirs = {}, files = {}, path = "" }
   for _, rel in ipairs(list) do
     local parts = vim.split(rel, "/", { plain = true })
@@ -123,7 +133,7 @@ local function rows()
     node.files[#node.files + 1] = { name = parts[#parts], rel = rel }
   end
 
-  local function emit(node, parent)
+  local function emit(node, parent, dim)
     local entries = {}
     for _, name in ipairs(sorted_keys(node.dirs)) do
       local child, label = node.dirs[name], name
@@ -151,21 +161,26 @@ local function rows()
         if not is_hidden or toolbar.showing then
           local item = {
             text = entry.label, kind = "dir", key = key, parent = parent, last = last,
-            open = not is_hidden and not collapsed[key], dirpath = dir .. "/" .. entry.node.path,
-            relpath = entry.node.path, hidden = is_hidden,
+            open = not collapsed[key], dirpath = dir .. "/" .. entry.node.path,
+            relpath = entry.node.path, hidden = is_hidden, dim = dim or is_hidden,
           }
           items[#items + 1] = item
           if item.open then
-            emit(entry.node, item)
+            emit(entry.node, item, item.dim)
           end
         end
       else
         local abs = dir .. "/" .. entry.file.rel
-        local requests = requests_of(abs, loaded)
+        local requests = {}
+        for _, req in ipairs(requests_of(abs, loaded)) do
+          if not pinned.is_pinned(dir, entry.file.rel, req) then -- a pinned one is shown under Pinned only
+            requests[#requests + 1] = req
+          end
+        end
         local key = "f:" .. entry.file.rel
         local item = {
           text = entry.file.name, kind = "file", key = key, parent = parent, last = last, file = abs,
-          open = not collapsed[key], count = #requests,
+          open = not collapsed[key], count = #requests, dim = dim,
         }
         items[#items + 1] = item
         if item.open then
@@ -173,9 +188,37 @@ local function rows()
             items[#items + 1] = {
               text = req.name .. " " .. req.method .. " " .. req.url, kind = "request", file = abs, req = req,
               parent = item, last = j == #requests, key = "r:" .. entry.file.rel .. ":" .. req.line,
+              rel = entry.file.rel, dim = dim,
             }
           end
         end
+      end
+    end
+  end
+  -- the pinned requests (looked up in their files; one that is gone is left out)
+  if pin_header then
+    local count = 0
+    for _, pin in ipairs(pins) do
+      local abs = dir .. "/" .. pin.file
+      for _, req in ipairs(requests_of(abs, loaded)) do
+        if req.method == pin.method and req.url == pin.url and req.name == pin.name then
+          count = count + 1
+          if pin_header.open then
+            items[#items + 1] = {
+              text = req.name .. " " .. req.method .. " " .. req.url, kind = "request", file = abs, req = req,
+              parent = pin_header, last = false, key = "p:" .. pin.file .. ":" .. req.line, rel = pin.file,
+              in_pins = true,
+            }
+          end
+          break
+        end
+      end
+    end
+    pin_header.count = count
+    if pin_header.open then
+      local last = items[#items]
+      if last.in_pins then
+        last.last = true
       end
     end
   end
@@ -222,10 +265,17 @@ local function format(item, picker)
     end
     return ret
   end
+  if item.kind == "section" then -- a label, not a folder: no fold arrow, nothing to open
+    return {
+      { " 󰐃 ", "HttpPanePin" },
+      { "Pinned", "SnacksPickerDirectory" },
+      { "  " .. (item.count or 0), "HttpPaneCount" },
+    }
+  end
   vim.list_extend(ret, Snacks.picker.format.tree(item, picker))
   local icons = picker.opts.icons.files
   if item.kind == "dir" then
-    ret[#ret + 1] = { (item.open and icons.dir_open or icons.dir) .. " ", "SnacksPickerDirectory" }
+    ret[#ret + 1] = { (item.open and icons.dir_open or icons.dir) .. " ", item.dim and "HttpPaneHiddenDir" or "SnacksPickerDirectory" }
     -- a long chain of folders ("a/b/c/d") keeps its end, where the folder that matters is
     local label, room = item.text, 36
     local depth = 0
@@ -237,21 +287,24 @@ local function format(item, picker)
     if vim.fn.strchars(label) > room then
       label = "…" .. vim.fn.strcharpart(label, vim.fn.strchars(label) - room + 1)
     end
-    ret[#ret + 1] = { label, item.hidden and "HttpPaneHiddenDir" or "SnacksPickerDirectory" }
+    ret[#ret + 1] = { label, item.dim and "HttpPaneHiddenDir" or "SnacksPickerDirectory" }
     if item.hidden then
       ret[#ret + 1] = { "  󰈉", "HttpPaneIconHidden" }
     end
   elseif item.kind == "file" then
     local icon, hl = Snacks.util.icon(item.text, "file")
-    ret[#ret + 1] = { (icon or "") .. " ", hl }
-    ret[#ret + 1] = { item.text, "SnacksPickerFile" }
+    ret[#ret + 1] = { (icon or "") .. " ", item.dim and "HttpPaneDim" or hl }
+    ret[#ret + 1] = { item.text, item.dim and "HttpPaneDim" or "SnacksPickerFile" }
     ret[#ret + 1] = { "  " .. item.count, "HttpPaneCount" }
   else
     local method = item.req.method
-    local group = "HttpPane" .. (vim.fn.hlexists("HttpPane" .. method) == 1 and method or "Other")
+    local group = item.dim and "HttpPaneDim" or "HttpPane" .. (vim.fn.hlexists("HttpPane" .. method) == 1 and method or "Other")
     ret[#ret + 1] = { " " .. method .. " ", group }
     -- only the name; a request without one is known by its URL
-    ret[#ret + 1] = { item.req.name == method .. " " .. item.req.url and item.req.url or item.req.name }
+    ret[#ret + 1] = { item.req.name == method .. " " .. item.req.url and item.req.url or item.req.name, item.dim and "HttpPaneDim" or nil }
+    if item.in_pins then
+      ret[#ret + 1] = { "  " .. vim.fn.fnamemodify(item.rel, ":t"), "HttpPaneCount" }
+    end
   end
   return ret
 end
@@ -395,7 +448,7 @@ local actions = {
     if not item then
       return
     end
-    if item.kind == "button" then
+    if item.kind == "button" or item.kind == "section" then
       return -- the toolbar acts on clicks (http_click) and on its keys
     elseif item.kind == "request" then
       goto_line(picker, item.file, item.req.line)
@@ -460,6 +513,14 @@ local actions = {
       refresh(picker)
     end
   end,
+  -- pin the request under the cursor to the top of the pane (or unpin it)
+  http_pin = function(picker, item)
+    item = item or picker:current()
+    if item and item.kind == "request" and item.rel then
+      pinned.toggle(cwd(), item.rel, item.req)
+      refresh(picker)
+    end
+  end,
   -- a small window with the keys of the pane
   http_help = function()
     local lines = {
@@ -469,6 +530,7 @@ local actions = {
       " r  Ctrl+Enter   run request",
       " a               new request",
       " P               request from clipboard curl",
+      " p               pin / unpin request",
       " x               hide / unhide folder",
       " H               show hidden folders",
       " l / h           open / close",
@@ -536,6 +598,7 @@ local function open()
           ["r"] = "http_run",
           ["a"] = "http_new",
           ["x"] = "http_hide",
+          ["p"] = "http_pin",
           ["H"] = "http_show_hidden",
           ["P"] = "http_curl",
           ["R"] = "http_refresh",

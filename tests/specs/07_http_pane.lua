@@ -781,13 +781,13 @@ lib.test("http pane: x hides a folder, the eye icon counts the hidden ones and s
     return h.find_on_screen(screen, "login.http", 40) == nil and h.find_on_screen(screen, "auth", 40) == nil
   end, "x did not hide the folder")
   lib.ok(h.find_on_screen(screen, ICON.hidden .. " 1", 40), "the eye must show 1 hidden folder")
-  -- the eye shows them, dimmed, without their content
+  -- the eye shows them, dimmed, with all their content
   local row, col = h.find_on_screen(screen, ICON.hidden, 40)
   h.click(screen, row, col)
   h.wait(screen, function()
     return h.find_on_screen(screen, "auth", 40) ~= nil and h.find_on_screen(screen, ICON.hidden_on .. " 1", 40) ~= nil
   end, "the eye did not show the hidden folder")
-  lib.ok(h.find_on_screen(screen, "login.http", 40) == nil, "a hidden folder shows no content")
+  lib.ok(h.find_on_screen(screen, "login.http", 40) and h.find_on_screen(screen, "Login", 40), "a shown hidden folder keeps all its content")
   -- x on it brings it back
   select_dir(screen, "auth")
   screen:input("x")
@@ -795,6 +795,46 @@ lib.test("http pane: x hides a folder, the eye icon counts the hidden ones and s
     return h.find_on_screen(screen, ICON.hidden_on .. " 0", 40) ~= nil
   end, "the count must go back to 0")
   lib.ok(h.find_on_screen(screen, "login.http", 40), "the folder has its content again")
+  screen:close()
+end)
+
+lib.test("http pane: p pins a request under Pinned (a reference, it leaves the tree), p there unpins it, pins are remembered", function()
+  local dir = project()
+  local memory = dir .. "/pinned.json"
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.pinned').set_file(...)", { memory })
+  lib.ok(h.find_on_screen(screen, "Pinned", 40) == nil, "no Pinned section without pins")
+  local function on_request(text)
+    local row, col = h.find_on_screen(screen, text, 40)
+    lib.ok(row, text .. " is not on the screen")
+    h.click(screen, row, col + 1)
+    h.wait(screen, function() return where(screen)[1] ~= nil end, "")
+    focus_pane(screen)
+    h.wait(screen, function()
+      return screen:exec("local c = require('modules.http_requests').panes()[1]:current(); return c and c.kind == 'request' and c.req.name == ...", { text })
+    end, "the cursor is not on " .. text)
+  end
+  on_request("make-user")
+  screen:input("p")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Pinned", 40) ~= nil
+  end, "p did not create the Pinned section")
+  local pin_row = h.find_on_screen(screen, "Pinned", 40)
+  local req_row = h.find_on_screen(screen, "make-user", 40)
+  lib.ok(req_row == pin_row + 1, "the pinned request must be right under Pinned")
+  lib.ok(select(1, h.find_on_screen(screen, "users.http  ", 40)) ~= nil or h.find_on_screen(screen, "users.http", 40), "its file is shown next to it")
+  -- a reference: the request is only listed once
+  local count = screen:exec("local n = 0; for _, i in ipairs(require('modules.http_requests').panes()[1]:items()) do if i.kind == 'request' and i.req.name == 'make-user' then n = n + 1 end end; return n")
+  lib.eq(1, count)
+  -- the pin is remembered
+  lib.eq(1, screen:exec("return #require('modules.http_requests.pinned').list(vim.uv.cwd())"))
+  -- p on the pinned row unpins
+  screen:exec("local p = require('modules.http_requests').panes()[1]; for i, it in ipairs(p:items()) do if it.in_pins then p.list:move(i, true) end end")
+  screen:input("p")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Pinned", 40) == nil
+  end, "p on the pinned request did not unpin it")
+  lib.ok(h.find_on_screen(screen, "make-user", 40), "the request is back in its file")
   screen:close()
 end)
 
