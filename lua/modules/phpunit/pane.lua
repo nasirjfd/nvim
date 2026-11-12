@@ -408,8 +408,7 @@ local function rows(_, ctx)
     { text = "Tests", kind = "info", counts = total, discovering = snap.tree == nil, key = "h:info" },
     { text = "Summary", kind = "summary", counts = total, methods = #all, discovering = snap.tree == nil, key = "h:summary" },
     { text = "Parallel", kind = "toggle", key = "h:parallel" },
-    { text = "Run all tests", kind = "button", action = "all", key = "h:all" },
-    { text = "Run failed tests", kind = "button", action = "failed", failed = total.failed, key = "h:failed" },
+    { text = "Run all", kind = "button", failed = total.failed, key = "h:run" },
   }
   -- while tests run: how far, from 0 to the last one
   local running = require("modules.phpunit.progress").state()
@@ -632,6 +631,7 @@ local function status_chunk(status)
 end
 
 local WIDTH = 50
+local HALF = WIDTH / 2 -- two buttons or toggles share a row
 
 -- The toggles row: "  󰄵 Parallel    󰄱 Flat list", each one its own checkbox. The same table draws the row
 -- and tells which one a click at a column hit.
@@ -644,10 +644,10 @@ local function toggle_parts()
     }
   end
   local parts = { part(options.parallel(), "Parallel", "parallel"), part(options.flat(), "Flat list", "flat") }
-  local col = 1
-  for _, p in ipairs(parts) do
-    p.from, p.to = col, col + vim.fn.strdisplaywidth(p.text) - 1
-    col = p.to + 1
+  -- two halves of the row, each one fills its half
+  for i, p in ipairs(parts) do
+    p.text = kit.pad(p.text, HALF)
+    p.from, p.to = (i - 1) * HALF + 1, i * HALF
   end
   return parts
 end
@@ -717,12 +717,10 @@ local function format(item, picker)
     ret[#ret + 1] = { string.rep(" ", math.max(0, WIDTH - width)), "PhpTestToggleOff" }
     return ret
   elseif item.kind == "button" then
-    if item.action == "all" then
-      ret[#ret + 1] = { kit.pad("  ▶  Run all tests", WIDTH), "PhpTestRun" }
-    else
-      local n = item.failed
-      ret[#ret + 1] = { kit.pad("  ✗  Run failed tests" .. (n > 0 and (" (" .. n .. ")") or ""), WIDTH), n > 0 and "PhpTestRunFailed" or "PhpTestRunIdle" }
-    end
+    -- Run all | Run failed (N): two buttons, each one fills its half of the row
+    local n = item.failed
+    ret[#ret + 1] = { kit.pad("  ▶  Run all", HALF), "PhpTestRun" }
+    ret[#ret + 1] = { kit.pad("  ✗  Run failed" .. (n > 0 and (" (" .. n .. ")") or ""), HALF), n > 0 and "PhpTestRunFailed" or "PhpTestRunIdle" }
     return ret
   end
 
@@ -846,10 +844,11 @@ local function run_item(item)
   if item.kind == "failed" then
     runner().run_failed()
   elseif item.kind == "button" then
-    if item.action == "all" then
-      runner().run_all()
-    else
+    -- (a click chooses by column: see tests_click; the keyboard runs everything)
+    if item.action == "failed" then
       runner().run_failed()
+    else
+      runner().run_all()
     end
   elseif item.kind == "dataset" then
     -- only that data set (PHPUnit's filter), in its file
@@ -967,6 +966,10 @@ local actions = {
       local item = picker:current()
       if item and item.kind == "toggle" then
         picker:action(zone_at(mouse.wincol) == "flat" and "tests_view" or "tests_parallel")
+        return
+      end
+      if item and item.kind == "button" then
+        run_item(vim.tbl_extend("force", item, { action = mouse.wincol > HALF and "failed" or "all" }))
         return
       end
       picker:action("tests_confirm")

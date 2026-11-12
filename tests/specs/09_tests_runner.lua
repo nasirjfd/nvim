@@ -290,8 +290,8 @@ lib.test("tests pane: counts and checkbox on top, then the parent folder, the fi
     return pane_row(screen, "ATest.php") ~= nil
   end, "the test files are not in the pane")
   lib.ok(pane_row(screen, "Parallel"), "the Parallel checkbox")
-  lib.ok(pane_row(screen, "Run all tests"), "Run all")
-  lib.ok(pane_row(screen, "Run failed tests"), "Run failed")
+  lib.ok(pane_row(screen, "Run all"), "Run all")
+  lib.ok(pane_row(screen, "Run failed"), "Run failed")
   lib.ok(pane_row(screen, "8 tests"), "the count")
   lib.ok(pane_row(screen, "tests") and pane_row(screen, "app"), "the parent folder with its project")
   lib.ok(not pane_row(screen, "testOne"), "tests are folded under their file at first")
@@ -334,16 +334,40 @@ lib.test("tests pane: one row holds two checkboxes, Parallel and Flat list, each
   screen:close()
 end)
 
+lib.test("tests pane: Run all and Run failed share a row, half each, and a click runs the one it hit", function()
+  local dir = project()
+  h.write(dir .. "/fail-B", { "x" })
+  local screen = start(dir)
+  h.wait(screen, function()
+    return pane_row(screen, "Run all") ~= nil
+  end, "no buttons")
+  local row, all_col = pane_row(screen, "Run all")
+  local failed_row, failed_col = pane_row(screen, "Run failed")
+  lib.eq(row, failed_row, "one row")
+  lib.ok(failed_col > all_col + 20, "Run failed starts in the second half")
+  local t_row, t_col = pane_row(screen, "Parallel")
+  local _, f_col = pane_row(screen, "Flat list")
+  lib.ok(f_col > t_col + 20, "the toggles fill the row the same way")
+  h.click(screen, row, failed_col) -- nothing failed yet: it only says so, it does not run everything
+  vim.wait(400)
+  lib.ok(pane_row(screen, "✓ 7") == nil, "Run failed ran everything")
+  h.click(screen, row, all_col)
+  h.wait(screen, function()
+    return pane_row(screen, "✓ 7") ~= nil and pane_row(screen, "Run failed (1)") ~= nil
+  end, "Run all did not run the tests")
+  screen:close()
+end)
+
 lib.test("tests pane: results show next to the tests and a click on Run all runs them", function()
   local dir = project()
   h.write(dir .. "/fail-B", { "x" })
   local screen = start(dir)
   h.wait(screen, function()
-    return pane_row(screen, "Run all tests") ~= nil
+    return pane_row(screen, "Run all") ~= nil
   end, "no button")
-  h.click(screen, pane_row(screen, "Run all tests"), 8)
+  h.click(screen, pane_row(screen, "Run all"), 8)
   h.wait(screen, function()
-    return pane_row(screen, "✓ 7") ~= nil and pane_row(screen, "✗ 1") ~= nil and pane_row(screen, "Run failed tests (1)") ~= nil
+    return pane_row(screen, "✓ 7") ~= nil and pane_row(screen, "✗ 1") ~= nil and pane_row(screen, "Run failed (1)") ~= nil
   end, "the counts did not show 7 passed and 1 failed", 20000)
   screen:close()
 end)
@@ -389,10 +413,10 @@ lib.test("tests pane: the failed tests come first, in a section above the folder
   h.write(dir .. "/fail-B", { "x" })
   local screen = start(dir)
   h.wait(screen, function()
-    return pane_row(screen, "Run all tests") ~= nil
+    return pane_row(screen, "Run all") ~= nil
   end, "no button")
   lib.ok(not pane_row(screen, "Failed"), "no Failed section before a run")
-  h.click(screen, pane_row(screen, "Run all tests"), 8)
+  h.click(screen, pane_row(screen, "Run all"), 8)
   h.wait(screen, function()
     return pane_row(screen, "✗ Failed") ~= nil
   end, "the Failed section did not appear", 20000)
@@ -415,11 +439,11 @@ lib.test("tests pane: the Flat list button shows every test on its own row, fail
   h.write(dir .. "/fail-C", { "x" })
   local screen = start(dir)
   h.wait(screen, function()
-    return pane_row(screen, "Run all tests") ~= nil
+    return pane_row(screen, "Run all") ~= nil
   end, "no button")
-  h.click(screen, pane_row(screen, "Run all tests"), 8)
+  h.click(screen, pane_row(screen, "Run all"), 8)
   h.wait(screen, function()
-    return pane_row(screen, "Run failed tests (1)") ~= nil
+    return pane_row(screen, "Run failed (1)") ~= nil
   end, "the run did not finish", 20000)
   h.click(screen, pane_row(screen, "Flat list"))
   h.wait(screen, function()
@@ -601,7 +625,7 @@ lib.test("tests memory: after a restart the failed tests are still known and onl
     require("modules.phpunit.pane").toggle()
   ]], dir, dir, dir, dir, dir .. "/app/tests/BTest.php"))
   h.wait(second, function()
-    return h.find_on_screen(second, "Run failed tests (1)", 54) ~= nil and h.find_on_screen(second, "✓ 7", 54) ~= nil
+    return h.find_on_screen(second, "Run failed (1)", 54) ~= nil and h.find_on_screen(second, "✓ 7", 54) ~= nil
   end, "the pane does not remember 7 passed and 1 failed", 20000)
   lib.eq(0, #lines(dir .. "/args.log"), "remembering must not run anything")
   -- and its message is under the line again
@@ -828,7 +852,7 @@ lib.test("tests data sets: Run failed runs only the failed data set, the Flat li
   local screen = start(dir)
   screen:exec("require('modules.phpunit.runner').run_all()")
   h.wait(screen, function()
-    return h.find_on_screen(screen, "10 tests", 54) ~= nil and h.find_on_screen(screen, "Run failed tests (1)", 54) ~= nil
+    return h.find_on_screen(screen, "10 tests", 54) ~= nil and h.find_on_screen(screen, "Run failed (1)", 54) ~= nil
   end, "the run did not finish", 20000)
   vim.fn.delete(dir .. "/args.log")
   screen:exec("require('modules.phpunit.runner').run_failed()")
