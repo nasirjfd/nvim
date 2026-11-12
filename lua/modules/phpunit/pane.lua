@@ -408,7 +408,6 @@ local function rows(_, ctx)
     { text = "Tests", kind = "info", counts = total, discovering = snap.tree == nil, key = "h:info" },
     { text = "Summary", kind = "summary", counts = total, methods = #all, discovering = snap.tree == nil, key = "h:summary" },
     { text = "Parallel", kind = "toggle", key = "h:parallel" },
-    { text = "Flat list", kind = "view", key = "h:view" },
     { text = "Run all tests", kind = "button", action = "all", key = "h:all" },
     { text = "Run failed tests", kind = "button", action = "failed", failed = total.failed, key = "h:failed" },
   }
@@ -634,36 +633,33 @@ end
 
 local WIDTH = 50
 
--- The Parallel row: "󰄵 Parallel   −  50  +  at a time". The checkbox part toggles, − and + change the
--- number; the same table draws the row and tells what a click at a column hit.
+-- The toggles row: "  󰄵 Parallel    󰄱 Flat list", each one its own checkbox. The same table draws the row
+-- and tells which one a click at a column hit.
 local function toggle_parts()
-  local on = options.parallel()
-  local bar = on and "PhpTestToggleOn" or "PhpTestToggleOff"
-  local step = on and "PhpTestStepOn" or "PhpTestStepOff"
-  local parts = {
-    { text = "  " .. (on and "󰄵" or "󰄱") .. "  Parallel", hl = bar, zone = "toggle" },
-    { text = "    ", hl = bar, zone = "toggle" },
-    { text = " − ", hl = step, zone = "minus" },
-    { text = " " .. options.workers() .. " ", hl = bar, zone = "count" },
-    { text = " + ", hl = step, zone = "plus" },
-    { text = " at a time", hl = bar, zone = "toggle" },
-  }
+  local function part(on, label, zone)
+    return {
+      text = "  " .. (on and "󰄵" or "󰄱") .. " " .. label .. "  ",
+      hl = on and "PhpTestToggleOn" or "PhpTestToggleOff",
+      zone = zone,
+    }
+  end
+  local parts = { part(options.parallel(), "Parallel", "parallel"), part(options.flat(), "Flat list", "flat") }
   local col = 1
-  for _, part in ipairs(parts) do
-    part.from, part.to = col, col + vim.fn.strdisplaywidth(part.text) - 1
-    col = part.to + 1
+  for _, p in ipairs(parts) do
+    p.from, p.to = col, col + vim.fn.strdisplaywidth(p.text) - 1
+    col = p.to + 1
   end
   return parts
 end
 
---- What a click at window column `col` of the Parallel row hits: "minus", "plus" or "toggle".
+--- What a click at window column `col` of the toggles row hits: "parallel" or "flat".
 local function zone_at(col)
   for _, part in ipairs(toggle_parts()) do
     if col >= part.from and col <= part.to then
-      return (part.zone == "count") and "toggle" or part.zone
+      return part.zone
     end
   end
-  return "toggle"
+  return "parallel"
 end
 
 local function format(item, picker)
@@ -718,15 +714,7 @@ local function format(item, picker)
       ret[#ret + 1] = { part.text, part.hl }
       width = width + vim.fn.strdisplaywidth(part.text)
     end
-    local on = options.parallel()
-    ret[#ret + 1] = { string.rep(" ", math.max(0, WIDTH - width)), on and "PhpTestToggleOn" or "PhpTestToggleOff" }
-    return ret
-  elseif item.kind == "view" then
-    local on = options.flat()
-    ret[#ret + 1] = {
-      kit.pad("  " .. (on and "󰄵" or "󰄱") .. "  Flat list of all tests", WIDTH),
-      on and "PhpTestToggleOn" or "PhpTestToggleOff",
-    }
+    ret[#ret + 1] = { string.rep(" ", math.max(0, WIDTH - width)), "PhpTestToggleOff" }
     return ret
   elseif item.kind == "button" then
     if item.action == "all" then
@@ -880,9 +868,6 @@ local actions = {
     if item.kind == "toggle" then
       options.toggle_parallel()
       refresh(picker, item.key)
-    elseif item.kind == "view" then
-      options.toggle_flat()
-      refresh(picker, item.key)
     elseif item.kind == "button" then
       run_item(item)
     elseif foldable(item) then
@@ -899,7 +884,7 @@ local actions = {
   end,
   tests_run = function(picker, item)
     item = item or picker:current()
-    if item and (item.kind == "toggle" or item.kind == "view") then
+    if item and (item.kind == "toggle") then
       return
     end
     run_item(item)
@@ -916,14 +901,6 @@ local actions = {
   end,
   tests_view = function(picker)
     options.toggle_flat()
-    refresh(picker, "h:view")
-  end,
-  tests_more = function(picker)
-    options.set_workers(options.workers() + options.step(true))
-    refresh(picker, "h:parallel")
-  end,
-  tests_less = function(picker)
-    options.set_workers(options.workers() - options.step(false))
     refresh(picker, "h:parallel")
   end,
   tests_stop = function()
@@ -956,7 +933,6 @@ local actions = {
       " a               run all",
       " F               run failed",
       " p               parallel on/off",
-      " + / -           workers",
       " v               flat list",
       " x               stop",
       " o               output",
@@ -990,14 +966,7 @@ local actions = {
       end
       local item = picker:current()
       if item and item.kind == "toggle" then
-        local zone = zone_at(mouse.wincol)
-        if zone == "minus" then
-          picker:action("tests_less")
-        elseif zone == "plus" then
-          picker:action("tests_more")
-        else
-          picker:action("tests_parallel")
-        end
+        picker:action(zone_at(mouse.wincol) == "flat" and "tests_view" or "tests_parallel")
         return
       end
       picker:action("tests_confirm")
@@ -1048,11 +1017,6 @@ local function open()
           ["F"] = "tests_failed",
           ["p"] = "tests_parallel",
           ["v"] = "tests_view",
-          ["+"] = "tests_more",
-          ["="] = "tests_more",
-          ["<kPlus>"] = "tests_more",
-          ["-"] = "tests_less",
-          ["<kMinus>"] = "tests_less",
           ["x"] = "tests_stop",
           ["o"] = "tests_output",
           ["e"] = "tests_expand_all",

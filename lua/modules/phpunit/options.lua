@@ -1,6 +1,6 @@
 -- The options of the tests pane that the user changes while working (kept between sessions):
 --   parallel   run the test files of one run at the same time
---   workers    how many at once
+--   (how many at once is fixed: WORKERS, or the project's max_workers when that is lower)
 --   flat       list every test on its own (true) instead of folder -> file -> tests
 local M = {}
 
@@ -8,6 +8,7 @@ local M = {}
 local file = vim.env.NVIM_CONFIG_TESTS and (vim.fn.tempname() .. "-phpunit-options.json")
   or (vim.fn.stdpath("state") .. "/phpunit-options.json")
 local MIN, MAX = 2, 64
+local WORKERS = 10 -- at a time: more is better, so it is not a setting
 local limit = MAX -- what the project can run at once (configure({ max_workers = N }))
 
 local values ---@type { parallel: boolean, workers: integer }?
@@ -16,7 +17,7 @@ local function load()
   if values then
     return values
   end
-  values = { parallel = false, workers = 4, flat = false }
+  values = { parallel = false, workers = WORKERS, flat = false }
   local fd = io.open(file, "r")
   if fd then
     local ok, data = pcall(vim.json.decode, fd:read("*a"))
@@ -24,9 +25,6 @@ local function load()
     if ok and type(data) == "table" then
       values.parallel = data.parallel == true
       values.flat = data.flat == true
-      if type(data.workers) == "number" then
-        values.workers = math.min(MAX, math.max(MIN, math.floor(data.workers)))
-      end
     end
   end
   return values
@@ -36,7 +34,7 @@ local function save()
   vim.fn.mkdir(vim.fn.fnamemodify(file, ":h"), "p")
   local fd = io.open(file, "w")
   if fd then
-    fd:write(vim.json.encode(values))
+    fd:write(vim.json.encode({ parallel = values.parallel, flat = values.flat }))
     fd:close()
   end
 end
@@ -83,19 +81,9 @@ function M.toggle_parallel()
   return M.parallel()
 end
 
---- The step of the + and - keys: one at a time up to 10, then five.
-function M.step(up)
-  local n = M.workers()
-  if up then
-    return n < 10 and 1 or 5
-  end
-  return n <= 10 and 1 or 5
-end
-
---- Set the number of workers (kept between MIN and MAX).
+--- Set the number of workers for this session (tests use it; it is not saved and no key changes it).
 function M.set_workers(count)
   load().workers = math.min(limit, math.max(MIN, math.floor(count)))
-  save()
   return values.workers
 end
 

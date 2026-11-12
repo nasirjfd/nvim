@@ -267,23 +267,13 @@ lib.test("tests run: stopping ends the queue of a parallel run", function()
   screen:close()
 end)
 
-lib.test("tests options: up to 64 workers, the + and - keys step by 5 above 10, the choice is kept", function()
+lib.test("tests options: ten at a time, nothing to change it, never above the project's limit", function()
   local screen = h.nvim(h.tmpdir())
-  lib.eq(50, screen:exec("local o = require('modules.phpunit.options'); return o.set_workers(50)"))
-  lib.eq(64, screen:exec("return require('modules.phpunit.options').set_workers(500)"), "the top is 64")
-  lib.eq(2, screen:exec("return require('modules.phpunit.options').set_workers(0)"), "the bottom is 2")
-  screen:exec("local o = require('modules.phpunit.options'); o.set_workers(8)")
-  lib.eq({ 1, 5, 5, 1 }, screen:exec([[
-    local o = require('modules.phpunit.options')
-    local out = {}
-    o.set_workers(9); out[1] = o.step(true)
-    o.set_workers(10); out[2] = o.step(true)
-    o.set_workers(15); out[3] = o.step(false)
-    o.set_workers(10); out[4] = o.step(false)
-    return out
-  ]]))
-  screen:exec("require('modules.phpunit.options').set_workers(50); require('modules.phpunit.options').reload()")
-  lib.eq(50, screen:exec("return require('modules.phpunit.options').workers()"), "kept")
+  lib.eq(10, screen:exec("local o = require('modules.phpunit.options'); o.reload(); return o.workers()"))
+  screen:exec("local o = require('modules.phpunit.options'); o.set_workers(4); o.set_parallel(true); o.reload()")
+  lib.eq(10, screen:exec("return require('modules.phpunit.options').workers()"), "a number is not kept")
+  lib.eq(true, screen:exec("return require('modules.phpunit.options').parallel()"), "Parallel is kept")
+  lib.eq(3, screen:exec("local o = require('modules.phpunit.options'); o.set_limit(3); return o.workers()"))
   screen:close()
 end)
 
@@ -312,60 +302,35 @@ lib.test("tests pane: counts and checkbox on top, then the parent folder, the fi
   screen:close()
 end)
 
-lib.test("tests pane: the Parallel row is a checkbox with a clickable number: - 4 + at a time", function()
+lib.test("tests pane: one row holds two checkboxes, Parallel and Flat list, each toggled by its own click", function()
   local dir = project()
   local screen = start(dir)
   h.wait(screen, function()
-    return pane_row(screen, "at a time") ~= nil
-  end, "no Parallel row")
-  local function workers()
-    return screen:exec("return require('modules.phpunit.options').workers()")
+    return pane_row(screen, "Flat list") ~= nil
+  end, "no toggles row")
+  local function opt(name)
+    return screen:exec("return require('modules.phpunit.options')." .. name .. "()")
   end
-  local function parallel()
-    return screen:exec("return require('modules.phpunit.options').parallel()")
-  end
-  local row, plus = pane_row(screen, "+")
-  local _, minus = pane_row(screen, "−")
-  lib.ok(row and minus and minus < plus, "− and + buttons are on the row")
-  lib.eq(false, parallel())
-  h.click(screen, row, plus)
+  local row, parallel_col = pane_row(screen, "Parallel")
+  local flat_row, flat_col = pane_row(screen, "Flat list")
+  lib.eq(row, flat_row, "Parallel and Flat list share one row")
+  lib.ok(parallel_col < flat_col, "Parallel first, then Flat list")
+  lib.ok(not pane_row(screen, "at a time"), "no workers number")
+  lib.eq({ false, false }, { opt("parallel"), opt("flat") })
+  h.click(screen, row, flat_col)
   h.wait(screen, function()
-    return workers() == 5
-  end, "clicking + did not raise the number")
-  h.click(screen, row, minus)
-  h.click(screen, row, minus)
+    return opt("flat")
+  end, "clicking Flat list did not turn it on")
+  lib.eq(false, opt("parallel"), "Flat list does not toggle Parallel")
+  h.click(screen, row, parallel_col)
   h.wait(screen, function()
-    return workers() == 3
-  end, "clicking − twice did not lower the number")
-  lib.eq(false, parallel(), "the buttons do not toggle Parallel")
-  h.click(screen, row, 6) -- the checkbox
-  h.wait(screen, parallel, "the checkbox did not turn Parallel on")
-  h.wait(screen, function()
-    return pane_row(screen, " 3 ") ~= nil
-  end, "the row does not show the number")
-  -- above ten the buttons step by five; the keys do the same
-  screen:exec("require('modules.phpunit.options').set_workers(10)")
-  screen:exec("require('modules.phpunit.pane').panes()[1]:find()")
-  h.wait(screen, function()
-    return pane_row(screen, " 10 ") ~= nil
-  end, "no 10")
-  row, plus = pane_row(screen, "+")
-  h.click(screen, row, plus)
-  h.wait(screen, function()
-    return workers() == 15
-  end, "+ above ten must step by five")
-  for _, key in ipairs({ "+", "=" }) do
+    return opt("parallel")
+  end, "clicking Parallel did not turn it on")
+  for _, key in ipairs({ "+", "-" }) do
     screen:input(key)
   end
-  h.wait(screen, function()
-    return workers() == 25
-  end, "the + and = keys must step too")
-  screen:input("-")
-  h.wait(screen, function()
-    return workers() == 20
-  end, "the - key must step down")
-  screen:exec("require('modules.phpunit.options').reload()")
-  lib.eq(20, workers(), "the choice is kept")
+  vim.wait(200)
+  lib.eq(10, screen:exec("return require('modules.phpunit.options').workers()"), "+ and - change nothing")
   screen:close()
 end)
 
@@ -456,7 +421,7 @@ lib.test("tests pane: the Flat list button shows every test on its own row, fail
   h.wait(screen, function()
     return pane_row(screen, "Run failed tests (1)") ~= nil
   end, "the run did not finish", 20000)
-  h.click(screen, pane_row(screen, "Flat list"), 8)
+  h.click(screen, pane_row(screen, "Flat list"))
   h.wait(screen, function()
     return pane_row(screen, "testOne") ~= nil
   end, "the flat list did not show the tests")
@@ -473,7 +438,7 @@ lib.test("tests pane: the Flat list button shows every test on its own row, fail
   lib.eq(8, rows, "all eight tests listed")
   local first = pane_row(screen, "testTwo")
   lib.ok(first and pane_row(screen, "CTest.php") == first, "the failed test comes first with its file name")
-  h.click(screen, pane_row(screen, "Flat list"), 8)
+  h.click(screen, pane_row(screen, "Flat list"))
   h.wait(screen, function()
     return pane_row(screen, "ATest.php") ~= nil and pane_row(screen, "testOne") == nil
   end, "the button did not bring the folders back")
