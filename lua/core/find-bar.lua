@@ -2,6 +2,8 @@
 --
 --   /  or Cmd+F   find                 Cmd+R   find and replace (Cmd+R twice: LSP rename)
 --
+-- Opening it on the previous search only highlights it where you are (the text may be about to be
+-- replaced); the jump comes with Enter or a change of the text.
 -- Typing searches as you go and jumps to the first match from the cursor (or, when that one is out of
 -- sight and there is a match on the screen, to the first match on the screen). The buttons on the
 -- right toggle Match case (Aa), Words (W) and Regex (.*); they can be clicked, or toggled with
@@ -248,11 +250,28 @@ local function first_match(pat)
   end
 end
 
+-- `state.pending` holds the text of the search shown that way until a real action.
+-- Opening the bar on the search made before: show every match where it is, leave the cursor and the
+-- view alone. Maybe the text is about to be replaced; the jump comes with Enter or with a change.
+local function hold()
+  local pat = pattern((fields()))
+  if not pat or not valid(pat) then
+    draw()
+    return
+  end
+  state.pending = (fields())
+  vim.fn.setreg("/", pat)
+  vim.v.hlsearch = 1
+  show_current(pat, false)
+  draw()
+end
+
 -- Search again after the text or a toggle changed: from where the search started.
 function M.update(from_origin)
   if not alive() then
     return
   end
+  state.pending = false
   local find, replace = fields()
   last.find, last.replace = find, state.replace and replace or last.replace
   local pat = pattern(find)
@@ -284,6 +303,11 @@ function M.step(dir)
   end
   local pat = pattern((fields()))
   if not pat or not valid(pat) then
+    return
+  end
+  if state.pending then
+    -- the first Enter after opening on the old search: go to its first match from here
+    M.update(true)
     return
   end
   api.nvim_win_call(state.target, function()
@@ -489,6 +513,8 @@ local function keymaps(buf)
   local function row()
     return api.nvim_win_get_cursor(state.win)[1]
   end
+  -- (also in Select mode: the old search is selected when the bar opens on it)
+  local STEP_MODES = { "i", "n", "s" }
   map("<Esc>", M.close)
   map("<C-c>", M.close)
   map("<CR>", function()
@@ -497,16 +523,16 @@ local function keymaps(buf)
     else
       M.step(1)
     end
-  end)
+  end, STEP_MODES)
   map("<S-CR>", function()
     M.step(-1)
-  end)
+  end, STEP_MODES)
   map("<Down>", function()
     M.step(1)
-  end)
+  end, STEP_MODES)
   map("<Up>", function()
     M.step(-1)
-  end)
+  end, STEP_MODES)
   map("<Tab>", function()
     if state.replace then
       local r = row() == 1 and 2 or 1
@@ -669,6 +695,10 @@ function M.open(o)
       if not alive() then
         return
       end
+      -- (the text put in the field when the bar opened is reported as a change: not one)
+      if state.pending and (fields()) == state.pending then
+        return
+      end
       keep_lines()
       local r = api.nvim_win_get_cursor(state.win)[1]
       if r == 1 then
@@ -740,7 +770,11 @@ function M.open(o)
     end
   else
     api.nvim_win_set_cursor(win, { 1, #find })
-    M.update(true)
+    if o.text or find == "" then
+      M.update(true)
+    else
+      hold()
+    end
   end
   vim.cmd("startinsert!")
   if not o.replace then

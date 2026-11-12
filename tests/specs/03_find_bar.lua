@@ -103,3 +103,66 @@ lib.test("find bar: with no match on the screen it still goes to the first one f
   end, "did not wrap to the only match")
   screen:close()
 end)
+
+local function big_file(screen_dir)
+  local lines = {}
+  for i = 1, 200 do
+    lines[i] = "line " .. i
+  end
+  lines[3] = "needle at the top"
+  lines[150] = "needle far below"
+  lines[160] = "other thing"
+  h.write(screen_dir .. "/big.txt", lines)
+end
+
+lib.test("find bar: reopening on the previous search stays where it is and highlights; Enter or a change goes to it", function()
+  local dir = h.tmpdir()
+  big_file(dir)
+  local screen = h.nvim(dir)
+  screen:exec("vim.cmd('edit big.txt'); vim.cmd('normal! 90Gzt'); vim.api.nvim_win_set_cursor(0, { 100, 0 })")
+  -- a first search, then close the bar
+  screen:input("/")
+  h.wait(screen, function()
+    return bar_text(screen) ~= false
+  end, "the find bar never opened")
+  screen:input("needle")
+  h.wait(screen, function()
+    return bar_text(screen) == "needle"
+  end, "typing did not reach the find bar")
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return bar_text(screen) == false
+  end, "Esc did not close the bar")
+  screen:exec("vim.api.nvim_win_set_cursor(0, { 100, 0 }); vim.cmd('normal! 90Gzt'); vim.api.nvim_win_set_cursor(0, { 100, 0 })")
+  -- reopen: nothing moves, the matches are highlighted
+  screen:input("/")
+  h.wait(screen, function()
+    return bar_text(screen) == "needle"
+  end, "the previous search is not in the bar")
+  screen:exec("vim.wait(300)")
+  local view = file_view(screen, "big.txt")
+  lib.eq({ 100, 90 }, view, "opening the bar moved the cursor or the view")
+  lib.eq(1, screen:exec("return vim.v.hlsearch"), "the matches are not highlighted")
+  -- Enter: now it goes to the first match from the cursor
+  screen:input("<CR>")
+  h.wait(screen, function()
+    return file_view(screen, "big.txt")[1] == 150
+  end, "Enter did not go to the match")
+  -- a changed text also goes
+  screen:exec("require('core.find-bar').close()")
+  h.wait(screen, function()
+    return bar_text(screen) == false
+  end, "the bar did not close")
+  screen:exec("vim.api.nvim_win_set_cursor(0, { 100, 0 })")
+  screen:input("/")
+  h.wait(screen, function()
+    return bar_text(screen) == "needle"
+  end, "no bar")
+  screen:exec("vim.wait(300)")
+  lib.eq(100, file_view(screen, "big.txt")[1], "reopening moved the cursor again")
+  screen:input("other")
+  h.wait(screen, function()
+    return file_view(screen, "big.txt")[1] == 160
+  end, "typing a new text did not go to its match")
+  screen:close()
+end)
