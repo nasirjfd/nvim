@@ -19,6 +19,7 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 - `init.lua` → sets `exrc` and requires `core`. `lua/core/init.lua` loads, in order: `options`, `keymaps`, `gui-keymaps`, `autocmds`, `external-changes`, `sidebars`, then `lazy`.
 - `lua/core/external-changes.lua` watches the cwd for files changed outside Neovim (e.g. by Claude Code): it reloads open buffers, sends `workspace/didChangeWatchedFiles` to servers that don't register watchers themselves (intelephense), and re-lints the current buffer.
 - `lua/core/lazy.lua` bootstraps lazy.nvim and calls `require("lazy").setup({ import = "plugins" })`, so **every file in `lua/plugins/` is auto-imported as a spec** — adding a plugin means returning a spec table from a file there.
+- `lua/core/guess-indent.lua` sets `shiftwidth`/`expandtab` of each file from its own text when it opens (skipped when `.editorconfig` sets the indent), so `o`/`O` and `>>` follow the file's formatting instead of the global `shiftwidth=2`. Spec: `tests/specs/11_guess_indent.lua`.
 - `lua/core/gui-keymaps.lua` holds `<D-…>` (Cmd) bindings mirroring VS Code muscle memory; they are inert in terminals that don't forward Cmd.
 - `snacks.nvim` is the central UI layer (picker, explorer, notifier, terminal). Many core and LSP keymaps call `Snacks.*` directly, and `gd`/`gD`/`gr`/`gi`/`gy` are defined in `lua/plugins/snacks.lua`, not in the LSP attach handler.
 
