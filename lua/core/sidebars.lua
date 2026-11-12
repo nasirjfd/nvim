@@ -231,6 +231,20 @@ function M.make_room(name, tab)
   restore_cmdheight()
 end
 
+-- Called right before the codediff sidebar (Git pane) is shown: close every other sidebar of the tab at
+-- once. The BufWinEnter handler above does it one tick later, and for that tick two sidebars are on
+-- screen (a visible jump).
+function M.make_room_for_codediff(tab)
+  tab = tab or vim.api.nvim_get_current_tabpage()
+  for _, picker in ipairs(snacks_explorers(tab)) do
+    close_now(picker)
+  end
+  for _, picker in ipairs(extra_panes(tab)) do
+    close_now(picker)
+  end
+  restore_cmdheight()
+end
+
 function M.make_room_for_http(tab)
   M.make_room("http", tab)
 end
