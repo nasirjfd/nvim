@@ -2,7 +2,8 @@
 --
 --   /  or Cmd+F   find                 Cmd+R   find and replace (Cmd+R twice: LSP rename)
 --
--- Typing searches as you go and jumps to the first match from the cursor. The buttons on the
+-- Typing searches as you go and jumps to the first match from the cursor (or, when that one is out of
+-- sight and there is a match on the screen, to the first match on the screen). The buttons on the
 -- right toggle Match case (Aa), Words (W) and Regex (.*); they can be clicked, or toggled with
 -- Option+C / Option+W / Option+X like in JetBrains. The chevron on the left (or Cmd+R) shows the
 -- replace field, with Replace and Replace All buttons (Option+P / Option+A).
@@ -222,6 +223,31 @@ local function show_current(pat, scroll)
   end)
 end
 
+-- The first and last line shown in the current window.
+local function visible_lines()
+  return vim.fn.line("w0"), vim.fn.line("w$")
+end
+
+-- Put the cursor on the match to show first: the first one from the cursor, but when that one is out
+-- of sight and a match is on the screen, the first on the screen. So searching does not throw you to
+-- the top (or the bottom) of the file while what you look for is right here. Runs in the target window.
+local function first_match(pat)
+  -- (read before the cursor moves: line("w0") scrolls the window to the cursor first)
+  local top, bottom = visible_lines()
+  local r = vim.fn.searchpos(pat, "cw")
+  if r[1] == 0 then
+    return
+  end
+  if r[1] >= top and r[1] <= bottom then
+    return
+  end
+  api.nvim_win_set_cursor(0, { top, 0 })
+  local seen = vim.fn.searchpos(pat, "cW")
+  if seen[1] == 0 or seen[1] > bottom then
+    api.nvim_win_set_cursor(0, { r[1], r[2] - 1 }) -- nothing on the screen: where the search went
+  end
+end
+
 -- Search again after the text or a toggle changed: from where the search started.
 function M.update(from_origin)
   if not alive() then
@@ -244,9 +270,7 @@ function M.update(from_origin)
   if from_origin then
     api.nvim_win_call(state.target, function()
       api.nvim_win_set_cursor(0, state.origin)
-      if vim.fn.searchpos(pat, "cw")[1] == 0 then
-        api.nvim_win_set_cursor(0, state.origin)
-      end
+      first_match(pat)
     end)
   end
   show_current(pat)
