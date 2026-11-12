@@ -36,6 +36,8 @@ keybind = ctrl+enter=csi:13;5u
 keybind = super+shift+h=csi:104;10u
 # cmd+shift+t opens the tests pane (neotest, lua/plugins/neotest.lua)
 keybind = super+shift+t=csi:116;10u
+# cmd+f opens the find bar in Neovim, same as / (Ghostty's own search would swallow it; see lua/core/find-bar.lua)
+keybind = super+f=csi:102;9u
 keybind = super+s=csi:115;9u
 keybind = super+r=csi:114;9u
 keybind = super+shift+e=csi:101;10u
