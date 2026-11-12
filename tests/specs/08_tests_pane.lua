@@ -334,7 +334,7 @@ local function press(screen, key)
   screen:exec("vim.fn.maparg(..., 'n', false, true).callback()", { key })
 end
 
-lib.test("tests pane: Cmd+Shift+T opens it with the focus, focuses it from elsewhere, closes it from inside", function()
+lib.test("tests pane: Cmd+Shift+T opens it with the focus, focuses it from elsewhere, never closes it", function()
   local screen = h.nvim(fake_project())
   lib.ok(screen:exec("return vim.fn.maparg('<D-S-t>', 'n') ~= ''"), "Cmd+Shift+T is not mapped")
   press(screen, "<D-S-t>")
@@ -351,9 +351,8 @@ lib.test("tests pane: Cmd+Shift+T opens it with the focus, focuses it from elsew
     return layout(screen).focused
   end, "the open pane was not focused")
   press(screen, "<D-S-t>")
-  h.wait(screen, function()
-    return layout(screen).summary == 0
-  end, "the focused pane was not closed")
+  vim.wait(300)
+  lib.eq(1, layout(screen).summary, "Cmd+Shift+T closed the pane")
   screen:close()
 end)
 

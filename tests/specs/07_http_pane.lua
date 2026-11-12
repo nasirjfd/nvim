@@ -282,16 +282,20 @@ lib.test("http pane: replaces the file explorer, and cmd+b toggles it afterwards
   screen:close()
 end)
 
-lib.test("http pane: <leader>h focuses an open pane and closes it when it has the focus", function()
+lib.test("http pane: <leader>h focuses an open pane and never closes it", function()
   local screen = open_pane(project())
-  screen:input("<Space>h") -- the pane has the focus: close
+  screen:input("<Space>h") -- the pane has the focus: it stays open
+  vim.wait(300)
+  lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "<leader>h closed the pane")
+  screen:input("<C-w>l")
+  screen:input("<Space>h")
   h.wait(screen, function()
-    return screen:exec("return #require('modules.http_requests').panes()") == 0
-  end, "<leader>h did not close the pane")
+    return screen:exec("return vim.api.nvim_get_current_win() == require('modules.http_requests').panes()[1].list.win.win")
+  end, "<leader>h did not put the cursor in the pane")
   screen:close()
 end)
 
-lib.test("http pane: Cmd+Shift+H opens the pane over the Explorer and closes it again", function()
+lib.test("http pane: Cmd+Shift+H opens the pane over the Explorer and keeps it open", function()
   local screen = h.nvim(project())
   h.wait(screen, function()
     return screen:exec("return package.loaded['kulala'] ~= nil")
@@ -306,10 +310,9 @@ lib.test("http pane: Cmd+Shift+H opens the pane over the Explorer and closes it 
       and screen:exec("return #Snacks.picker.get({ source = 'explorer' })") == 0
       and screen:exec("return vim.o.cmdheight") == 1
   end, "Cmd+Shift+H did not replace the explorer with the pane")
-  screen:input("<D-S-h>") -- the pane has the focus: close
-  h.wait(screen, function()
-    return screen:exec("return #require('modules.http_requests').panes()") == 0
-  end, "Cmd+Shift+H did not close the pane")
+  screen:input("<D-S-h>") -- the pane has the focus: it stays
+  vim.wait(300)
+  lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "Cmd+Shift+H closed the pane")
   screen:close()
 end)
 

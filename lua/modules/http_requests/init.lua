@@ -608,19 +608,11 @@ local function open()
   })
 end
 
---- <leader>h: show the pane; focus it when it is open elsewhere; close it when it has the focus.
+--- <leader>h: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
 function M.toggle()
   local panes = M.panes()
   if #panes > 0 then
-    local current = api.nvim_get_current_win()
-    for _, picker in ipairs(panes) do
-      local win = picker.list.win.win
-      if win == current then
-        picker:close()
-      else
-        picker:focus("list")
-      end
-    end
+    panes[1]:focus("list")
     return
   end
   if vim.fn.executable("fd") == 0 then
