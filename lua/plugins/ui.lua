@@ -2,6 +2,13 @@
 return {
   { "nvim-tree/nvim-web-devicons", lazy = true },
 
+  -- A scrollbar thumb shows the current viewport's position in the buffer.
+  {
+    "petertriho/nvim-scrollbar",
+    event = "BufReadPost",
+    opts = {},
+  },
+
   -- ════════════════════════════════════════════════════════════════════════════
   -- Todo Comments (highlight TODO/FIXME/NOTE, matches wayou.vscode-todo-highlight)
   -- ════════════════════════════════════════════════════════════════════════════

@@ -20,3 +20,19 @@ lib.test("an .http file is highlighted by tree-sitter on first open", function()
   end, "tree-sitter never started on the .http buffer")
   screen:close()
 end)
+
+lib.test("a file gets a scrollbar handle showing the current viewport", function()
+  local dir = h.tmpdir()
+  local lines = {}
+  for i = 1, 100 do
+    lines[i] = "line " .. i
+  end
+  h.write(dir .. "/long.txt", lines)
+  local screen = h.nvim(dir)
+  screen:exec("vim.cmd('edit long.txt')")
+  h.wait(screen, function()
+    return screen:exec([[local ns = vim.api.nvim_get_namespaces().Scrollbar
+      return ns ~= nil and #vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}) > 0]])
+  end, "scrollbar handle did not render for a long file")
+  screen:close()
+end)
