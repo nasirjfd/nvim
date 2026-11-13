@@ -1,13 +1,27 @@
 local lib = require("lib")
 local h = require("support")
 
-local function open_symbols(dir, files)
+local function open_symbols(dir, files, blank)
   local screen = h.nvim(dir)
   screen:exec([[
-    local dir, files = ...
+    local dir, files, blank = ...
     vim.cmd('edit ' .. vim.fn.fnameescape(dir .. '/' .. files[1]))
+    if blank then
+      vim.cmd('enew')
+      local function client(id, root)
+        return { id = id, root_dir = root, offset_encoding = 'utf-16',
+          supports_method = function(_, method) return method == 'workspace/symbol' end }
+      end
+      require('core.symbol-files').clients = function()
+        return { client(1, dir), client(2, dir .. '-unrelated') }
+      end
+    end
     -- A deterministic LSP response, through the real Snacks symbol conversion and picker.
-    require('snacks.picker.source.lsp').request = function(_, _, params, cb)
+    require('snacks.picker.source.lsp').request = function(target, _, params, cb)
+      if blank then
+        assert(type(target) == 'table' and target.id == 1, 'must query only the current workspace server')
+        _G.workspace_server_queried = true
+      end
       local results = {}
       for i, file in ipairs(files) do
         results[#results + 1] = {
@@ -19,7 +33,7 @@ local function open_symbols(dir, files)
       end
       cb({ offset_encoding = 'utf-16' }, results, params())
     end
-  ]], { dir, files })
+  ]], { dir, files, blank or false })
   screen:input("<Space>lS")
   h.wait(screen, function()
     return screen:exec("return #Snacks.picker.get({ source = 'lsp_workspace_symbols' }) == 1")
@@ -80,5 +94,19 @@ lib.test("workspace symbols: local .ignore overrides a parent's vendor ignore ju
   expect(screen, { "Symbol1" })
   screen:input("<A-i>")
   expect(screen, { "Symbol1", "Symbol2" })
+  screen:close()
+end)
+
+lib.test("workspace symbols: searching from a blank buffer uses the running project server", function()
+  local dir = h.repo({
+    [".gitignore"] = { "ignored/" },
+    ["normal.lua"] = { "function normal() end" },
+    ["ignored/PaymentService.lua"] = { "function PaymentService() end" },
+  })
+  local screen = open_symbols(dir, { "normal.lua", "ignored/PaymentService.lua" }, true)
+  expect(screen, { "Symbol1" })
+  screen:input("<A-i>")
+  expect(screen, { "Symbol1", "Symbol2" })
+  lib.ok(screen:exec("return _G.workspace_server_queried"), "the running project server was not queried")
   screen:close()
 end)

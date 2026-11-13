@@ -12,7 +12,7 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 
 ## Commands
 
-- Related-repository and real-project testing rules are in `AGENTS.md` under **Related projects and real-project testing** and apply here too: Git-pane source is `~/Can/Develop/nvim/multi-repo-code-diff`, not Lazy's installed copy. Push fork changes, update the installed plugin through Lazy, verify/test it, then commit and push the config lockfile. In testing/performance requests, "the project" means `~/Can/Develop/supernova-env-dev/vendor`; test there as well when the user requests it or reports a problem there, not routinely for every change. Locate equivalent checkouts on other machines rather than assuming the same absolute paths.
+- Related-repository and real-project testing rules are in `AGENTS.md` under **Related projects and real-project testing** and apply here too: Git-pane source is `~/Can/Develop/nvim/multi-repo-code-diff`, not Lazy's installed copy. Push fork changes, update the installed plugin through Lazy, verify/test it, then commit and push the config lockfile. In testing/performance requests, "the project" means `~/Can/Develop/php/supernova-env-dev/vendor`; test there as well when the user requests it or reports a problem there, not routinely for every change. Locate equivalent checkouts on other machines rather than assuming the same absolute paths.
 
 - Validate config loads without errors: `nvim --headless -u ./init.lua '+qa'`
   - This may bootstrap lazy.nvim, install/update plugins, and touch the network (see Startup side effects).
