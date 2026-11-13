@@ -13,7 +13,7 @@ local panels = {}
 local explorer_pref = {}
 -- The sidebar opened last in each tab: "explorer", "codediff", "http" (HTTP Requests) or "tests".
 local last_sidebar = {}
-local request_id = {} -- per-tab generation: delayed directory opens must yield to explicit pane requests
+local request_id = {} -- per-tab generation: delayed directory opens yield to explicit pane/picker requests
 
 function M.request(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
@@ -307,6 +307,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
         else
           M.request()
         end
+      else
+        -- A search/recent-files popup is an explicit request too. A directory Explorer
+        -- still waiting for its initial Git scan must not replace it when that scan finishes.
+        M.request()
       end
       return pick(source, opts)
     end

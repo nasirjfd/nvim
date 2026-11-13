@@ -264,8 +264,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
             Snacks.bufdelete.delete(ev.buf)
             pending[ev.buf] = nil
             if picker then
+              local opened_generation = sidebars.generation(tab)
               vim.schedule(function()
-                if not picker.closed then
+                if not picker.closed and vim.api.nvim_get_current_tabpage() == tab
+                  and sidebars.generation(tab) == opened_generation then
                   picker:focus()
                 end
               end)

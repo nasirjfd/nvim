@@ -2,6 +2,48 @@
 local lib = require("lib")
 local h = require("support")
 
+for _, source in ipairs({ "grep", "recent" }) do
+  lib.test("startup explorer does not close an immediately opened " .. source .. " popup", function()
+    local dir = h.tmpdir()
+    h.write(dir .. "/sample.txt", { "something to find" })
+    local screen = h.nvim(dir, 160, 45, { ".", "-c", [[lua vim.api.nvim_create_autocmd('VimEnter', {
+      once = true,
+      callback = function()
+        local git = require('snacks.explorer.git')
+        local update = git.update
+        git.update = function() end
+        _G.explorer_git_ready = {}
+        vim.defer_fn(function()
+          git.update = update
+          _G.explorer_git_ready[vim.fs.normalize(vim.fn.getcwd())] = true
+          _G.startup_discovery_done = true
+        end, 700)
+      end,
+    })]] })
+    if source == "grep" then
+      screen:input("<Space>/")
+    else
+      screen:exec("vim.v.oldfiles = { ... }", { dir .. "/sample.txt" })
+      screen:exec("vim.fn.maparg('<D-e>', 'n', false, true).callback()")
+    end
+    h.wait(screen, function()
+      return screen:exec([[
+        _G.startup_popup = Snacks.picker.get({ source = ... })[1]
+        return _G.startup_popup ~= nil
+      ]], { source })
+    end, "popup did not open")
+    h.wait(screen, function()
+      return screen:exec("return _G.startup_discovery_done == true")
+    end, "directory discovery did not finish")
+    vim.wait(1000)
+    lib.ok(screen:exec([[
+      return not _G.startup_popup.closed and _G.startup_popup:is_focused()
+        and #Snacks.picker.get({ source = 'explorer' }) == 0
+    ]]), "late startup explorer closed or stole focus from the popup")
+    screen:close()
+  end)
+end
+
 lib.test("kulala is loaded at startup, so the first .http buffer (e.g. in a diff) gets its colours", function()
   local screen = h.nvim(h.tmpdir())
   h.wait(screen, function()
