@@ -44,8 +44,8 @@ function M.repo(files)
 end
 
 -- An embedded Neovim running this configuration in `cwd`, ready for input.
-function M.nvim(cwd, width, height)
-  local screen = Screen.new(width or 160, height or 45, cwd)
+function M.nvim(cwd, width, height, extra_args)
+  local screen = Screen.new(width or 160, height or 45, cwd, extra_args)
   open_screens[#open_screens + 1] = screen
   screen:await(function()
     return screen:exec("return vim.v.vim_did_enter == 1")

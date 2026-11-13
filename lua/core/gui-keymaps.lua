@@ -198,10 +198,10 @@ local function focus_git()
       end
       -- cmd+shift+e in the git tab swaps its sidebar for the file explorer: bring the git one back,
       -- since that is what this key is for.
+      require("core.sidebars").make_room_for_codediff(tab)
       local view = lifecycle.get_panel_view(tab)
       if view and view.is_hidden then
         -- the other sidebars go first, in the same tick, so they are never on screen together
-        require("core.sidebars").make_room_for_codediff(tab)
         require("codediff.ui.explorer").toggle_visibility(view)
       end
       if view and view.winid and vim.api.nvim_win_is_valid(view.winid) then

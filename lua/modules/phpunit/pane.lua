@@ -859,6 +859,19 @@ local function run_item(item)
 end
 
 local actions = {
+  tests_noop = function() end,
+  tests_show_search = function(picker)
+    picker:toggle("input", { enable = true, focus = true })
+  end,
+  tests_stop_search_insert = function()
+    vim.cmd("stopinsert")
+  end,
+  tests_clear_search = function(picker)
+    picker.input:set("", "")
+    picker:find()
+    picker:toggle("input", { enable = false })
+    picker:focus("list")
+  end,
   tests_confirm = function(picker, item)
     item = item or picker:current()
     if not item then
@@ -938,7 +951,7 @@ local actions = {
       " i               jump to code",
       " l / h           open / close",
       " e / E           expand / collapse all",
-      " q  Esc          close",
+      " q               close",
       " ?               this help",
     }
     Snacks.win({
@@ -1023,13 +1036,20 @@ local function open()
           ["x"] = "tests_stop",
           ["o"] = "tests_output",
           ["e"] = "tests_expand_all",
-          ["E"] = "tests_collapse_all",
-          ["?"] = "tests_help",
-          ["q"] = "close",
-          ["<Esc>"] = "close",
-        }),
-      },
-    },
+           ["E"] = "tests_collapse_all",
+           ["?"] = "tests_help",
+           ["/"] = "tests_show_search",
+           ["q"] = "close",
+           ["<Esc>"] = "tests_noop",
+         }),
+       },
+       input = {
+         keys = {
+           ["<Esc>"] = { "tests_stop_search_insert", mode = { "i" } },
+           ["<Esc>"] = { "tests_clear_search", mode = { "n" } },
+         },
+       },
+     },
   })
 end
 

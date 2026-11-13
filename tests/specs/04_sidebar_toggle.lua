@@ -23,6 +23,7 @@ lib.test("cmd+b keeps toggling the explorer after cmd+shift+e in a git tab, and 
   h.wait(screen, function()
     return explorer_open(screen)
   end, "cmd+shift+e did not open the explorer")
+  lib.ok(screen:exec("return require('core.sidebars').prefers_explorer(vim.api.nvim_get_current_tabpage())"), "Explorer preference was lost")
   local seen = {}
   for _ = 1, 4 do
     press(screen, "<D-b>")
@@ -77,5 +78,44 @@ lib.test("cmd+shift+g never shows the git pane and the explorer together, not ev
     return git > 0 and lists > 0
   ]])
   lib.ok(not both, "the explorer and the git pane were on screen together")
+  screen:close()
+end)
+
+lib.test("rapid Explorer Git switching never overlaps their windows in either direction", function()
+  local dir = h.repo({ ["a.txt"] = { "one", "two" } })
+  h.write(dir .. "/a.txt", { "one", "CHANGED" })
+  local screen = h.nvim(dir)
+  screen:exec("vim.cmd('edit a.txt'); vim.cmd('CodeDiff scm')")
+  h.wait(screen, function()
+    return screen:exec("local l = package.loaded['codediff.ui.lifecycle']; return l and l.get_panel_view(vim.api.nvim_get_current_tabpage()) ~= nil")
+  end, "Git pane did not open")
+  screen:exec([[
+    _G.sidebar_overlaps = 0
+    vim.api.nvim_create_autocmd('BufWinEnter', { callback = function()
+      local git, lists = 0, 0
+      for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+        git = git + (ft == 'codediff-explorer' and 1 or 0)
+        lists = lists + (ft == 'snacks_picker_list' and 1 or 0)
+      end
+      if git > 0 and lists > 0 then _G.sidebar_overlaps = _G.sidebar_overlaps + 1 end
+    end })
+  ]])
+  for i = 1, 60 do
+    local key = i % 2 == 1 and "<D-S-e>" or "<D-S-g>"
+    local both = screen:exec([[
+      vim.fn.maparg(..., 'n', false, true).callback()
+      local git, lists = 0, 0
+      for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+        git = git + (ft == 'codediff-explorer' and 1 or 0)
+        lists = lists + (ft == 'snacks_picker_list' and 1 or 0)
+      end
+      return git > 0 and lists > 0
+    ]], { key })
+    lib.ok(not both, "overlapping sidebars immediately after " .. key .. " on switch " .. i)
+    vim.wait(i % 3 == 0 and 1 or 10)
+  end
+  lib.eq(0, screen:exec("return _G.sidebar_overlaps"), "sidebars overlapped during window creation")
   screen:close()
 end)

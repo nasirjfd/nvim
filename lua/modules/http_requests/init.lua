@@ -5,7 +5,7 @@
 --   Ctrl+Enter / r  run the request (and go to it)
 --   a               add a request to the file under the cursor (a folder asks for a new file name)
 --   P               add the curl command in the clipboard as a request (a message when it is not valid)
---   R               list again                    q / Esc  close
+--   R               list again                    q  close
 --
 -- It is a Snacks picker source (sidebar layout) so the tree, the window and the mouse come for free; the
 -- parsing (parse.lua), the curl conversion (curl.lua) and the file edits (edit.lua) know nothing of it.
@@ -26,13 +26,18 @@ local uv = vim.uv
 local last_file -- the .http file last gone to from the pane
 local collapsed = {} -- item key -> true while folded
 local parsed = {} -- abs path -> { stamp, requests }
+local previewing_request = false
+local moving_from_pane = false
+local opening = {} -- tab -> true while its initial file scan is pending
 
 local function cwd()
   return uv.cwd() or vim.fn.getcwd()
 end
 
 -- ── highlights ──────────────────────────────────────────────────────────────────────────────────
+local hidden_highlights = {}
 local function set_highlights()
+  hidden_highlights = {}
   local function hl(name, opts)
     opts.default = true
     api.nvim_set_hl(0, name, opts)
@@ -56,6 +61,29 @@ local function set_highlights()
 end
 set_highlights()
 api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
+
+-- Hidden rows retain their semantic colors; fade them only 18% toward the pane background.
+local function hidden_highlight(group)
+  group = group or "Normal"
+  if hidden_highlights[group] then
+    return hidden_highlights[group]
+  end
+  local normal = api.nvim_get_hl(0, { name = "Normal", link = false })
+  local pane = api.nvim_get_hl(0, { name = "SnacksPickerList", link = false })
+  local opts = api.nvim_get_hl(0, { name = group, link = false })
+  local fg, bg = opts.fg or normal.fg or 0xc0c0c0, pane.bg or normal.bg or 0x202020
+  local color = 0
+  for _, shift in ipairs({ 16, 8, 0 }) do
+    local a = math.floor(fg / 2 ^ shift) % 256
+    local b = math.floor(bg / 2 ^ shift) % 256
+    color = color + math.floor(a * 0.82 + b * 0.18 + 0.5) * 2 ^ shift
+  end
+  opts.fg = color
+  local name = "HttpPaneHidden_" .. group:gsub("[^%w_]", "_")
+  api.nvim_set_hl(0, name, opts)
+  hidden_highlights[group] = name
+  return name
+end
 
 -- ── the data ────────────────────────────────────────────────────────────────────────────────────
 -- the requests of a file: from its buffer when it is loaded (unsaved edits count), else from disk
@@ -113,6 +141,31 @@ local function rows()
   local toolbar = { text = "Toolbar", kind = "button", toolbar = true, hidden_count = 0, showing = hidden.showing(), key = "h:toolbar" }
   local items = { toolbar }
   local hidden_set = hidden.set(dir)
+  local hidden_files = hidden.set(dir, "files")
+  local hidden_requests = hidden.set(dir, "requests")
+  toolbar.hidden_count = vim.tbl_count(hidden_set) + vim.tbl_count(hidden_files) + vim.tbl_count(hidden_requests)
+
+  local function request_hidden(rel, req)
+    return hidden_requests[hidden.request_key(rel, req)] == true
+  end
+
+  local function file_hidden(rel)
+    if hidden_files[rel] then
+      return true
+    end
+    local parent = vim.fs.dirname(rel)
+    while parent and parent ~= "." and parent ~= "" do
+      if hidden_set[parent] then
+        return true
+      end
+      local next_parent = vim.fs.dirname(parent)
+      if next_parent == parent then
+        break
+      end
+      parent = next_parent
+    end
+    return false
+  end
 
   local pins = pinned.list(dir)
   local pin_header
@@ -150,14 +203,27 @@ local function rows()
     for _, file in ipairs(node.files) do
       entries[#entries + 1] = { kind = "file", file = file }
     end
+    -- Keep hidden-marked folders below normal siblings even while "show hidden" reveals them.
+    -- Preserve the existing directory/file and alphabetical ordering within each group.
+    for index, entry in ipairs(entries) do
+      entry.order = index
+      entry.hidden = entry.kind == "dir" and hidden_set[entry.node.path] == true
+        or entry.kind == "file" and hidden_files[entry.file.rel] == true
+    end
+    table.sort(entries, function(a, b)
+      if a.hidden ~= b.hidden then
+        return not a.hidden
+      end
+      return a.order < b.order
+    end)
+    entries = vim.tbl_filter(function(entry)
+      return not entry.hidden or toolbar.showing
+    end, entries)
     for i, entry in ipairs(entries) do
       local last = i == #entries
       if entry.kind == "dir" then
         local key = "d:" .. entry.node.path
         local is_hidden = hidden_set[entry.node.path] == true
-        if is_hidden then
-          toolbar.hidden_count = toolbar.hidden_count + 1
-        end
         if not is_hidden or toolbar.showing then
           local item = {
             text = entry.label, kind = "dir", key = key, parent = parent, last = last,
@@ -172,18 +238,34 @@ local function rows()
       else
         local abs = dir .. "/" .. entry.file.rel
         local requests = requests_of(abs, loaded) -- a pinned request stays here too (and is marked)
+        local visible = {}
+        for index, req in ipairs(requests) do
+          local is_hidden = request_hidden(entry.file.rel, req)
+          if not is_hidden or toolbar.showing then
+            visible[#visible + 1] = { req = req, hidden = is_hidden, order = index }
+          end
+        end
+        table.sort(visible, function(a, b)
+          if a.hidden ~= b.hidden then
+            return not a.hidden
+          end
+          return a.order < b.order
+        end)
         local key = "f:" .. entry.file.rel
         local item = {
           text = entry.file.name, kind = "file", key = key, parent = parent, last = last, file = abs,
-          open = not collapsed[key], count = #requests, dim = dim,
+          open = not collapsed[key], count = #visible, dim = dim or entry.hidden,
+          rel = entry.file.rel, hidden = entry.hidden,
         }
         items[#items + 1] = item
         if item.open then
-          for j, req in ipairs(requests) do
+          for j, request in ipairs(visible) do
+            local req = request.req
             items[#items + 1] = {
               text = req.name .. " " .. req.method .. " " .. req.url, kind = "request", file = abs, req = req,
-              parent = item, last = j == #requests, key = "r:" .. entry.file.rel .. ":" .. req.line,
-              rel = entry.file.rel, dim = dim, pinned = pinned.is_pinned(dir, entry.file.rel, req),
+              parent = item, last = j == #visible, key = "r:" .. entry.file.rel .. ":" .. req.line,
+              rel = entry.file.rel, dim = item.dim or request.hidden, hidden = request.hidden,
+              pinned = pinned.is_pinned(dir, entry.file.rel, req),
             }
           end
         end
@@ -192,28 +274,34 @@ local function rows()
   end
   -- the pinned requests (looked up in their files; one that is gone is left out)
   if pin_header then
-    local count = 0
+    local pin_rows = {}
     for _, pin in ipairs(pins) do
       local abs = dir .. "/" .. pin.file
       for _, req in ipairs(requests_of(abs, loaded)) do
         if req.method == pin.method and req.url == pin.url and req.name == pin.name then
-          count = count + 1
-          if pin_header.open then
-            items[#items + 1] = {
+          local is_hidden = file_hidden(pin.file) or request_hidden(pin.file, req)
+          if not is_hidden or toolbar.showing then
+            pin_rows[#pin_rows + 1] = {
               text = req.name .. " " .. req.method .. " " .. req.url, kind = "request", file = abs, req = req,
               parent = pin_header, last = false, key = "p:" .. pin.file .. ":" .. req.line, rel = pin.file,
-              in_pins = true,
+              in_pins = true, dim = is_hidden, hidden = request_hidden(pin.file, req), order = #pin_rows + 1,
             }
           end
           break
         end
       end
     end
-    pin_header.count = count
+    table.sort(pin_rows, function(a, b)
+      if a.dim ~= b.dim then
+        return not a.dim
+      end
+      return a.order < b.order
+    end)
+    pin_header.count = #pin_rows
     if pin_header.open then
-      local last = items[#items]
-      if last.in_pins then
-        last.last = true
+      for index, item in ipairs(pin_rows) do
+        item.last = index == #pin_rows
+        items[#items + 1] = item
       end
     end
   end
@@ -270,7 +358,7 @@ local function format(item, picker)
   vim.list_extend(ret, Snacks.picker.format.tree(item, picker))
   local icons = picker.opts.icons.files
   if item.kind == "dir" then
-    ret[#ret + 1] = { (item.open and icons.dir_open or icons.dir) .. " ", item.dim and "HttpPaneHiddenDir" or "SnacksPickerDirectory" }
+    ret[#ret + 1] = { (item.open and icons.dir_open or icons.dir) .. " ", item.dim and hidden_highlight("SnacksPickerDirectory") or "SnacksPickerDirectory" }
     -- a long chain of folders ("a/b/c/d") keeps its end, where the folder that matters is
     local label, room = item.text, 36
     local depth = 0
@@ -282,21 +370,22 @@ local function format(item, picker)
     if vim.fn.strchars(label) > room then
       label = "…" .. vim.fn.strcharpart(label, vim.fn.strchars(label) - room + 1)
     end
-    ret[#ret + 1] = { label, item.dim and "HttpPaneHiddenDir" or "SnacksPickerDirectory" }
+    ret[#ret + 1] = { label, item.dim and hidden_highlight("SnacksPickerDirectory") or "SnacksPickerDirectory" }
     if item.hidden then
       ret[#ret + 1] = { "  󰈉", "HttpPaneIconHidden" }
     end
   elseif item.kind == "file" then
     local icon, hl = Snacks.util.icon(item.text, "file")
-    ret[#ret + 1] = { (icon or "") .. " ", item.dim and "HttpPaneDim" or hl }
-    ret[#ret + 1] = { item.text, item.dim and "HttpPaneDim" or "SnacksPickerFile" }
+    ret[#ret + 1] = { (icon or "") .. " ", item.dim and hidden_highlight(hl) or hl }
+    ret[#ret + 1] = { item.text, item.dim and hidden_highlight("SnacksPickerFile") or "SnacksPickerFile" }
     ret[#ret + 1] = { "  " .. item.count, "HttpPaneCount" }
   else
     local method = item.req.method
-    local group = item.dim and "HttpPaneDim" or "HttpPane" .. (vim.fn.hlexists("HttpPane" .. method) == 1 and method or "Other")
+    local group = "HttpPane" .. (vim.fn.hlexists("HttpPane" .. method) == 1 and method or "Other")
+    group = item.dim and hidden_highlight(group) or group
     ret[#ret + 1] = { " " .. method .. " ", group }
     -- only the name; a request without one is known by its URL
-    ret[#ret + 1] = { item.req.name == method .. " " .. item.req.url and item.req.url or item.req.name, item.dim and "HttpPaneDim" or nil }
+    ret[#ret + 1] = { item.req.name == method .. " " .. item.req.url and item.req.url or item.req.name, item.dim and hidden_highlight("Normal") or nil }
     if item.in_pins then
       ret[#ret + 1] = { "  " .. vim.fn.fnamemodify(item.rel, ":t"), "HttpPaneCount" }
     elseif item.pinned then
@@ -318,11 +407,43 @@ end
 -- go to `line` of `file` in the editing window (never over a diff)
 local function goto_line(picker, file, line)
   last_file = vim.fs.normalize(file)
-  return kit.goto_line(picker, file, line)
+  moving_from_pane = true
+  local ok = kit.goto_line(picker, file, line)
+  if ok then
+    require("core.http-highlight").ensure(api.nvim_get_current_buf())
+  end
+  moving_from_pane = false
+  return ok
 end
 
--- run the request under the cursor of the current buffer the way <CR> does in an .http file
--- (ftplugin/http.lua: Kulala with the progress spinner)
+-- Reveal a request in the editing window without taking focus from the pane.
+local function preview_line(picker, file, line)
+  local win = kit.editing_window(picker)
+  if not (win and api.nvim_win_is_valid(win)) then
+    return
+  end
+  local previous = api.nvim_get_current_win()
+  previewing_request = true
+  api.nvim_win_call(win, function()
+    if vim.fs.normalize(api.nvim_buf_get_name(0)) ~= vim.fs.normalize(file) then
+      vim.cmd("edit " .. vim.fn.fnameescape(file))
+    end
+    require("core.http-highlight").ensure(api.nvim_get_current_buf())
+    -- `nvim_win_call()` can load a buffer without running its ftplugin; make sure the request runner
+    -- and the file-local HTTP keys are available before this becomes the active editing buffer.
+    if vim.bo.filetype == "http" and not vim.fn.maparg("<CR>", "n", false, true).callback then
+      vim.cmd("runtime! ftplugin/http.lua")
+    end
+    api.nvim_win_set_cursor(0, { math.min(line, api.nvim_buf_line_count(0)), 0 })
+    vim.cmd("normal! zz")
+  end)
+  previewing_request = false
+  if api.nvim_win_is_valid(previous) then
+    api.nvim_set_current_win(previous)
+  end
+end
+
+-- Run the request under the cursor the same way <CR> in an .http file does (with its progress spinner).
 local function run_here()
   local map = vim.fn.maparg("<CR>", "n", false, true)
   if map.callback then
@@ -438,7 +559,47 @@ local function add_from_curl(picker, item)
   end)
 end
 
+local function request_at_cursor()
+  local file = vim.fs.normalize(api.nvim_buf_get_name(0))
+  local root = vim.fs.normalize(cwd())
+  local rel = vim.fs.relpath(root, file)
+  if not rel or rel == ".." or rel:sub(1, 3) == "../" or not is_http(file) then
+    return
+  end
+  local line = api.nvim_win_get_cursor(0)[1]
+  for _, req in ipairs(parse.parse(api.nvim_buf_get_lines(0, 0, -1, false))) do
+    if line >= req.start_line and line <= req.end_line then
+      return root, rel, req
+    end
+  end
+end
+
+-- Pin the request containing the cursor in the current .http / .rest buffer.
+function M.pin_at_cursor()
+  local root, rel, req = request_at_cursor()
+  if not root then
+    vim.notify("The current .http file is outside the project", vim.log.levels.WARN, { title = "HTTP Requests" })
+    return
+  end
+  if req then
+    pinned.toggle(root, rel, req)
+    refresh_all()
+  else
+    vim.notify("No request under the cursor", vim.log.levels.WARN, { title = "HTTP Requests" })
+  end
+end
+
+local preview_current
 local actions = {
+  http_noop = function() end,
+  http_down = function(picker)
+    picker.list:move(1)
+    preview_current(picker)
+  end,
+  http_up = function(picker)
+    picker.list:move(-1)
+    preview_current(picker)
+  end,
   -- Enter, double click, single click on a row
   http_confirm = function(picker, item)
     item = item or picker:current()
@@ -502,17 +663,35 @@ local actions = {
       picker:action("http_confirm")
     end)
   end,
-  -- hide the folder under the cursor (or show it again when it is hidden); kept between sessions
+  -- Hide/unhide the folder, file or request under the cursor; kept between sessions.
   http_hide = function(picker, item)
     item = item or picker:current()
     if item and item.kind == "dir" and item.relpath then
       hidden.toggle(cwd(), item.relpath)
-      refresh(picker)
+    elseif item and item.kind == "file" and item.rel then
+      hidden.toggle(cwd(), item.rel, "files")
+    elseif item and item.kind == "request" and item.rel then
+      hidden.toggle(cwd(), hidden.request_key(item.rel, item.req), "requests")
+    else
+      return
     end
+    refresh_all()
   end,
   -- pin the request under the cursor to the top of the pane (or unpin it)
   http_pin = function(picker, item)
     item = item or picker:current()
+    -- While the search input has focus, Snacks keeps `current()` on the row that was selected before
+    -- filtering. Pin the first visible request instead (normally the search result the user sees).
+    if picker.input and picker.input.filter
+      and (picker.input.filter.pattern ~= "" or picker.input.filter.search ~= "") then
+      for index = 1, picker.list:count() do
+        local candidate = picker.list:get(index)
+        if candidate and candidate.kind == "request" then
+          item = candidate
+          break
+        end
+      end
+    end
     if item and item.kind == "request" and item.rel then
       pinned.toggle(cwd(), item.rel, item.req)
       refresh(picker)
@@ -528,11 +707,11 @@ local actions = {
       " a               new request",
       " P               request from clipboard curl",
       " p               pin / unpin request",
-      " x               hide / unhide folder",
+      " x               hide / unhide item",
       " H               show hidden folders",
       " l / h           open / close",
       " R               refresh",
-      " q  Esc          close",
+      " q               close",
       " ?               this help",
     }
     Snacks.win({
@@ -551,6 +730,34 @@ local actions = {
     hidden.toggle_show()
     refresh(picker, "h:toolbar")
   end,
+  -- / shows the search input; Esc only leaves insert mode, keeping the filtered results visible.
+  http_show_search = function(picker)
+    picker:toggle("input", { enable = true, focus = true })
+    vim.schedule(function()
+      if not picker.closed then
+        vim.keymap.set("n", "p", function()
+          vim.schedule(function()
+            if not picker.closed then
+              local item = picker.list:get(1)
+              if item and item.kind == "request" and item.rel then
+                pinned.toggle(cwd(), item.rel, item.req)
+              end
+            end
+          end)
+        end, { buffer = picker.input.win.buf, silent = true, desc = "Pin filtered HTTP request" })
+      end
+    end)
+  end,
+  http_stop_search_insert = function()
+    vim.cmd("stopinsert")
+  end,
+  -- A second Esc, now in normal mode, clears the search and restores the full list.
+  http_clear_search = function(picker)
+    picker.input:set("", "")
+    picker:find()
+    picker:toggle("input", { enable = false })
+    picker:focus("list")
+  end,
 }
 
 -- ── the pane ────────────────────────────────────────────────────────────────────────────────────
@@ -564,6 +771,71 @@ end
 --- The open panes of a tab (the current one by default).
 function M.panes(tab)
   return kit.panes(SOURCE, tab)
+end
+
+local pane_request = setmetatable({}, { __mode = "k" })
+
+-- Moving through request rows previews the request in the editing window, but leaves focus in the pane.
+preview_current = function(picker)
+  local item = picker:current()
+  if not item or item.kind ~= "request" then
+    pane_request[picker] = nil
+    return
+  end
+  local key = item.file .. ":" .. item.req.line
+  if pane_request[picker] == key then
+    local win = picker.main
+    if win and api.nvim_win_is_valid(win) then
+      require("core.http-highlight").ensure(api.nvim_win_get_buf(win))
+    end
+    return
+  end
+  pane_request[picker] = key
+  preview_line(picker, item.file, item.req.line)
+end
+
+local buffer_request = {}
+
+local function select_request(picker, file, line)
+  file = vim.fs.normalize(file)
+  for index, item in ipairs(picker:items()) do
+    if item.kind == "request" and vim.fs.normalize(item.file) == file and item.req.line == line then
+      picker.list:move(index, true)
+      return true
+    end
+  end
+  return false
+end
+
+-- Keep an open HTTP pane on the request that contains the cursor in an .http / .rest file.
+local function follow_editor_cursor()
+  local buf = api.nvim_get_current_buf()
+  local root, rel, req = request_at_cursor()
+  if not root or not req then
+    buffer_request[buf] = nil
+    return
+  end
+  local key = rel .. ":" .. req.line
+  if buffer_request[buf] == key then
+    return
+  end
+  buffer_request[buf] = key
+  for _, picker in ipairs(M.panes()) do
+    local row_key = "r:" .. key
+    local found = select_request(picker, root .. "/" .. rel, req.line)
+    if not found then
+      -- Reveal a request whose folders or file are folded, then select it once Snacks has rebuilt the tree.
+      collapsed["f:" .. rel] = nil
+      local path = ""
+      for _, part in ipairs(vim.split(vim.fs.dirname(rel), "/", { plain = true })) do
+        if part ~= "." and part ~= "" then
+          path = path == "" and part or path .. "/" .. part
+          collapsed["d:" .. path] = nil
+        end
+      end
+      refresh(picker, row_key)
+    end
+  end
 end
 
 local function open()
@@ -584,11 +856,24 @@ local function open()
     sort = { fields = { "idx" } },
     confirm = "http_confirm",
     actions = actions,
-    on_show = set_title,
+    on_show = function(picker)
+      set_title(picker)
+      -- Snacks owns its list cursor, so subscribe through its window helper after its own cursor
+      -- handler has been registered. A global CursorMoved autocmd runs too early to see the new row.
+      picker.list.win:on("CursorMoved", function()
+        if not picker.closed then
+          preview_current(picker)
+        end
+      end, { buf = true })
+    end,
     win = {
       list = {
         keys = vim.tbl_extend("error", kit.mouse_keys("http_press", "http_click"), {
           ["<CR>"] = "http_confirm",
+          ["j"] = "http_down",
+          ["k"] = "http_up",
+          ["<Down>"] = "http_down",
+          ["<Up>"] = "http_up",
           ["l"] = "http_open",
           ["h"] = "http_close",
           ["<C-CR>"] = "http_run",
@@ -600,19 +885,37 @@ local function open()
           ["P"] = "http_curl",
           ["R"] = "http_refresh",
           ["?"] = "http_help",
+          ["/"] = "http_show_search",
           ["q"] = "close",
-          ["<Esc>"] = "close",
+          ["<Esc>"] = "http_noop",
         }),
       },
-    },
+      input = {
+        keys = {
+          ["<Esc>"] = { "http_stop_search_insert", mode = { "i" } },
+          ["<Esc>"] = { "http_clear_search", mode = { "n" } },
+          ["p"] = { "http_pin", mode = { "n" } },
+        },
+      },
+     },
   })
 end
 
 --- <leader>h: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
 function M.toggle()
+  local tab = api.nvim_get_current_tabpage()
+  if opening[tab] then
+    return
+  end
+  local generation = require("core.sidebars").request(tab)
   local panes = M.panes()
   if #panes > 0 then
+    local buf = api.nvim_get_current_buf()
     panes[1]:focus("list")
+    if is_http(api.nvim_buf_get_name(buf)) then
+      buffer_request[buf] = nil
+      follow_editor_cursor()
+    end
     return
   end
   if vim.fn.executable("fd") == 0 then
@@ -629,7 +932,16 @@ function M.toggle()
       end
     end)
   else
-    files.scan(dir, open) -- never listed: list it first (a few tens of ms)
+    opening[tab] = true
+    files.scan(dir, function()
+      opening[tab] = nil
+      if api.nvim_tabpage_is_valid(tab) and api.nvim_get_current_tabpage() == tab
+        and require("core.sidebars").generation(tab) == generation then
+        if #M.panes(tab) == 0 then
+          open()
+        end
+      end
+    end) -- never listed: list it first (a few tens of ms)
   end
 end
 
@@ -664,6 +976,14 @@ api.nvim_create_autocmd({ "BufWritePost", "TextChanged", "TextChangedI", "BufDel
     local name = args.event == "DirChanged" and ".http" or (args.file or "")
     if name:find("%.http$") or name:find("%.rest$") then
       refresh_soon()
+    end
+  end,
+})
+api.nvim_create_autocmd("CursorMoved", {
+  group = group,
+  callback = function(args)
+    if not previewing_request and not moving_from_pane and is_http(api.nvim_buf_get_name(args.buf)) then
+      follow_editor_cursor()
     end
   end,
 })

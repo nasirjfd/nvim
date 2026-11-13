@@ -65,13 +65,13 @@ function Screen:_redraw(events)
   end
 end
 
-function Screen.new(width, height, cwd)
+function Screen.new(width, height, cwd, extra_args)
   local self = setmetatable({ next_id = 0, responses = {}, grid = {}, highlights = {}, flushes = 0, stderr = "" }, Screen)
   self.stdin, self.stdout, self.errpipe = uv.new_pipe(false), uv.new_pipe(false), uv.new_pipe(false)
   local err
   self.process, err = uv.spawn(vim.v.progpath, {
     -- the real configuration, in a Neovim whose screen we can read
-    args = { "--embed", "-u", vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h") .. "/init.lua", "-i", "NONE" },
+    args = vim.list_extend({ "--embed", "-u", vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h") .. "/init.lua", "-i", "NONE" }, extra_args or {}),
     cwd = cwd or vim.fn.getcwd(),
     env = (function()
       local env = { "NVIM_CONFIG_TESTS=1" }

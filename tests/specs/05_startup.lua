@@ -21,6 +21,43 @@ lib.test("an .http file is highlighted by tree-sitter on first open", function()
   screen:close()
 end)
 
+lib.test("HTTP highlighting recovers after attachment failed, without reopening Neovim", function()
+  local dir = h.tmpdir()
+  h.write(dir .. "/r.http", { "POST https://example.com/api", "Content-Type: application/json", "", '{"id":1}' })
+  local screen = h.nvim(dir)
+  screen:exec([[
+    vim.cmd('edit r.http')
+    vim.treesitter.stop(0)
+    _G.real_ts_start = vim.treesitter.start
+    _G.ts_attempts = 0
+    vim.treesitter.start = function(...)
+      _G.ts_attempts = _G.ts_attempts + 1
+      if _G.ts_attempts <= 3 then error('parser not ready yet') end
+      return _G.real_ts_start(...)
+    end
+    require('core.http-highlight').ensure(0)
+  ]])
+  h.wait(screen, function()
+    return screen:exec("return _G.ts_attempts >= 4 and vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil")
+  end, "HTTP highlighting did not recover from delayed parser availability")
+  screen:close()
+end)
+
+lib.test("HTTP highlighting reattaches on buffer display after being stopped", function()
+  local dir = h.tmpdir()
+  h.write(dir .. "/r.http", { "GET https://example.com/api" })
+  local screen = h.nvim(dir)
+  screen:exec([[
+    vim.cmd('edit r.http')
+    vim.treesitter.stop(0)
+    vim.cmd('doautocmd BufWinEnter')
+  ]])
+  h.wait(screen, function()
+    return screen:exec("return vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil")
+  end, "HTTP highlighting did not restart on display")
+  screen:close()
+end)
+
 lib.test("a file gets a scrollbar handle showing the current viewport", function()
   local dir = h.tmpdir()
   local lines = {}

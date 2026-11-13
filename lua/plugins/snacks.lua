@@ -186,6 +186,9 @@ vim.api.nvim_create_autocmd({ "VimEnter", "DirChanged" }, {
           explorer._waits_for_git = true
           local open = explorer.open
           explorer.open = function(opts)
+            local sidebars = require("core.sidebars")
+            local tab = vim.api.nvim_get_current_tabpage()
+            local generation = sidebars.generation(tab)
             local cwd = vim.fs.normalize((opts and opts.cwd) or vim.fn.getcwd())
             _G.explorer_git_ready = _G.explorer_git_ready or {}
             if not _G.explorer_git_ready[cwd] then
@@ -193,6 +196,11 @@ vim.api.nvim_create_autocmd({ "VimEnter", "DirChanged" }, {
               vim.wait(1500, function()
                 return _G.explorer_git_ready[cwd] == true
               end, 10)
+            end
+            -- vim.wait processes input: a newer sidebar request during git discovery wins.
+            if not vim.api.nvim_tabpage_is_valid(tab) or vim.api.nvim_get_current_tabpage() ~= tab
+              or sidebars.generation(tab) ~= generation then
+              return
             end
             return open(opts)
           end
@@ -212,8 +220,16 @@ vim.api.nvim_create_autocmd("VimEnter", {
     vim.schedule(function()
       pcall(vim.api.nvim_del_augroup_by_name, "FileExplorer") -- netrw
       local group = vim.api.nvim_create_augroup("ExplorerOpenDirectory", { clear = true })
+      local pending = {} -- directory buffer -> true; BufEnter can fire again while git status is pending
       local function handle(ev)
         if ev.file ~= "" and vim.fn.isdirectory(ev.file) == 1 then
+          if pending[ev.buf] then
+            return
+          end
+          pending[ev.buf] = true
+          local tab = vim.api.nvim_get_current_tabpage()
+          local sidebars = require("core.sidebars")
+          local generation = ev.startup and 0 or sidebars.generation(tab)
           -- The open patch above is installed one tick after this handler on startup, so wait for the
           -- git status here too -- without blocking: a blocking wait lets UIEnter run in the middle of
           -- startup (E823 "Not an undo file: .../undo/." for the directory buffer).
@@ -221,9 +237,19 @@ vim.api.nvim_create_autocmd("VimEnter", {
           _G.explorer_git_ready = _G.explorer_git_ready or {}
           local function open()
             if not vim.api.nvim_buf_is_valid(ev.buf) then
+              pending[ev.buf] = nil
               return
             end
-            local picker = Snacks.explorer.open({ cwd = ev.file })
+            -- The user may have requested another sidebar while directory/git discovery was pending.
+            -- Dispose of the directory buffer, but never let the stale startup request steal focus.
+            local cancelled = not vim.api.nvim_tabpage_is_valid(tab)
+              or vim.api.nvim_get_current_tabpage() ~= tab
+              or sidebars.generation(tab) ~= generation
+              or #require("modules.http_requests").panes(tab) > 0
+            local picker
+            if not cancelled then
+              picker = Snacks.explorer.open({ cwd = ev.file })
+            end
             -- The directory buffer must never be (re)loaded: with 'undofile' that tries to read an
             -- undo file named after the directory (E823 "Not an undo file: .../undo/." in UIEnter).
             pcall(function()
@@ -231,6 +257,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
               vim.api.nvim_buf_set_name(ev.buf, "")
             end)
             Snacks.bufdelete.delete(ev.buf)
+            pending[ev.buf] = nil
             if picker then
               vim.schedule(function()
                 if not picker.closed then
@@ -260,7 +287,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
       for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         local name = vim.api.nvim_buf_get_name(buf)
         if name ~= "" and vim.fn.isdirectory(name) == 1 then
-          handle({ file = name, buf = buf })
+          handle({ file = name, buf = buf, startup = true })
           break
         end
       end
@@ -542,19 +569,23 @@ return {
             end,
             -- Esc in the search box: clear it, hide it, back to the list
             hide_search = function(picker)
-              vim.cmd("stopinsert")
               picker.input:set("", "")
               picker:find()
               picker:toggle("input", { enable = false })
               explorer_title(picker, true)
               picker:focus("list")
             end,
+            explorer_stop_search_insert = function()
+              vim.cmd("stopinsert")
+            end,
+            explorer_noop = function() end,
           },
           win = {
             input = {
               keys = {
                 ["<CR>"] = { "search_confirm", mode = { "n", "i" } },
-                ["<Esc>"] = { "hide_search", mode = { "n", "i" } },
+                ["<Esc>"] = { "explorer_stop_search_insert", mode = { "i" } },
+                ["<Esc>"] = { "hide_search", mode = { "n" } },
                 ["<C-q>"] = { "quit_nvim", mode = { "n", "i" } },
               },
             },
@@ -562,6 +593,7 @@ return {
               keys = {
                 ["<C-q>"] = "quit_nvim",
                 ["/"] = "show_search",
+                ["<Esc>"] = "explorer_noop",
                 ["<D-c>"] = { "explorer_yank", mode = { "n", "x" } },
                 ["<D-v>"] = "explorer_paste_named",
               },

@@ -115,6 +115,36 @@ local function focus_pane(screen)
   end, "the pane did not get the focus")
 end
 
+lib.test("http pane: opening it as soon as Neovim is ready loads Kulala before the first request preview", function()
+  local screen = h.nvim(project())
+  lib.ok(screen:exec("return package.loaded['kulala'] ~= nil"), "Kulala was not ready at startup")
+  screen:input("<Space>h")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests').panes() == 1 and package.loaded['kulala'] ~= nil")
+  end, "opening the pane did not load Kulala")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "make-user", 40) ~= nil
+  end, "the requests did not load")
+  for _ = 1, 20 do
+    if screen:exec("local c = require('modules.http_requests').panes()[1]:current(); return c and c.req and c.req.name") == "make-user" then
+      break
+    end
+    screen:input("j")
+    vim.wait(20)
+  end
+  h.wait(screen, function()
+    return screen:exec([[
+      local p = require('modules.http_requests').panes()[1]
+      return vim.api.nvim_win_call(p.main, function()
+        return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') == 'users.http'
+          and pcall(vim.treesitter.get_parser, 0, 'http')
+          and vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil
+      end)
+    ]])
+  end, "the first preview has no HTTP parser")
+  screen:close()
+end)
+
 lib.test("http pane: shows folders, files and their requests; folders and files fold", function()
   local screen = open_pane(project())
   for _, text in ipairs({ ICON.new, ICON.curl, ICON.hidden, "api", "users", "users.http", "List users", "make-user", "health.http", "auth", "login.http", "Login" }) do
@@ -420,6 +450,54 @@ lib.test("http pane: the terminal cursor is hidden while the pane has the focus 
   screen:close()
 end)
 
+lib.test("http pane: moving onto a request previews it in the editor without leaving the pane", function()
+  local screen = open_pane(project())
+  select_row(screen, "request:make-user POST https://example.com/users")
+  h.wait(screen, function()
+    local shown = screen:exec([[
+      local p = require('modules.http_requests').panes()[1]
+      return vim.api.nvim_win_call(p.main, function()
+        return { vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'), vim.api.nvim_win_get_cursor(0)[1] }
+      end)
+    ]])
+    return shown[1] == "users.http" and shown[2] == 7
+  end, "moving onto a request did not reveal it")
+  lib.eq("snacks_picker_list", screen:exec("return vim.bo.filetype"), "the pane lost focus")
+  screen:close()
+end)
+
+lib.test("http pane: revisiting an already loaded plain request restores its highlighter", function()
+  local screen = open_pane(project())
+  click_request(screen, "make-user", "users.http")
+  screen:exec([[
+    vim.treesitter.stop(0)
+    _G.plain_http_buf = vim.api.nvim_get_current_buf()
+  ]])
+  focus_pane(screen)
+  screen:input("k")
+  screen:input("j")
+  h.wait(screen, function()
+    return screen:exec("return vim.treesitter.highlighter.active[_G.plain_http_buf] ~= nil")
+  end, function()
+    return "previewing an already loaded plain request did not restore highlighting: " .. vim.inspect(screen:exec([[
+      local p = require('modules.http_requests').panes()[1]
+      return { ft = vim.bo[_G.plain_http_buf].filetype, name = vim.api.nvim_buf_get_name(_G.plain_http_buf),
+        current = (p:current() or {}).text, messages = vim.fn.execute('messages') }
+    ]]))
+  end)
+  screen:close()
+end)
+
+lib.test("http pane: moving in an open HTTP file selects its request in the pane", function()
+  local screen = open_pane(project())
+  click_request(screen, "make-user", "users.http")
+  screen:exec("vim.api.nvim_win_set_cursor(0, { 12, 0 }); vim.cmd('doautocmd CursorMoved')")
+  h.wait(screen, function()
+    return current_row(screen) == "request:DELETE https://example.com/users/1 DELETE https://example.com/users/1"
+  end, "the pane did not follow the request under the editor cursor")
+  screen:close()
+end)
+
 lib.test("http pane: an unsaved edit of an open file shows in the pane", function()
   local dir = project()
   local screen = open_pane(dir)
@@ -532,6 +610,33 @@ local function expect_whole(screen, label, sidebar)
   lib.eq(sidebar and 1 or 0, l.boxes, label .. ": sidebar windows left over: " .. vim.inspect(l))
 end
 
+lib.test("http pane: nvim . with slow directory discovery and repeated immediate opens leaves one HTTP sidebar", function()
+  local dir = project()
+  local screen = h.nvim(dir, 160, 45, { ".", "-c", [[lua vim.api.nvim_create_autocmd('VimEnter', {
+    once = true,
+    callback = function()
+      local git = require('snacks.explorer.git')
+      local update = git.update
+      git.update = function() end
+      _G.explorer_git_ready = {}
+      vim.defer_fn(function()
+        git.update = update
+        _G.explorer_git_ready[vim.fs.normalize(vim.fn.getcwd())] = true
+      end, 500)
+      require('modules.http_requests').toggle()
+      require('modules.http_requests').toggle()
+      require('modules.http_requests').toggle()
+    end,
+  })]] })
+  h.wait(screen, function()
+    return layout(screen).http == 1 and h.find_on_screen(screen, "make-user", 40) ~= nil
+  end, "the immediate HTTP request did not open the pane")
+  vim.wait(1800) -- the delayed directory open must not replace the requested HTTP pane later
+  expect_whole(screen, "after delayed directory discovery", "http")
+  lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "duplicate HTTP panes")
+  screen:close()
+end)
+
 for _, start in ipairs({ "the start screen", "a file" }) do
   lib.test("http pane: switching between the pane and the explorer keeps the layout whole (from " .. start .. ")", function()
     local dir = project()
@@ -614,6 +719,15 @@ lib.test("http pane: from the Git sidebar and back, the layout stays whole", fun
   h.wait(screen, function()
     return layout(screen).http == 1
   end, "the pane did not open a second time")
+  screen:close()
+end)
+
+lib.test("http pane: Esc does not close the Git sidebar", function()
+  local screen = open_diff_tab(diff_project())
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return screen:exec("local v = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage()); return v ~= nil and not v.is_hidden")
+  end, "Esc closed the Git sidebar")
   screen:close()
 end)
 
@@ -738,7 +852,7 @@ lib.test("http pane: folding and unfolding do not flash (the list never jumps)",
     return screen:exec("return #require('modules.http_requests').panes() == 1 and #require('modules.http_requests').panes()[1]:items() > 40")
   end, "the pane has no rows")
   vim.wait(600)
-  screen:exec("require('modules.http_requests').panes()[1].list:move(40, true)")
+  screen:exec("require('modules.http_requests').panes()[1].list:move(38, true)")
   vim.wait(400)
   local frames = {}
   screen.on_flush = function()
@@ -791,6 +905,12 @@ lib.test("http pane: x hides a folder, the eye icon counts the hidden ones and s
     return h.find_on_screen(screen, "auth", 40) ~= nil and h.find_on_screen(screen, ICON.hidden_on .. " 1", 40) ~= nil
   end, "the eye did not show the hidden folder")
   lib.ok(h.find_on_screen(screen, "login.http", 40) and h.find_on_screen(screen, "Login", 40), "a shown hidden folder keeps all its content")
+  lib.ok(screen:exec([[
+    local method = vim.api.nvim_get_hl(0, { name = 'HttpPaneHidden_HttpPanePOST', link = false })
+    local comment = vim.api.nvim_get_hl(0, { name = 'Comment', link = false })
+    local regular = vim.api.nvim_get_hl(0, { name = 'HttpPanePOST', link = false })
+    return method.fg ~= nil and method.fg ~= comment.fg and method.fg ~= regular.fg
+  ]]), "hidden requests must keep a subtly faded method color, not the comment gray")
   -- x on it brings it back
   select_dir(screen, "auth")
   screen:input("x")
@@ -798,6 +918,108 @@ lib.test("http pane: x hides a folder, the eye icon counts the hidden ones and s
     return h.find_on_screen(screen, ICON.hidden_on .. " 0", 40) ~= nil
   end, "the count must go back to 0")
   lib.ok(h.find_on_screen(screen, "login.http", 40), "the folder has its content again")
+  screen:close()
+end)
+
+lib.test("http pane: shown hidden folders sort below normal folders", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.hidden').set_file(...)", { dir .. "/hidden.json" })
+  select_dir(screen, "api")
+  screen:input("x")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "users.http", 40) == nil
+  end, "api was not hidden")
+  screen:input("H")
+  h.wait(screen, function()
+    local api_row = h.find_on_screen(screen, "api", 40)
+    local login_row = h.find_on_screen(screen, "Login", 40)
+    return api_row and login_row and api_row > login_row
+  end, "the hidden api folder must be below the normal auth folder and its requests")
+  screen:close()
+end)
+
+lib.test("http pane: x hides files, H reveals them at the bottom, and x restores their normal order", function()
+  local dir = project()
+  h.write(dir .. "/api/a.http", { "### First", "GET https://example.com/first" })
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.hidden').set_file(...)", { dir .. "/hidden.json" })
+  select_row(screen, "file:a.http")
+  screen:input("x")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "a.http", 40) == nil
+      and h.find_on_screen(screen, "First", 40) == nil
+  end, "x did not hide the file and its requests")
+  screen:input("H")
+  h.wait(screen, function()
+    return screen:exec([[
+      local a, health
+      for index, item in ipairs(require('modules.http_requests').panes()[1]:items()) do
+        if item.key == 'f:api/a.http' then a = index end
+        if item.key == 'f:api/health.http' then health = index end
+      end
+      return a and health and a > health
+    ]])
+  end, "the revealed hidden file must sort after normal siblings")
+  focus_pane(screen)
+  screen:exec("local p = require('modules.http_requests').panes()[1]; for i, item in ipairs(p:items()) do if item.key == 'f:api/a.http' then p.list:move(i, true); break end end")
+  screen:input("x")
+  h.wait(screen, function()
+    return screen:exec([[
+      local a, health
+      for index, item in ipairs(require('modules.http_requests').panes()[1]:items()) do
+        if item.key == 'f:api/a.http' then a = index end
+        if item.key == 'f:api/health.http' then health = index end
+      end
+      return a and health and a < health
+    ]])
+  end, "unhiding must restore alphabetical file order")
+  screen:close()
+end)
+
+lib.test("http pane: x hides requests including pinned references, reveals them last, and remembers their identity", function()
+  local dir = project()
+  local memory = dir .. "/hidden.json"
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.hidden').set_file(...)", { memory })
+  select_row(screen, "request:List users GET https://example.com/users")
+  screen:input("p")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Pinned", 40) ~= nil
+  end, "the request was not pinned")
+  screen:input("x")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "List users", 40) == nil
+  end, "the hidden request or its pinned reference is still visible")
+  screen:input("H")
+  h.wait(screen, function()
+    return screen:exec([[
+      local list, make
+      for index, item in ipairs(require('modules.http_requests').panes()[1]:items()) do
+        if item.kind == 'request' and not item.in_pins then
+          if item.req.name == 'List users' then list = index end
+          if item.req.name == 'make-user' then make = index end
+        end
+      end
+      return list and make and list > make
+    ]])
+  end, "the hidden request must appear below normal requests")
+  -- Reload the on-disk hide store and shift the request's line: its identity, not its line, is hidden.
+  screen:exec([[
+    require('modules.http_requests.hidden').set_file(...)
+    vim.cmd('edit api/users/users.http')
+    vim.api.nvim_buf_set_lines(0, 0, 0, false, { '# inserted comment' })
+    local h = require('modules.http_requests.hidden')
+    local req = require('modules.http_requests.parse').parse(vim.api.nvim_buf_get_lines(0, 0, -1, false))[1]
+    _G.remembered_hidden = h.set(vim.uv.cwd(), 'requests')[h.request_key('api/users/users.http', req)] == true
+  ]], { memory })
+  lib.ok(screen:exec("return _G.remembered_hidden"), "hidden request identity was not persisted across line changes")
+  focus_pane(screen)
+  screen:exec("local p = require('modules.http_requests').panes()[1]; for i, item in ipairs(p:items()) do if item.kind == 'request' and item.req.name == 'List users' then p.list:move(i, true); break end end")
+  screen:input("x")
+  h.wait(screen, function()
+    return screen:exec("return next(require('modules.http_requests.hidden').set(vim.uv.cwd(), 'requests')) == nil")
+  end, "x did not unhide the request")
   screen:close()
 end)
 
@@ -841,6 +1063,69 @@ lib.test("http pane: p pins a request under Pinned (a reference, it also stays i
   screen:close()
 end)
 
+lib.test("http pane: Esc leaves search insert mode without clearing it, and p pins the selected request", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.pinned').set_file(...)", { dir .. "/pinned.json" })
+  screen:input("/")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_input'")
+  end, "slash did not open search")
+  screen:input("make-user")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "make-user", 40) ~= nil
+      and h.find_on_screen(screen, "List users", 40) == nil
+  end, "search did not filter to the matching request")
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_input' and vim.fn.mode() == 'n'")
+  end, "Esc did not leave search insert mode")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "make-user", 40) ~= nil
+      and h.find_on_screen(screen, "List users", 40) == nil
+  end, "Esc changed the search")
+  lib.eq("request:make-user POST https://example.com/users", screen:exec([[
+    local p = require('modules.http_requests').panes()[1]
+    local found = {}
+    for i = 1, p.list:count() do
+      local item = p.list:get(i)
+      found[#found + 1] = item and (item.kind .. ':' .. item.text) or 'nil'
+    end
+    return table.concat(found, ',')
+  ]]), "filtered list")
+  lib.eq("Pin filtered HTTP request", screen:exec("return vim.fn.maparg('p', 'n', false, true).desc"), "p mapping")
+  screen:input("p")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests.pinned').list(vim.uv.cwd())") == 1
+  end, "p did not pin the selected request")
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_list'")
+      and h.find_on_screen(screen, "List users", 40) ~= nil
+  end, "Esc in search normal mode did not restore the full list")
+  lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "Esc closed the pane")
+  screen:close()
+end)
+
+lib.test("http file: <leader>p pins and unpins the request under the cursor", function()
+  local dir = project()
+  local screen = h.nvim(dir)
+  h.wait(screen, function()
+    return screen:exec("return package.loaded['kulala'] ~= nil")
+  end, "kulala did not load")
+  screen:exec("require('modules.http_requests.pinned').set_file(...); vim.cmd('edit api/users/users.http')", { dir .. "/pinned.json" })
+  screen:exec("vim.api.nvim_win_set_cursor(0, { 7, 0 })")
+  screen:input("<Space>p")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests.pinned').list(vim.uv.cwd())") == 1
+  end, "<leader>p did not pin the current request")
+  screen:input("<Space>p")
+  h.wait(screen, function()
+    return screen:exec("return #require('modules.http_requests.pinned').list(vim.uv.cwd())") == 0
+  end, "<leader>p did not unpin the current request")
+  screen:close()
+end)
+
 lib.test("http pane: hidden folders are remembered after closing Neovim", function()
   local dir = project()
   local memory = dir .. "/hidden.json"
@@ -874,7 +1159,7 @@ lib.test("http pane: ? shows the keys in a small window, Esc closes it", functio
   local screen = open_pane(project())
   screen:input("?")
   h.wait(screen, function()
-    return h.find_on_screen(screen, "HTTP pane keys") ~= nil and h.find_on_screen(screen, "hide / unhide folder") ~= nil
+    return h.find_on_screen(screen, "HTTP pane keys") ~= nil and h.find_on_screen(screen, "hide / unhide item") ~= nil
   end, "? did not show the keys")
   screen:input("<Esc>")
   h.wait(screen, function()

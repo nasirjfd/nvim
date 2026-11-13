@@ -13,6 +13,17 @@ local panels = {}
 local explorer_pref = {}
 -- The sidebar opened last in each tab: "explorer", "codediff", "http" (HTTP Requests) or "tests".
 local last_sidebar = {}
+local request_id = {} -- per-tab generation: delayed directory opens must yield to explicit pane requests
+
+function M.request(tab)
+  tab = tab or vim.api.nvim_get_current_tabpage()
+  request_id[tab] = (request_id[tab] or 0) + 1
+  return request_id[tab]
+end
+
+function M.generation(tab)
+  return request_id[tab or vim.api.nvim_get_current_tabpage()] or 0
+end
 
 function M.last(tab)
   return last_sidebar[tab]
@@ -58,10 +69,9 @@ end
 -- second sidebar opened in between makes Neovim split the screen between the two layouts and hand the
 -- rows it cannot place to the command line (cmdheight 20, the sidebar and the editor half as tall).
 local function close_now(picker)
-  if picker.closed then
-    return
+  if not picker.closed then
+    picker:close()
   end
-  picker:close()
   pcall(function()
     picker.layout:close()
   end)
@@ -163,6 +173,11 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       if not vim.api.nvim_tabpage_is_valid(tab) then
         return
       end
+      -- A later request may already have hidden Git before this callback gets its turn.
+      -- Do not let the stale BufWinEnter callback switch the active-sidebar preference back.
+      if not panel_visible(codediff_panel(tab)) then
+        return
+      end
       explorer_pref[tab] = false
       last_sidebar[tab] = "codediff"
       codediff_panel(tab)
@@ -173,6 +188,22 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
         close_now(picker)
       end
       restore_cmdheight()
+    end)
+  end,
+})
+
+-- Esc never hides the CodeDiff sidebar; q and the sidebar toggles remain the explicit close controls.
+vim.api.nvim_create_autocmd("BufWinEnter", {
+  group = group,
+  callback = function(args)
+    local filetype = vim.bo[args.buf].filetype
+    if filetype ~= "codediff-explorer" and filetype ~= "codediff-history" then
+      return
+    end
+    vim.schedule(function()
+      if vim.api.nvim_buf_is_valid(args.buf) then
+        vim.keymap.set("n", "<Esc>", "<Nop>", { buffer = args.buf, silent = true, desc = "Keep Git sidebar open" })
+      end
     end)
   end,
 })
@@ -214,6 +245,11 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
 -- moment.
 function M.make_room(name, tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
+  M.request(tab)
+  if name == "explorer" then
+    explorer_pref[tab] = true
+    last_sidebar[tab] = "explorer"
+  end
   for _, picker in ipairs(snacks_explorers(tab)) do
     close_now(picker)
   end
@@ -236,6 +272,7 @@ end
 -- screen (a visible jump).
 function M.make_room_for_codediff(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
+  M.request(tab)
   for _, picker in ipairs(snacks_explorers(tab)) do
     close_now(picker)
   end
@@ -261,9 +298,13 @@ vim.api.nvim_create_autocmd("VimEnter", {
     local pick = Snacks.picker.pick
     Snacks.picker.pick = function(source, opts)
       local name = type(source) == "table" and source.source or source
-      if name == "explorer" and #snacks_explorers(vim.api.nvim_get_current_tabpage()) == 0 then
-        for _, picker in ipairs(extra_panes(vim.api.nvim_get_current_tabpage())) do
-          close_now(picker)
+      if name == "explorer" then
+        -- Hide Git synchronously, before Snacks constructs (and can render) any Explorer windows.
+        -- BufWinEnter's scheduled cleanup is too late during fast switching.
+        if #snacks_explorers(vim.api.nvim_get_current_tabpage()) == 0 then
+          M.make_room("explorer")
+        else
+          M.request()
         end
       end
       return pick(source, opts)
