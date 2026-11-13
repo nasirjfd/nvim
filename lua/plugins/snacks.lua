@@ -381,6 +381,7 @@ return {
         lsp_workspace_symbols = {
           hidden = false,
           ignored = false,
+          matcher = { frecency = true, sort_empty = true },
           finder = function(opts, ctx)
             return require("core.symbol-files").finder(opts, ctx)
           end,
@@ -389,11 +390,14 @@ return {
         grep = {
           regex = false,
           args = { "--ignore-case" },
+          matcher = { frecency = true, sort_empty = true },
           toggles = { regex = false }, -- the title's "R" flag: the regex button replaces it
           on_show = function(picker)
             require("core.grep-toggles").attach(picker)
           end,
         },
+        grep_word = { matcher = { frecency = true, sort_empty = true } },
+        grep_buffers = { matcher = { frecency = true, sort_empty = true } },
         -- LSP location lists: only file:line, the code is already in the preview; list on top, preview below
         lsp_references = { format = "filename", layout = lsp_layout },
         lsp_definitions = { format = "filename", layout = lsp_layout },

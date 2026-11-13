@@ -30,6 +30,7 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 - `lua/core/guess-indent.lua` sets `shiftwidth`/`expandtab` of each file from its own text when it opens (skipped when `.editorconfig` sets the indent), so `o`/`O` and `>>` follow the file's formatting instead of the global `shiftwidth=2`. Spec: `tests/specs/11_guess_indent.lua`.
 - `lua/core/gui-keymaps.lua` holds `<D-…>` (Cmd) bindings mirroring VS Code muscle memory; they are inert in terminals that don't forward Cmd.
 - `snacks.nvim` is the central UI layer (picker, explorer, notifier, terminal). Many core and LSP keymaps call `Snacks.*` directly, and `gd`/`gD`/`gr`/`gi`/`gy` are defined in `lua/plugins/snacks.lua`, not in the LSP attach handler.
+- File, text (`grep`, `grep_word`, `grep_buffers`) and workspace-symbol searches share Snacks' persistent frecency history: frequently/recently opened files get a bounded ranking bonus without replacing match relevance. `lua/core/init.lua` starts visit tracking on `VimEnter`, before the first search; history is stored under `stdpath("data")/snacks/picker-frecency` (SQLite or `.dat` fallback). Restart-persistence tests: `tests/specs/13_search_usage.lua`. Workspace-symbol file visibility is filtered through `lua/core/symbol-files.lua`, respecting `.ignore` and Option+I/H.
 
 ### HTTP Requests pane (`<leader>h`)
 

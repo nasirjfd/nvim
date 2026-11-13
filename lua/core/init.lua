@@ -19,6 +19,14 @@ require("core.modal-backdrop").setup()
 require("core.find-bar").setup()
 require("modules.phpunit.gutter").setup()
 require("core.lazy")
+-- Track file visits before the first picker opens; reuse Snacks' persistent history for all searches.
+vim.api.nvim_create_autocmd("VimEnter", {
+  group = vim.api.nvim_create_augroup("SearchFileUsage", { clear = true }),
+  once = true,
+  callback = function()
+    require("snacks.picker.core.frecency").new()
+  end,
+})
 -- a file picked while in the git pane opens in an editor tab (needs snacks, loaded by lazy)
 pcall(function()
   require("core.leave-codediff").setup()
