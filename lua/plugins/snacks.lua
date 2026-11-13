@@ -131,6 +131,8 @@ local builtin_layouts = {
 -- snacks.scroll restores the view it planned, cursor included. So finish the glide first: on any
 -- typed key, run the running scroll animation's last step right away. (Registered here rather
 -- than in the spec's `init`, which snacks-explorer-nested-git.lua's `init` replaces.)
+-- Wheel input is different: snacks.scroll cancels the glide at the visible position itself.
+-- Finishing it here first would jump to the old destination before following the fingers.
 vim.api.nvim_create_autocmd("VimEnter", {
   once = true,
   callback = function()
@@ -151,6 +153,9 @@ vim.api.nvim_create_autocmd("VimEnter", {
     vim.on_key(function(_, typed)
       if not typed or typed == "" then
         return -- keys the animation itself runs
+      end
+      if vim.fn.keytrans(typed):find("<ScrollWheel", 1, true) then
+        return
       end
       for id, s in pairs(scrolls) do
         scrolls[id] = nil
@@ -634,9 +639,9 @@ return {
         end)
         return not (ok and pickers and #pickers > 0)
       end,
-      animate = { duration = { step = 6, total = 110 }, easing = "outCubic" },
+      animate = { duration = { step = 4, total = 80 }, easing = "outCubic" },
       -- presses within 100ms of the last one (holding a key) get an even shorter glide
-      animate_repeat = { delay = 100, duration = { step = 3, total = 40 }, easing = "outCubic" },
+      animate_repeat = { delay = 100, duration = { step = 1, total = 24 }, easing = "outCubic" },
     },
     statuscolumn = { enabled = true },
     words = { enabled = true },
