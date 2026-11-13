@@ -4,6 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Personal Neovim (0.11+) configuration, not an application — there is no build step or test suite. See `AGENTS.md` for the shared agent guidance; the essentials are repeated here.
 
+## Completion rule (this repository only)
+
+- Validate your changes, then commit and push them to `main` before reporting the work as complete. This applies to all changes in this repository, not other projects.
+- Commit only changes belonging to the task; do not include unrelated user work. Use a short, single-line commit message without agent attribution.
+- If validation, commit, or push fails, report the blocker rather than claiming completion. Explicit user instructions not to commit or push take precedence.
+
 ## Commands
 
 - Validate config loads without errors: `nvim --headless -u ./init.lua '+qa'`
@@ -79,4 +85,3 @@ Machine-local `.nvim.lua` files of projects (e.g. `supernova-env-dev/vendor/.nvi
 
 - Whenever you change one of those `.nvim.lua` files, copy it into `local-projects/`, then commit and push to `main` in the same turn. Add new projects to the table in `local-projects/README.md`.
 - Editing a `.nvim.lua` changes its exrc trust hash: re-trust it (`nvim --headless -u NONE -c "edit <file>" -c trust -c qa`) before running nvim there, or the trust prompt eats keystrokes sent by tmux tests (and they can end up typed into the open file).
-

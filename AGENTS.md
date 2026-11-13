@@ -1,5 +1,6 @@
 # Repository guidance
 
+- For this repository only, validate your changes, then commit and push them to `main` before reporting the work as complete. Commit only changes belonging to the task; do not include unrelated user work. Use a short, single-line commit message without agent attribution. If validation, commit, or push fails, report the blocker rather than claiming completion. Explicit user instructions not to commit or push take precedence.
 - This is a Neovim configuration, not an application with a standalone test suite. The entry point is `init.lua`; `lua/core/init.lua` loads core setup, and `lua/plugins/*.lua` are lazy.nvim plugin specs imported by `lua/core/lazy.lua`.
 - Plugin versions are recorded in `lazy-lock.json`. Keep it in sync when intentionally changing plugin versions/specs; inspect lockfile changes rather than reverting them as incidental noise.
 - Lua formatting is configured by `stylua.toml` (2 spaces, 100-column width, double quotes preferred). Format changed Lua with `stylua <files>` when available.
