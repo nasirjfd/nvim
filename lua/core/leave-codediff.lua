@@ -6,6 +6,17 @@ local M = {}
 
 local api = vim.api
 
+-- Non-Git sidebars belong to an editor tab, never beside the Git graph/details.
+function M.leave_graph()
+  local graph = package.loaded["codediff.ui.graph"]
+  if graph and graph.get(api.nvim_get_current_tabpage()) then
+    local win = M.editor_window(api.nvim_get_current_win())
+    if win then
+      api.nvim_set_current_win(win)
+    end
+  end
+end
+
 local function is_codediff_tab(tab)
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   if lifecycle and (lifecycle.get_session(tab) ~= nil or lifecycle.get_panel(tab) ~= nil) then

@@ -14,6 +14,19 @@ local function editor()
   return screen
 end
 
+lib.test("scroll keyboard resumes at the original editing position after wheeling offscreen", function()
+  local screen = editor()
+  for _ = 1, 35 do
+    screen:request("nvim_input_mouse", { "wheel", "down", "", 0, 10, 30 })
+  end
+  vim.wait(150)
+  screen:request("nvim_input", { "j" })
+  h.wait(screen, function()
+    return screen:exec("return vim.api.nvim_win_get_cursor(0)[1]") == 201
+  end, "wheel moved the editing position")
+  screen:close()
+end)
+
 lib.test("scroll wheel moves immediately and has no animation tail", function()
   local screen = editor()
   local before = screen:exec("return vim.fn.line('w0')")

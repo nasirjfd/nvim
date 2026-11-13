@@ -10,6 +10,26 @@ local function press(screen, key)
   screen:exec("vim.fn.maparg(..., 'n', false, true).callback()", { key })
 end
 
+lib.test("git graph is left behind when opening Explorer or HTTP", function()
+  local dir = h.repo({ ["a.txt"] = { "one" }, ["a.http"] = { "GET https://example.com" } })
+  local screen = h.nvim(dir)
+  for _, key in ipairs({ "<D-S-e>", "http" }) do
+    screen:exec("vim.cmd('CodeDiff graph')")
+    h.wait(screen, function()
+      return screen:exec("local g = package.loaded['codediff.ui.graph']; return g and g.get(vim.api.nvim_get_current_tabpage()) ~= nil")
+    end, "graph did not open")
+    if key == "http" then
+      screen:exec("require('modules.http_requests').toggle()")
+    else
+      press(screen, key)
+    end
+    h.wait(screen, function()
+      return screen:exec("return require('codediff.ui.graph').get(vim.api.nvim_get_current_tabpage()) == nil")
+    end, "non-Git pane remained in graph tab")
+  end
+  screen:close()
+end)
+
 lib.test("cmd+b keeps toggling the explorer after cmd+shift+e in a git tab, and git after cmd+shift+g", function()
   local dir = h.repo({ ["a.txt"] = { "one", "two" } })
   h.write(dir .. "/a.txt", { "one", "CHANGED" })

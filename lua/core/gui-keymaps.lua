@@ -83,6 +83,7 @@ end, { desc = "Toggle Sidebar" })
 -- (cmd+b is the one that toggles that tab's own sidebar). It focuses the explorer of this tab, opening
 -- it when needed, and reveals the current file when the tab is an ordinary one.
 local function focus_explorer()
+  require("core.leave-codediff").leave_graph()
   local current_tab = vim.api.nvim_get_current_tabpage()
   local explorer
   for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do

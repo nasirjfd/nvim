@@ -180,13 +180,15 @@ end
 --- as the target of the next render, and the cursor is only moved to `keep_key` when that row is not where
 --- it stays.
 ---@param picker snacks.Picker
----@param keep_key? string key of the row the cursor should end on (default: the row it is on now)
+---@param keep_key? string|false key to follow; false keeps the row number (default: current item)
 function M.refresh(picker, keep_key)
   if not picker or picker.closed then
     return
   end
   local list = picker.list
-  keep_key = keep_key or (picker:current() or {}).key
+  if keep_key ~= false then
+    keep_key = keep_key or (picker:current() or {}).key
+  end
   -- Where the row will be: rows can appear or vanish above it (a test that starts running leaves the Failed
   -- section), so the old row number would put the cursor on another row first and Snacks would then move it
   -- back (the cursor goes up and comes back). The pane's finder says where the row is going to be.

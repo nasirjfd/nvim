@@ -1055,6 +1055,7 @@ end
 
 --- Cmd+Shift+T: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
 function M.toggle()
+  require("core.leave-codediff").leave_graph()
   local panes = M.panes()
   if #panes > 0 then
     panes[1]:focus("list")

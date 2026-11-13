@@ -19,6 +19,7 @@ require("core.modal-backdrop").setup()
 require("core.find-bar").setup()
 require("modules.phpunit.gutter").setup()
 require("core.lazy")
+require("core.wheel-cursor").setup()
 -- Track file visits before the first picker opens; reuse Snacks' persistent history for all searches.
 vim.api.nvim_create_autocmd("VimEnter", {
   group = vim.api.nvim_create_augroup("SearchFileUsage", { clear = true }),

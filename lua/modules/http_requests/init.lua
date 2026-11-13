@@ -675,7 +675,7 @@ local actions = {
     else
       return
     end
-    refresh_all()
+    refresh_all(false)
   end,
   -- pin the request under the cursor to the top of the pane (or unpin it)
   http_pin = function(picker, item)
@@ -903,6 +903,7 @@ end
 
 --- <leader>h: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
 function M.toggle()
+  require("core.leave-codediff").leave_graph()
   local tab = api.nvim_get_current_tabpage()
   if opening[tab] then
     return

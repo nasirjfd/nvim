@@ -82,6 +82,68 @@ local function where(screen)
   return screen:exec("return { vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'), vim.api.nvim_win_get_cursor(0)[1] }")
 end
 
+lib.test("http pane: wheel keeps the selected request even when it leaves the viewport", function()
+  local dir = project()
+  local lines = {}
+  for i = 1, 100 do
+    vim.list_extend(lines, { "### Request " .. i, "GET https://example.com/" .. i, "" })
+  end
+  h.write(dir .. "/many.http", lines)
+  local screen = open_pane(dir)
+  screen:exec([[
+    local p = require('modules.http_requests').panes()[1]
+    for i, item in ipairs(p:items()) do
+      if item.kind == 'request' then p.list:move(i, true); break end
+    end
+    _G.wheel_key = p:current().key
+    _G.wheel_top = p.list.top
+  ]])
+  for _ = 1, 35 do
+    screen:request("nvim_input_mouse", { "wheel", "down", "", 0, 10, 5 })
+  end
+  vim.wait(200)
+  lib.ok(screen:exec([[
+    local p = require('modules.http_requests').panes()[1]
+    return p.list.top > _G.wheel_top and p:current().key == _G.wheel_key
+  ]]), "wheel moved the selection or failed to scroll")
+  screen:input("j")
+  lib.ok(screen:exec([[
+    local p = require('modules.http_requests').panes()[1]
+    return p.list:get(p.list.cursor - 1).key == _G.wheel_key
+  ]]), "keyboard did not resume at the original request")
+  screen:close()
+end)
+
+lib.test("http pane: x keeps the row instead of following a reordered hidden request", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  screen:exec([[
+    require('modules.http_requests.hidden').set_file(...)
+    local p = require('modules.http_requests').panes()[1]
+    p:action('http_show_hidden')
+  ]], { dir .. "/hidden.json" })
+  vim.wait(100)
+  screen:exec([[
+    local p = require('modules.http_requests').panes()[1]
+    for i, item in ipairs(p:items()) do
+      if item.kind == 'request' and item.req.name == 'List users' then
+        p.list:move(i, true)
+        _G.hide_row = i
+        _G.hide_key = item.key
+        break
+      end
+    end
+    p:action('http_hide')
+  ]])
+  h.wait(screen, function()
+    return screen:exec([[
+      local p = require('modules.http_requests').panes()[1]
+      return p.list.cursor == _G.hide_row and p:current().key ~= _G.hide_key
+    ]])
+  end, "x followed the hidden item")
+  screen:close()
+end)
+
 -- (the pane is the 40 left columns; the file next to it may show the same words)
 local function click_on(screen, text)
   local row, col = h.find_on_screen(screen, text, 40)

@@ -299,6 +299,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
     Snacks.picker.pick = function(source, opts)
       local name = type(source) == "table" and source.source or source
       if name == "explorer" then
+        require("core.leave-codediff").leave_graph()
         -- Hide Git synchronously, before Snacks constructs (and can render) any Explorer windows.
         -- BufWinEnter's scheduled cleanup is too late during fast switching.
         if #snacks_explorers(vim.api.nvim_get_current_tabpage()) == 0 then
