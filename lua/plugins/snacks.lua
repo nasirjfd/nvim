@@ -378,6 +378,13 @@ return {
         list = { keys = { ["<C-q>"] = "close" } },
       },
       sources = {
+        lsp_workspace_symbols = {
+          hidden = false,
+          ignored = false,
+          finder = function(opts, ctx)
+            return require("core.symbol-files").finder(opts, ctx)
+          end,
+        },
         -- Global grep: case-insensitive, plain text; buttons in the search box toggle case / word / regex
         grep = {
           regex = false,
@@ -1296,7 +1303,7 @@ return {
           set = function(state)
             vim.g.show_ignored = state
             local sources = Snacks.config.picker.sources
-            for _, source in ipairs({ "files", "grep", "grep_word", "grep_buffers", "explorer" }) do
+            for _, source in ipairs({ "files", "grep", "grep_word", "grep_buffers", "explorer", "lsp_workspace_symbols" }) do
               sources[source] = sources[source] or {}
               sources[source].ignored = state
               sources[source].hidden = state
