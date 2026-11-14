@@ -321,6 +321,9 @@ return {
         group = group,
         pattern = { "codediff-explorer", "codediff-history" },
         callback = function(args)
+          vim.keymap.set("n", "ggm", function()
+            require("core.git-merge-requests").open()
+          end, { buffer = args.buf, desc = "Open Merge Requests in Browser", silent = true })
           -- <F7> / <F19> in the file list jumps back to the diff pane
           for _, lhs in ipairs({ "<F7>", "<F19>" }) do
             vim.keymap.set("n", lhs, "<cmd>wincmd p<cr>", { buffer = args.buf })
