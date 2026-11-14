@@ -8,24 +8,25 @@ local function editor(dir)
     _G.hunk_prompts, _G.hunk_notifications = {}, {}
     vim.ui.select = function(_, opts, callback)
       table.insert(_G.hunk_prompts, opts.prompt)
-      callback('Revert staged hunk')
+      callback('Yes')
     end
     vim.notify = function(message) table.insert(_G.hunk_notifications, message) end
   ]])
   return screen
 end
 
-lib.test("staged hunk confirmation defaults to Cancel and only reverts after approval", function()
-  local dir = h.repo({ ["a.txt"] = { "one", "two", "three" } })
-  h.write(dir .. "/a.txt", { "one", "STAGED", "three" })
-  h.git(dir, "add", "a.txt")
-  local before = h.git(dir, "diff", "--cached")
-  local screen = h.nvim(dir)
-  screen:exec("vim.cmd('edit a.txt')")
-  h.wait(screen, function()
-    return screen:exec("return require('gitsigns').get_hunks() ~= nil")
-  end, "Git hunks did not attach")
-  for _, approve in ipairs({ false, true }) do
+for _, answer in ipairs({ { "y", true }, { "<CR>", true }, { "n", false }, { "<Esc>", false } }) do
+  lib.test("staged hunk confirmation responds to " .. answer[1], function()
+    local dir = h.repo({ ["a.txt"] = { "one", "two", "three" } })
+    h.write(dir .. "/a.txt", { "one", "STAGED", "three" })
+    h.git(dir, "add", "a.txt")
+    local before = h.git(dir, "diff", "--cached")
+    local screen = h.nvim(dir)
+    screen:exec("vim.cmd('edit a.txt')")
+    h.wait(screen, function()
+      return screen:exec("return require('gitsigns').get_hunks() ~= nil")
+    end, "Git hunks did not attach")
+    local approve = answer[2]
     screen:exec("vim.api.nvim_win_set_cursor(0, { 2, 0 }); require('core.revert-hunk').reset()")
     h.wait(screen, function()
       return screen:exec("return #Snacks.picker.get({source='select'}) == 1")
@@ -35,14 +36,12 @@ lib.test("staged hunk confirmation defaults to Cancel and only reverts after app
       screen:exec("return vim.api.nvim_buf_get_lines(vim.fn.bufnr('a.txt'), 1, 2, false)[1]")
     )
     lib.eq(before, h.git(dir, "diff", "--cached"), "index changed before confirmation")
-    screen:exec(
-      [[
-      local p = Snacks.picker.get({source='select'})[1]
-      if ... then p.list:move(2, true) end
-      p:action('confirm')
-    ]],
-      { approve }
+    lib.eq(
+      "Yes",
+      screen:exec("return Snacks.picker.get({source='select'})[1]:current().item"),
+      "Enter must default to Yes"
     )
+    screen:input(answer[1])
     h.wait(screen, function()
       return screen:exec(
         "return #Snacks.picker.get({source='select'}) == 0 and vim.b.reverting_staged_hunk == nil"
@@ -57,9 +56,9 @@ lib.test("staged hunk confirmation defaults to Cancel and only reverts after app
       end, "approved hunk was not reverted")
       lib.eq("", h.git(dir, "diff", "--cached"))
     end
-  end
-  screen:close()
-end)
+    screen:close()
+  end)
+end
 
 for _, kind in ipairs({ "addition", "deletion" }) do
   lib.test("cmd+alt+z reverts a staged " .. kind, function()
