@@ -20,6 +20,7 @@ require("core.modal-backdrop").setup()
 require("core.find-bar").setup()
 require("modules.phpunit.gutter").setup()
 require("core.lazy")
+require("core.picker-resize").setup()
 require("core.wheel-cursor").setup()
 require("core.diagnostic-card").setup()
 -- Track file visits before the first picker opens; reuse Snacks' persistent history for all searches.
