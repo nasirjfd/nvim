@@ -268,10 +268,10 @@ local function setup_keymaps(bufnr)
 
   -- Diagnostics navigation
   map("n", "[d", function()
-    vim.diagnostic.jump({ count = -vim.v.count1 })
+    require("core.diagnostic-card").jump(-vim.v.count1)
   end, "Prev Diagnostic")
   map("n", "]d", function()
-    vim.diagnostic.jump({ count = vim.v.count1 })
+    require("core.diagnostic-card").jump(vim.v.count1)
   end, "Next Diagnostic")
 
   -- Goto next/prev class/method/function
@@ -353,33 +353,13 @@ vim.api.nvim_create_autocmd("LspAttach", {
 -- Diagnostic Configuration
 -- ════════════════════════════════════════════════════════════════════════════
 vim.diagnostic.config({
-  virtual_text = true,
+  virtual_text = false,
   underline = true,
   update_in_insert = false,
   severity_sort = true,
   jump = {
     on_jump = function(diagnostic, bufnr)
-      if not diagnostic then
-        return
-      end
-      vim.diagnostic.open_float({
-        bufnr = bufnr,
-        scope = "cursor",
-        focus = false,
-        border = "rounded",
-        title = " Diagnostics ",
-        title_pos = "center",
-        max_width = 88,
-        max_height = 18,
-        source = true,
-        header = "",
-        prefix = function(item)
-          local severity = vim.diagnostic.severity[item.severity]
-          local highlight = severity:sub(1, 1) .. severity:sub(2):lower()
-          local label = severity == "WARN" and "Warning" or highlight
-          return label .. ": ", "Diagnostic" .. highlight
-        end,
-      })
+      require("core.diagnostic-card").show(diagnostic, bufnr)
     end,
   },
   float = { border = "rounded", source = true, header = "", prefix = "" },

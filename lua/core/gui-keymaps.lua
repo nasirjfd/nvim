@@ -123,8 +123,12 @@ map("n", "<D-F4>", function()
 end, { desc = "Close Buffer" })
 
 -- cmd+d -> duplicate line/selection
-map("n", "<D-d>", ":t.<cr>", { desc = "Duplicate Line" })
-map("x", "<D-d>", ":t'>gv<cr>", { desc = "Duplicate Selection" })
+map({ "n", "i" }, "<D-d>", function()
+  require("core.duplicate").line()
+end, { desc = "Duplicate Line" })
+map("x", "<D-d>", function()
+  require("core.duplicate").selection()
+end, { desc = "Duplicate Selection" })
 
 -- cmd+' / shift+cmd+' -> toggle terminal / new terminal
 map({ "n", "t" }, "<D-'>", function()
@@ -253,7 +257,8 @@ end
 map({ "n", "x" }, "<M-F>", format_buffer_or_selection, { desc = "Format Selection / File" })
 
 -- alt+cmd+z -> revert the hunk under the cursor. In a diff tab that is codediff's discard-hunk (working
--- tree side, no confirmation: cmd+z / u bring it back); elsewhere gitsigns' reset hunk.
+-- tree side, no confirmation: cmd+z / u bring it back); elsewhere reset an unstaged hunk,
+-- or unstage and reset just the staged hunk under the cursor.
 map("n", "<D-M-z>", function()
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   if lifecycle and lifecycle.get_session(vim.api.nvim_get_current_tabpage()) then
@@ -267,7 +272,7 @@ map("n", "<D-M-z>", function()
       return
     end
   end
-  require("gitsigns").reset_hunk()
+  require("core.revert-hunk").reset()
 end, { desc = "Revert Hunk" })
 
 -- cmd+z / cmd+shift+z -> undo / redo
