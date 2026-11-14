@@ -515,8 +515,14 @@ local function keymaps(buf)
   end
   -- (also in Select mode: the old search is selected when the bar opens on it)
   local STEP_MODES = { "i", "n", "s" }
-  map("<Esc>", M.close)
-  map("<C-c>", M.close)
+  -- Global Visual mappings also apply to Select mode (notably p = paste). In a
+  -- selected text field every printable key must keep its native typing behavior.
+  for code = 32, 126 do
+    local key = code == 60 and "<lt>" or vim.fn.nr2char(code)
+    map(key, key, { "s" })
+  end
+  map("<Esc>", M.close, { "i", "n", "s", "x" })
+  map("<C-c>", M.close, { "i", "n", "s", "x" })
   map("<CR>", function()
     if row() == 2 then
       M.replace_one()
@@ -623,11 +629,17 @@ end
 
 -- Select the text of the find field (Select mode), so typing replaces it like in a text field.
 local function select_find()
-  vim.schedule(function()
-    if state and alive() and api.nvim_get_current_win() == state.win and api.nvim_buf_get_lines(state.buf, 0, 1, false)[1] ~= "" then
-      api.nvim_feedkeys(vim.keycode("<Esc>$v0<C-g>"), "n", false)
-    end
-  end)
+  if
+    state
+    and alive()
+    and api.nvim_get_current_win() == state.win
+    and api.nvim_buf_get_lines(state.buf, 0, 1, false)[1] ~= ""
+  then
+    -- Select only the text already present now. A scheduled Escape could run after
+    -- the user started typing, leave Normal mode behind, and make p paste instead.
+    vim.cmd("stopinsert")
+    vim.cmd("normal! \27$v0\7")
+  end
 end
 
 --- Open the bar on the current window. `o.replace` shows the replace field, `o.text` fills the
@@ -688,6 +700,23 @@ function M.open(o)
   }
   keymaps(buf)
   local group = api.nvim_create_augroup("FindBar", { clear = true })
+  api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    pattern = "*:n",
+    callback = function()
+      local current = state
+      vim.schedule(function()
+        if
+          state == current
+          and alive()
+          and api.nvim_get_current_win() == current.win
+          and vim.fn.mode() == "n"
+        then
+          vim.cmd("startinsert")
+        end
+      end)
+    end,
+  })
   api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
     group = group,
     buffer = buf,
