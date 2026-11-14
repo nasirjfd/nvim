@@ -6,9 +6,9 @@ local function editor(dir)
   local screen = h.nvim(dir)
   screen:exec([[
     _G.hunk_prompts, _G.hunk_notifications = {}, {}
-    vim.ui.select = function(_, opts, callback)
-      table.insert(_G.hunk_prompts, opts.prompt)
-      callback('Yes')
+    require('core.revert-confirm').ask = function(callback)
+      table.insert(_G.hunk_prompts, 'Revert staged hunk')
+      callback(true)
     end
     vim.notify = function(message) table.insert(_G.hunk_notifications, message) end
   ]])
@@ -29,22 +29,48 @@ for _, answer in ipairs({ { "y", true }, { "<CR>", true }, { "n", false }, { "<E
     local approve = answer[2]
     screen:exec("vim.api.nvim_win_set_cursor(0, { 2, 0 }); require('core.revert-hunk').reset()")
     h.wait(screen, function()
-      return screen:exec("return #Snacks.picker.get({source='select'}) == 1")
+      return screen:exec("return vim.bo.filetype == 'revert_confirm'")
     end, "confirmation popup did not open")
     lib.eq(
       "STAGED",
       screen:exec("return vim.api.nvim_buf_get_lines(vim.fn.bufnr('a.txt'), 1, 2, false)[1]")
     )
     lib.eq(before, h.git(dir, "diff", "--cached"), "index changed before confirmation")
+    lib.ok(
+      screen:exec([[
+        return not vim.bo.modifiable and vim.fn.mode() == 'n'
+          and vim.api.nvim_buf_get_lines(0,4,5,false)[1]:find('%[ Yes %].*%[ No %]') ~= nil
+          and #Snacks.picker.get({source='select'}) == 0
+      ]]),
+      "confirmation must have horizontal buttons and no text input"
+    )
+    screen:exec("_G.confirm_text = vim.api.nvim_buf_get_lines(0,0,-1,false)")
+    screen:input("ipasted code")
     lib.eq(
-      "Yes",
-      screen:exec("return Snacks.picker.get({source='select'})[1]:current().item"),
-      "Enter must default to Yes"
+      screen:exec("return _G.confirm_text"),
+      screen:exec("return vim.api.nvim_buf_get_lines(0,0,-1,false)"),
+      "typing edited the dialog"
+    )
+    lib.eq("n", screen:exec("return vim.fn.mode()"), "dialog entered text-entry mode")
+    screen:input("<Esc>")
+    h.wait(screen, function()
+      return screen:exec(
+        "return vim.b.reverting_staged_hunk == nil and vim.bo.filetype ~= 'revert_confirm'"
+      )
+    end, "Escape did not dismiss the read-only dialog")
+    lib.eq(before, h.git(dir, "diff", "--cached"), "typing changed the index")
+    screen:exec("require('core.revert-hunk').reset()")
+    h.wait(screen, function()
+      return screen:exec("return vim.bo.filetype == 'revert_confirm'")
+    end, "confirmation did not reopen")
+    lib.eq(
+      screen:exec("return _G.confirm_text"),
+      screen:exec("return vim.api.nvim_buf_get_lines(0,0,-1,false)")
     )
     screen:input(answer[1])
     h.wait(screen, function()
       return screen:exec(
-        "return #Snacks.picker.get({source='select'}) == 0 and vim.b.reverting_staged_hunk == nil"
+        "return vim.bo.filetype ~= 'revert_confirm' and vim.b.reverting_staged_hunk == nil"
       )
     end, "confirmation did not finish")
     if not approve then

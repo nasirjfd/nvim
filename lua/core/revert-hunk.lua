@@ -62,30 +62,8 @@ function M.reset()
       vim.notify("No hunk at the cursor", vim.log.levels.INFO, { title = "Revert Hunk" })
       return
     end
-    local keys = {
-      ["y"] = { "revert_yes", mode = { "n", "i" } },
-      ["Y"] = { "revert_yes", mode = { "n", "i" } },
-      ["n"] = { "revert_no", mode = { "n", "i" } },
-      ["N"] = { "revert_no", mode = { "n", "i" } },
-      ["<Esc>"] = { "close", mode = { "n", "i" } },
-    }
-    vim.ui.select({ "Yes", "No" }, {
-      prompt = "Revert and unstage this hunk? [Y/n] (Enter = Yes)",
-      snacks = {
-        actions = {
-          revert_yes = function(picker)
-            picker.list:move(1, true)
-            picker:action("confirm")
-          end,
-          revert_no = function(picker)
-            picker.list:move(2, true)
-            picker:action("confirm")
-          end,
-        },
-        win = { input = { keys = keys }, list = { keys = keys } },
-      },
-    }, function(choice)
-      if choice ~= "Yes" then
+    require("core.revert-confirm").ask(function(yes)
+      if not yes then
         if api.nvim_buf_is_valid(buf) then
           vim.b[buf].reverting_staged_hunk = nil
         end
