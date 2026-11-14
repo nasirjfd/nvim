@@ -112,7 +112,11 @@ function M.prefers_explorer(tab)
 end
 
 local function panel_visible(panel)
-  return panel and not panel.is_hidden and panel.split and panel.split.winid and vim.api.nvim_win_is_valid(panel.split.winid)
+  return panel
+    and not panel.is_hidden
+    and panel.split
+    and panel.split.winid
+    and vim.api.nvim_win_is_valid(panel.split.winid)
 end
 
 -- The Snacks explorer pickers whose list is shown in `tab`.
@@ -139,7 +143,11 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
     end
     local tab = vim.api.nvim_get_current_tabpage()
     vim.schedule(function()
-      if not vim.api.nvim_tabpage_is_valid(tab) or #snacks_explorers(tab) == 0 or source_of(args.buf) ~= "explorer" then
+      if
+        not vim.api.nvim_tabpage_is_valid(tab)
+        or #snacks_explorers(tab) == 0
+        or source_of(args.buf) ~= "explorer"
+      then
         return
       end
       explorer_pref[tab] = true
@@ -192,7 +200,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   end,
 })
 
--- Esc never hides the CodeDiff sidebar; q and the sidebar toggles remain the explicit close controls.
+-- Esc never hides the regular CodeDiff sidebar, but a commit diff keeps its back-to-graph key.
 vim.api.nvim_create_autocmd("BufWinEnter", {
   group = group,
   callback = function(args)
@@ -200,9 +208,20 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
     if filetype ~= "codediff-explorer" and filetype ~= "codediff-history" then
       return
     end
+    local tab = vim.api.nvim_get_current_tabpage()
     vim.schedule(function()
+      local lifecycle = package.loaded["codediff.ui.lifecycle"]
+      local session = lifecycle and lifecycle.get_session(tab)
+      if session and session.back then
+        return
+      end
       if vim.api.nvim_buf_is_valid(args.buf) then
-        vim.keymap.set("n", "<Esc>", "<Nop>", { buffer = args.buf, silent = true, desc = "Keep Git sidebar open" })
+        vim.keymap.set(
+          "n",
+          "<Esc>",
+          "<Nop>",
+          { buffer = args.buf, silent = true, desc = "Keep Git sidebar open" }
+        )
       end
     end)
   end,
@@ -292,7 +311,9 @@ vim.api.nvim_create_autocmd("VimEnter", {
   group = group,
   once = true,
   callback = function()
-    if not (_G.Snacks and Snacks.picker and Snacks.picker.pick) or Snacks.picker._sidebars_wrapped then
+    if
+      not (_G.Snacks and Snacks.picker and Snacks.picker.pick) or Snacks.picker._sidebars_wrapped
+    then
       return
     end
     local pick = Snacks.picker.pick
