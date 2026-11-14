@@ -10,6 +10,7 @@
 
 ## Related projects and real-project testing
 
+- Reports of Git conflicts, missing changes, or broken merge UI in Supernova are requests to fix the Neovim/Git-pane tooling, not to resolve application conflicts. Never edit, stage, commit, merge, abort, reset, or otherwise change Supernova repositories for these tasks unless the user explicitly asks for that project operation. Use read-only inspection for real-project validation and isolated repositories for tests that need file changes or conflicts.
 - Requests to change the Git pane may require edits in the separate source repository `~/Can/Develop/nvim/multi-repo-code-diff` (`https://github.com/nasirjfd/multi-repo-code-diff`). Read that repository's own agent guidance before editing it. Do not confuse it with Lazy's installed copy at `~/.local/share/nvim/lazy/multi-repo-code-diff`; make source changes in the source checkout, not the installed copy.
 - For changes to that fork: validate, commit and push the source changes; update the installed plugin through Lazy (`:Lazy update multi-repo-code-diff`); verify the installed commit and test in Neovim; then commit and push this config repository's updated `lazy-lock.json` and any related config changes before reporting completion. Do not include unrelated work or force-push. Report any blocker instead of claiming completion.
 - In testing/performance discussions, "the project" means `~/Can/Develop/php/supernova-env-dev/vendor` (on the current machine, `/Users/nasirjd/Can/Develop/php/supernova-env-dev/vendor`), not the plugin source or a temporary fixture.
