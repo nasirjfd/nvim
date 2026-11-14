@@ -36,47 +36,9 @@ function M.set_title(picker, text)
   end
 end
 
--- ── the terminal cursor ─────────────────────────────────────────────────────────────────────────
--- The rows are selected by the list's own highlight: the terminal cursor on top of it is only noise, so it
--- is hidden while a pane's list has the focus and given back when the focus leaves. One place does it for
--- all panes (two of them saving and restoring 'guicursor' would trip over each other).
-local saved_guicursor ---@type string?
-
-local function hide_cursor()
-  if saved_guicursor == nil then
-    saved_guicursor = vim.o.guicursor
-    api.nvim_set_hl(0, "PaneHiddenCursor", { blend = 100, nocombine = true })
-    vim.o.guicursor = "a:PaneHiddenCursor"
-  end
-end
-
-local function show_cursor()
-  if saved_guicursor ~= nil then
-    vim.o.guicursor = saved_guicursor
-    saved_guicursor = nil
-  end
-end
-
-local function sync_cursor()
-  local buf = api.nvim_get_current_buf()
-  local in_pane = false
-  if vim.bo[buf].filetype == "snacks_picker_list" then
-    for source in pairs(sources) do
-      for _, picker in ipairs(M.panes(source)) do
-        in_pane = in_pane or picker.list.win.buf == buf
-      end
-    end
-  end
-  if in_pane then
-    hide_cursor()
-  else
-    show_cursor()
-  end
-end
-
---- The guicursor that is in use while no pane hides it (for tests).
+--- Whether the shared cursor visibility controller is hiding the cursor (for tests).
 function M.hidden()
-  return vim.o.guicursor == "a:PaneHiddenCursor"
+  return require("core.cursor-visibility").hidden()
 end
 
 -- ── mouse ───────────────────────────────────────────────────────────────────────────────────────
@@ -128,7 +90,10 @@ end
 --- (a new tab when there is none).
 function M.editing_window(picker)
   local win = picker.main
-  local tab = picker.list and picker.list.win and picker.list.win.win and api.nvim_win_is_valid(picker.list.win.win)
+  local tab = picker.list
+    and picker.list.win
+    and picker.list.win.win
+    and api.nvim_win_is_valid(picker.list.win.win)
     and api.nvim_win_get_tabpage(picker.list.win.win)
   if win and api.nvim_win_is_valid(win) and not (tab and is_diff_tab(tab)) then
     return win
@@ -228,12 +193,6 @@ function M.register(source, title)
 end
 
 local group = api.nvim_create_augroup("PaneKit", { clear = true })
-api.nvim_create_autocmd({ "BufEnter", "WinEnter", "WinLeave", "BufLeave", "FocusGained", "TabEnter", "ModeChanged" }, {
-  group = group,
-  callback = function()
-    vim.schedule(sync_cursor)
-  end,
-})
 api.nvim_create_autocmd("BufWinEnter", {
   group = group,
   callback = function(args)

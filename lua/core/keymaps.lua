@@ -211,7 +211,12 @@ local function selection()
 end
 
 local function same(a, b)
-  return a and b and a.first[1] == b.first[1] and a.first[2] == b.first[2] and a.last[1] == b.last[1] and a.last[2] == b.last[2]
+  return a
+    and b
+    and a.first[1] == b.first[1]
+    and a.first[2] == b.first[2]
+    and a.last[1] == b.last[1]
+    and a.last[2] == b.last[2]
 end
 
 --- Select first..last with the cursor on the end nearest to where the resizing started.
@@ -292,23 +297,16 @@ vim.api.nvim_create_autocmd("ModeChanged", {
 -- wheel puts the real selection back first (so `y`, `d`, <Esc>, <M-k>… act on it), a click just ends it.
 local frozen ---@type {buf: number, mode: string, anchor: number[], cursor: number[], mark: number}?
 local freeze_ns = vim.api.nvim_create_namespace("visual_scroll_freeze")
-local saved_guicursor ---@type string?
+local cursor_visibility = require("core.cursor-visibility")
 
 -- The real cursor follows the scroll while the selection is only drawn, so it is hidden and a drawn
 -- one stays on the selection's own cursor position instead (it may be scrolled out of sight).
 local function hide_cursor()
-  if saved_guicursor == nil then
-    saved_guicursor = vim.o.guicursor
-    vim.api.nvim_set_hl(0, "VisualScrollHiddenCursor", { blend = 100, nocombine = true })
-    vim.o.guicursor = "a:VisualScrollHiddenCursor"
-  end
+  cursor_visibility.hide("visual-scroll")
 end
 
 local function show_cursor()
-  if saved_guicursor ~= nil then
-    vim.o.guicursor = saved_guicursor
-    saved_guicursor = nil
-  end
+  cursor_visibility.show("visual-scroll")
 end
 
 local function thaw(restore)
@@ -327,6 +325,13 @@ local function thaw(restore)
     end)
   end
 end
+
+vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave", "TabLeave" }, {
+  group = vim.api.nvim_create_augroup("VisualScrollFocus", { clear = true }),
+  callback = function()
+    thaw(false)
+  end,
+})
 
 local function wheel_in_visual(key)
   return function()
@@ -434,7 +439,11 @@ vim.keymap.set("n", "<leader>rr", function()
     package.loaded[name] = nil
     local ok, err = pcall(require, name)
     if not ok then
-      vim.notify("Reload failed on " .. name .. ": " .. err, vim.log.levels.ERROR, { title = "Reload Config" })
+      vim.notify(
+        "Reload failed on " .. name .. ": " .. err,
+        vim.log.levels.ERROR,
+        { title = "Reload Config" }
+      )
       return
     end
   end
@@ -487,11 +496,18 @@ end
 vim.keymap.set("n", "<leader>fl", function()
   local path = vim.fn.getcwd() .. "/.nvim.lua"
   if vim.fn.filereadable(path) == 0 then
-    local choice = vim.fn.confirm(("No .nvim.lua in %s. Create it?"):format(vim.fn.fnamemodify(vim.fn.getcwd(), ":~")), "&Yes\n&No", 1)
+    local choice = vim.fn.confirm(
+      ("No .nvim.lua in %s. Create it?"):format(vim.fn.fnamemodify(vim.fn.getcwd(), ":~")),
+      "&Yes\n&No",
+      1
+    )
     if choice ~= 1 then
       return
     end
-    vim.fn.writefile({ "-- Local config for this project (runs when Neovim starts here, via exrc)", "" }, path)
+    vim.fn.writefile(
+      { "-- Local config for this project (runs when Neovim starts here, via exrc)", "" },
+      path
+    )
   end
   vim.cmd("edit " .. vim.fn.fnameescape(path))
 end, { desc = "Open the project's local .nvim.lua" })

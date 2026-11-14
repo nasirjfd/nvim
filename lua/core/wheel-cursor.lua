@@ -4,7 +4,7 @@ local M = {}
 local api = vim.api
 local ns = api.nvim_create_namespace("WheelCursor")
 local states = {}
-local saved_cursor
+local visibility = require("core.cursor-visibility")
 
 local function restore(click)
   for win, state in pairs(states) do
@@ -25,10 +25,7 @@ local function restore(click)
     end
   end
   states = {}
-  if saved_cursor then
-    vim.o.guicursor = saved_cursor
-    saved_cursor = nil
-  end
+  visibility.show("wheel")
 end
 
 local function remember(win)
@@ -83,20 +80,24 @@ local function remember(win)
       priority = 250,
     })
   end
-  if not saved_cursor then
-    saved_cursor = vim.o.guicursor
-    api.nvim_set_hl(0, "WheelHiddenCursor", { blend = 100, nocombine = true })
-    vim.o.guicursor = "a:WheelHiddenCursor"
-  end
+  visibility.hide("wheel", win)
 end
 
 function M.setup()
+  api.nvim_create_autocmd({ "WinLeave", "BufLeave", "TabLeave" }, {
+    group = api.nvim_create_augroup("WheelCursorFocus", { clear = true }),
+    callback = function()
+      if next(states) then
+        restore(true)
+      end
+    end,
+  })
   vim.on_key(function(key, typed)
     key = typed and typed ~= "" and typed or key
     local name = vim.fn.keytrans(key)
     if name:find("^<ScrollWheel") then
       -- Visual mode already has its own frozen-selection handling in core/keymaps.lua.
-      if vim.fn.mode():match("^[vV\22]") or vim.o.guicursor:find("VisualScrollHiddenCursor", 1, true) then
+      if vim.fn.mode():match("^[vV\22]") or visibility.active("visual-scroll") then
         return
       end
       local win = vim.fn.getmousepos().winid

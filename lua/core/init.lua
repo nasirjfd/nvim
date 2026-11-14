@@ -1,5 +1,6 @@
 -- Core configuration loader
 require("core.options")
+require("core.cursor-visibility").setup()
 require("core.keymaps")
 require("core.gui-keymaps")
 require("core.autocmds")

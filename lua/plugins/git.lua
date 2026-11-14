@@ -267,7 +267,8 @@ return {
       },
       -- Source Control pane: with no change selected, the right side shows the file you were in
       -- (like VS Code) instead of the shortcuts page (g? shows those)
-      scm = { empty_view = "buffer" },
+      -- Cursor visibility is owned by core.cursor-visibility, shared with the other sidebars.
+      scm = { empty_view = "buffer", hide_cursor = false },
       keymaps = {
         view = {
           quit = { "q", "<leader>dc" },
@@ -323,7 +324,11 @@ return {
         callback = function(args)
           vim.keymap.set("n", "ggm", function()
             require("core.git-merge-requests").open()
-          end, { buffer = args.buf, desc = "Open Merge Requests in Browser", silent = true })
+          end, {
+            buffer = args.buf,
+            desc = "Open Merge Requests in Browser",
+            silent = true,
+          })
           -- <F7> / <F19> in the file list jumps back to the diff pane
           for _, lhs in ipairs({ "<F7>", "<F19>" }) do
             vim.keymap.set("n", lhs, "<cmd>wincmd p<cr>", { buffer = args.buf })
