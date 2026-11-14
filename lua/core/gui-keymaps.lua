@@ -122,6 +122,11 @@ map("n", "<D-F4>", function()
   Snacks.bufdelete()
 end, { desc = "Close Buffer" })
 
+-- Cmd+Option+V -> introduce a variable from the selected expression.
+map("x", "<D-M-v>", function()
+  require("core.introduce-variable").extract()
+end, { desc = "Introduce Variable from Selection" })
+
 -- cmd+d -> duplicate line/selection
 map({ "n", "i" }, "<D-d>", function()
   require("core.duplicate").line()
