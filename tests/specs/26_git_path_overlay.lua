@@ -63,7 +63,21 @@ lib.test("Git K expands only the selected file row over code with the same highl
   end, "K did not reopen the row")
   screen:input("k")
   h.wait(screen, function()
+    return screen:exec([[
+      local overlay = _G.path_overlay_panel.path_overlay
+      return overlay ~= nil and overlay.win == nil
+    ]])
+  end, "non-file row did not hide the overlay while keeping the mode enabled")
+  screen:input("j")
+  h.wait(screen, function()
+    return screen:exec([[
+      local overlay = _G.path_overlay_panel.path_overlay
+      return overlay and overlay.win ~= nil and vim.api.nvim_win_is_valid(overlay.win)
+    ]])
+  end, "expanded-path mode did not follow the selected file")
+  screen:input("K")
+  h.wait(screen, function()
     return screen:exec("return _G.path_overlay_panel.path_overlay == nil")
-  end, "moving the selection left the old row overlay behind")
+  end, "K did not disable expanded-path mode")
   screen:close()
 end)
