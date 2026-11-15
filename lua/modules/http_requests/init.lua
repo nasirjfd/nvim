@@ -58,6 +58,7 @@ local function set_highlights()
   hl("HttpPaneDim", { link = "Comment" })
   hl("HttpPanePin", { fg = "#e0c08a" })
   hl("HttpPaneCount", { link = "NonText" })
+  hl("HttpRequestSelectedName", { link = "IncSearch" })
 end
 set_highlights()
 api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
@@ -417,29 +418,12 @@ local function goto_line(picker, file, line)
 end
 
 -- Reveal a request in the editing window without taking focus from the pane.
-local function preview_line(picker, file, line)
-  local win = kit.editing_window(picker)
-  if not (win and api.nvim_win_is_valid(win)) then
-    return
-  end
-  local previous = api.nvim_get_current_win()
+local function preview_line(picker, item)
   previewing_request = true
-  api.nvim_win_call(win, function()
-    if vim.fs.normalize(api.nvim_buf_get_name(0)) ~= vim.fs.normalize(file) then
-      vim.cmd("edit " .. vim.fn.fnameescape(file))
-    end
-    require("core.http-highlight").ensure(api.nvim_get_current_buf())
-    -- `nvim_win_call()` can load a buffer without running its ftplugin; make sure the request runner
-    -- and the file-local HTTP keys are available before this becomes the active editing buffer.
-    if vim.bo.filetype == "http" and not vim.fn.maparg("<CR>", "n", false, true).callback then
-      vim.cmd("runtime! ftplugin/http.lua")
-    end
-    api.nvim_win_set_cursor(0, { math.min(line, api.nvim_buf_line_count(0)), 0 })
-    vim.cmd("normal! zz")
-  end)
+  local ok, err = pcall(require("modules.http_requests.preview").show, picker, item)
   previewing_request = false
-  if api.nvim_win_is_valid(previous) then
-    api.nvim_set_current_win(previous)
+  if not ok then
+    error(err)
   end
 end
 
@@ -593,11 +577,11 @@ local preview_current
 local actions = {
   http_noop = function() end,
   http_down = function(picker)
-    picker.list:move(1)
+    picker.list:move(vim.v.count1)
     preview_current(picker)
   end,
   http_up = function(picker)
-    picker.list:move(-1)
+    picker.list:move(-vim.v.count1)
     preview_current(picker)
   end,
   -- Enter, double click, single click on a row
@@ -773,25 +757,14 @@ function M.panes(tab)
   return kit.panes(SOURCE, tab)
 end
 
-local pane_request = setmetatable({}, { __mode = "k" })
-
 -- Moving through request rows previews the request in the editing window, but leaves focus in the pane.
 preview_current = function(picker)
-  local item = picker:current()
+  local item = picker:current({ resolve = false })
   if not item or item.kind ~= "request" then
-    pane_request[picker] = nil
+    require("modules.http_requests.preview").clear(picker)
     return
   end
-  local key = item.file .. ":" .. item.req.line
-  if pane_request[picker] == key then
-    local win = picker.main
-    if win and api.nvim_win_is_valid(win) then
-      require("core.http-highlight").ensure(api.nvim_win_get_buf(win))
-    end
-    return
-  end
-  pane_request[picker] = key
-  preview_line(picker, item.file, item.req.line)
+  preview_line(picker, item)
 end
 
 local buffer_request = {}
@@ -865,6 +838,9 @@ local function open()
           preview_current(picker)
         end
       end, { buf = true })
+    end,
+    on_close = function(picker)
+      require("modules.http_requests.preview").clear(picker)
     end,
     win = {
       list = {

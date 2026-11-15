@@ -6,8 +6,18 @@
 local M = {}
 
 local METHODS = {
-  GET = true, POST = true, PUT = true, PATCH = true, DELETE = true, HEAD = true, OPTIONS = true,
-  TRACE = true, CONNECT = true, GRAPHQL = true, GRPC = true, WEBSOCKET = true,
+  GET = true,
+  POST = true,
+  PUT = true,
+  PATCH = true,
+  DELETE = true,
+  HEAD = true,
+  OPTIONS = true,
+  TRACE = true,
+  CONNECT = true,
+  GRAPHQL = true,
+  GRPC = true,
+  WEBSOCKET = true,
 }
 M.METHODS = METHODS
 
@@ -18,6 +28,9 @@ M.METHODS = METHODS
 ---@field line integer  the request line (METHOD url), 1-based
 ---@field start_line integer  first line of the block (the `###` line, or 1)
 ---@field end_line integer
+---@field name_line integer
+---@field name_col integer 0-based byte column
+---@field name_end integer exclusive byte column
 
 ---@param lines string[]
 ---@return http.Request[]
@@ -26,13 +39,16 @@ function M.parse(lines)
   local start, title = 1, ""
 
   local function finish(last)
-    local name, method, url, request_line
+    local name, method, url, request_line, name_line, name_from
     for lnum = start, last do
       local line = lines[lnum]
       if lnum > start or not line:find("^###") then
         local tag = line:match("^%s*[#/]+%s*@name%s+(%S+)")
         if tag and not name then
           name = tag
+          name_line = lnum
+          local _, prefix = line:find("^%s*[#/]+%s*@name%s+")
+          name_from = prefix + 1
         end
         if not request_line and not line:find("^%s*[#/]") then
           local m, u = line:match("^%s*(%u+)%s+(%S+)")
@@ -45,9 +61,16 @@ function M.parse(lines)
     if request_line then
       if not name and title ~= "" then
         name = title
+        name_line, name_from = start, (lines[start]:find("[^#%s]") or 1)
       end
+      name = name or (method .. " " .. url)
+      name_line = name_line or request_line
+      local first, name_last = lines[name_line]:find(name, name_from or 1, true)
       requests[#requests + 1] = {
-        name = name or (method .. " " .. url),
+        name = name,
+        name_line = name_line,
+        name_col = first and first - 1 or 0,
+        name_end = name_last or #lines[name_line],
         method = method,
         url = url,
         line = request_line,
