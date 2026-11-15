@@ -104,8 +104,11 @@ end)
 lib.test(
   "Git F4 return point preserves a whole commit diff across backward and forward jumps",
   function()
-    local dir = h.repo({ ["a.txt"] = { "one" }, ["b.txt"] = { "two" } })
-    h.write(dir .. "/a.txt", { "changed" })
+    local lines = { "one", "two", "three", "four", "five", "six", "seven", "eight" }
+    local dir = h.repo({ ["a.txt"] = lines, ["b.txt"] = { "two" } })
+    lines[7] = "changed"
+    h.write(dir .. "/a.txt", lines)
+    h.write(dir .. "/b.txt", { "also changed" })
     h.git(dir, "commit", "-qam", "change")
     local screen = h.nvim(dir)
     screen:exec("vim.cmd('edit b.txt'); vim.cmd('CodeDiff graph')")
@@ -139,9 +142,17 @@ lib.test(
     screen:exec([[
     _G.workflow_tab = vim.api.nvim_get_current_tabpage()
     _G.workflow_session = require('codediff.ui.lifecycle').get_session(_G.workflow_tab)
-    vim.api.nvim_set_current_win(_G.workflow_session.modified_win)
     _G.workflow_win = vim.api.nvim_get_current_win()
   ]])
+    lib.ok(
+      screen:exec("return _G.workflow_win == _G.workflow_session.modified_win"),
+      "commit page did not focus the modified diff pane"
+    )
+    lib.eq(
+      7,
+      screen:exec("return vim.api.nvim_win_get_cursor(0)[1]"),
+      "commit page did not start at the first change of the first file"
+    )
     h.wait(screen, function()
       return screen:exec([[
         for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -175,6 +186,11 @@ lib.test(
         paths={require('codediff.ui.lifecycle').get_paths(_G.workflow_tab)}}
     ]]))
     end)
+    lib.eq(
+      7,
+      screen:exec("return vim.api.nvim_win_get_cursor(0)[1]"),
+      "F4 did not open the working file at the first change"
+    )
     screen:exec("vim.cmd('edit b.txt')")
     screen:input("<C-o>")
     h.wait(screen, function()
