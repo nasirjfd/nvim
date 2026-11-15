@@ -80,12 +80,8 @@ api.nvim_create_autocmd("FileType", {
   end,
 })
 
--- Resize neovim split when terminal is resized
-api.nvim_create_autocmd("VimResized", {
-  callback = function()
-    vim.cmd("wincmd =")
-  end,
-})
+-- Neovim already adapts splits to terminal resizing. Do not run `wincmd =`
+-- here: it discards the proportions chosen by dragging a pane separator.
 
 -- Fix terraform and hcl comment string
 api.nvim_create_autocmd("FileType", {
