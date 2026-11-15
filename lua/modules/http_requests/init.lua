@@ -903,7 +903,13 @@ end
 
 --- <leader>h: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
 function M.toggle()
-  require("core.leave-codediff").leave_graph()
+  -- The request list and its live editor must share a normal tab. Keeping the
+  -- list in a Git tab made previews invisible in another tab, and Enter then
+  -- exposed that tab's Explorer instead of the adjacent request editor.
+  local editor = require("core.leave-codediff").editor_window(api.nvim_get_current_win())
+  if editor then
+    api.nvim_set_current_win(editor)
+  end
   local tab = api.nvim_get_current_tabpage()
   if opening[tab] then
     return
@@ -936,8 +942,11 @@ function M.toggle()
     opening[tab] = true
     files.scan(dir, function()
       opening[tab] = nil
-      if api.nvim_tabpage_is_valid(tab) and api.nvim_get_current_tabpage() == tab
-        and require("core.sidebars").generation(tab) == generation then
+      if
+        api.nvim_tabpage_is_valid(tab)
+        and api.nvim_get_current_tabpage() == tab
+        and require("core.sidebars").generation(tab) == generation
+      then
         if #M.panes(tab) == 0 then
           open()
         end

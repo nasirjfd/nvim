@@ -761,20 +761,20 @@ end
 
 lib.test("http pane: from the Git sidebar and back, the layout stays whole", function()
   local screen = open_diff_tab(diff_project())
-  local function hidden()
-    return screen:exec("local v = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage()); return v ~= nil and v.is_hidden == true")
-  end
+  screen:exec("_G.http_origin_git_tab = vim.api.nvim_get_current_tabpage()")
   screen:input("<Space>h")
   h.wait(screen, function()
-    return layout(screen).http == 1 and hidden()
-  end, "the pane must replace the Git sidebar")
+    return layout(screen).http == 1
+      and screen:exec("return vim.api.nvim_get_current_tabpage() ~= _G.http_origin_git_tab")
+  end, "the HTTP pane must open with its editor outside the Git tab")
   vim.wait(300)
   local l = layout(screen)
   lib.eq(1, l.cmdheight, "the command line grew")
   screen:exec("vim.fn.maparg('<D-S-g>', 'n', false, true).callback()")
   h.wait(screen, function()
-    return layout(screen).http == 0 and not hidden()
-  end, "cmd+shift+g must bring the Git sidebar back and close the pane")
+    return layout(screen).http == 0
+      and screen:exec("return vim.api.nvim_get_current_tabpage() == _G.http_origin_git_tab")
+  end, "cmd+shift+g must bring the Git tab back")
   vim.wait(300)
   lib.eq(1, layout(screen).cmdheight, "the command line grew after going back to Git")
   screen:input("<Space>h")
@@ -788,31 +788,48 @@ lib.test("http pane: Esc does not close the Git sidebar", function()
   local screen = open_diff_tab(diff_project())
   screen:input("<Esc>")
   h.wait(screen, function()
-    return screen:exec("local v = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage()); return v ~= nil and not v.is_hidden")
+    return screen:exec(
+      "local v = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage()); return v ~= nil and not v.is_hidden"
+    )
   end, "Esc closed the Git sidebar")
   screen:close()
 end)
 
-lib.test("http pane: a request chosen in a diff tab opens in another tab and leaves the diff alone", function()
-  local dir = diff_project()
-  local screen = open_diff_tab(dir)
-  local diff_tab = screen:exec("return vim.api.nvim_get_current_tabpage()")
-  screen:input("<Space>h")
-  h.wait(screen, function()
-    return h.find_on_screen(screen, "Extra", 40) ~= nil
-  end, "the requests are not on the screen")
-  click_on(screen, "Extra")
-  h.wait(screen, function()
-    return screen:exec("return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t')") == "login.http"
-      and screen:exec("return vim.api.nvim_get_current_tabpage()") ~= diff_tab
-  end, "the file did not open in another tab")
-  -- (the cursor is set right after the file opens: wait for it, do not race it)
-  h.wait(screen, function()
-    return where(screen)[2] == 5
-  end, "the cursor must be on the request (line 5)")
-  lib.ok(screen:exec("return require('codediff.ui.lifecycle').get_session(...) ~= nil", { diff_tab }), "the diff session was destroyed")
-  screen:close()
-end)
+lib.test(
+  "http pane: a request chosen in a diff tab opens in another tab and leaves the diff alone",
+  function()
+    local dir = diff_project()
+    local screen = open_diff_tab(dir)
+    local diff_tab = screen:exec("return vim.api.nvim_get_current_tabpage()")
+    screen:input("<Space>h")
+    h.wait(screen, function()
+      return screen:exec([[
+      local p = require('modules.http_requests').panes()[1]
+      if not p or vim.api.nvim_get_current_win() ~= p.list.win.win then return false end
+      for _, item in ipairs(p:items()) do
+        if item.req and item.req.name == 'Extra' then return true end
+      end
+      return false
+    ]])
+    end, "the requests are not on the screen")
+    screen:flush()
+    click_on(screen, "Extra")
+    h.wait(screen, function()
+      return screen:exec("return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t')")
+          == "login.http"
+        and screen:exec("return vim.api.nvim_get_current_tabpage()") ~= diff_tab
+    end, "the file did not open in another tab")
+    -- (the cursor is set right after the file opens: wait for it, do not race it)
+    h.wait(screen, function()
+      return where(screen)[2] == 5
+    end, "the cursor must be on the request (line 5)")
+    lib.ok(
+      screen:exec("return require('codediff.ui.lifecycle').get_session(...) ~= nil", { diff_tab }),
+      "the diff session was destroyed"
+    )
+    screen:close()
+  end
+)
 
 -- ── other situations ────────────────────────────────────────────────────────────────────────────
 lib.test("http pane: with split windows the pane is full height and files open in the window it was opened from", function()
