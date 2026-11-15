@@ -83,29 +83,53 @@ end
 -- over its panes.
 local function is_diff_tab(tab)
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
-  return lifecycle ~= nil and lifecycle.get_session(tab) ~= nil
+  local graph = package.loaded["codediff.ui.graph"]
+  return (lifecycle and (lifecycle.get_session(tab) or lifecycle.get_panel(tab)))
+    or (graph and graph.get(tab))
 end
 
 --- The window a file is opened in: the one next to the pane; in a diff tab, a window of an ordinary tab
 --- (a new tab when there is none).
 function M.editing_window(picker)
-  local win = picker.main
-  local tab = picker.list
-    and picker.list.win
-    and picker.list.win.win
-    and api.nvim_win_is_valid(picker.list.win.win)
-    and api.nvim_win_get_tabpage(picker.list.win.win)
-  if win and api.nvim_win_is_valid(win) and not (tab and is_diff_tab(tab)) then
+  local function editor(win)
     return win
+      and api.nvim_win_is_valid(win)
+      and api.nvim_win_get_config(win).relative == ""
+      and (vim.bo[api.nvim_win_get_buf(win)].buftype == "" or vim.bo[api.nvim_win_get_buf(win)].filetype == "snacks_dashboard")
+      and not is_diff_tab(api.nvim_win_get_tabpage(win))
   end
-  for _, candidate in ipairs(api.nvim_list_tabpages()) do
-    if not is_diff_tab(candidate) then
-      api.nvim_set_current_tabpage(candidate)
-      return api.nvim_get_current_win()
+  if editor(picker.main) then
+    return picker.main
+  end
+  -- Selecting a destination must not change focus: previews save their origin
+  -- *after* this call, and a tab's current window may be its Explorer sidebar.
+  local origin = api.nvim_get_current_win()
+  local target = require("core.leave-codediff").editor_window(origin)
+  if not editor(target) then
+    target = nil
+    for _, tab in ipairs(api.nvim_list_tabpages()) do
+      if not is_diff_tab(tab) then
+        for _, win in ipairs(api.nvim_tabpage_list_wins(tab)) do
+          if editor(win) then
+            target = win
+            break
+          end
+        end
+      end
+      if target then
+        break
+      end
     end
   end
-  vim.cmd("tabnew")
-  return api.nvim_get_current_win()
+  if not target then
+    vim.cmd("tabnew")
+    target = api.nvim_get_current_win()
+  end
+  if api.nvim_win_is_valid(origin) then
+    api.nvim_set_current_win(origin)
+  end
+  picker.main = target
+  return target
 end
 
 --- Go to `line` of `file` in the editing window.
