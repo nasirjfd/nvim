@@ -595,6 +595,14 @@ local function keymaps(buf)
     end
     show_replace(true)
   end)
+  map("r", function()
+    if state.by_r and (vim.uv.now() - state.opened_at) < 800 then
+      M.close()
+      vim.lsp.buf.rename()
+    else
+      api.nvim_feedkeys("r", "in", false)
+    end
+  end, { "i", "s" })
   -- one line per field: Backspace at the start and Delete at the end don't join them
   vim.keymap.set("i", "<BS>", function()
     return api.nvim_win_get_cursor(0)[2] == 0 and "" or "<BS>"

@@ -279,6 +279,7 @@ return {
     },
     config = function(_, opts)
       require("codediff").setup(opts)
+      require("core.git-jumps").attach()
 
       local group = vim.api.nvim_create_augroup("UserCodeDiff", { clear = true })
 

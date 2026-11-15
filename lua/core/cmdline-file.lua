@@ -1,10 +1,11 @@
 -- The file name at the left of the command line (the line `:q` and `:w` are typed on), hidden
 -- while a command is being typed. Neovim has no slot there, so it is a one-row floating window
 -- laid over the start of that row; the blame and line:col stay in the ruler on the right.
--- A message starts at the same spot, so the name stays hidden after a command until the cursor moves.
+-- Restore it as soon as the command line closes, including in diff views.
 local M = {}
 
 local buf, win, shown
+local editor_windows = {}
 
 local function ensure_buf()
   if not (buf and vim.api.nvim_buf_is_valid(buf)) then
@@ -21,28 +22,55 @@ local function hide()
   shown = nil
 end
 
--- Nothing in a diff view: the buffers there are virtual and the view has its own layout
-local function in_diff()
-  local session = package.loaded["codediff.ui.lifecycle.session"]
-  return session ~= nil and session.get_active_diffs()[vim.api.nvim_get_current_tabpage()] ~= nil
-end
-
 local function render()
   if vim.fn.mode() == "c" or vim.fn.getcmdwintype() ~= "" then
     return hide()
   end
-  if in_diff() then
-    return hide()
+  local tab = vim.api.nvim_get_current_tabpage()
+  local current = vim.api.nvim_get_current_win()
+  local function is_file_window(candidate)
+    if not candidate or not vim.api.nvim_win_is_valid(candidate) then
+      return false
+    end
+    local b = vim.api.nvim_win_get_buf(candidate)
+    return vim.api.nvim_win_get_config(candidate).relative == ""
+      and vim.bo[b].buftype == ""
+      and vim.api.nvim_buf_get_name(b) ~= ""
   end
-  local ok, text = pcall(_G.title_string)
+  local target = current
+  if is_file_window(current) then
+    editor_windows[tab] = current
+  elseif is_file_window(editor_windows[tab]) then
+    target = editor_windows[tab]
+  else
+    for _, candidate in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+      if is_file_window(candidate) then
+        target = candidate
+        break
+      end
+    end
+  end
+  local ok, text = pcall(vim.api.nvim_win_call, target, _G.title_string)
   if not ok or not text or text == "" then
     return hide()
   end
   -- a file: its name first and clear, then the folder it is in, dim
   local name, dir = text, ""
-  local path = vim.api.nvim_buf_get_name(0)
-  if path ~= "" and vim.bo.buftype == "" then
-    name = vim.fn.fnamemodify(path, ":t") .. (vim.bo.modified and " ●" or "")
+  local target_buf = vim.api.nvim_win_get_buf(target)
+  local path = vim.api.nvim_buf_get_name(target_buf)
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  local original, modified
+  if lifecycle then
+    original, modified = lifecycle.get_paths(tab)
+  end
+  local diff_path = modified and modified.absolute ~= "" and modified or original
+  if diff_path and diff_path.absolute ~= "" then
+    path = diff_path.absolute
+  else
+    diff_path = nil
+  end
+  if path ~= "" and (diff_path or vim.bo[target_buf].buftype == "") then
+    name = vim.fn.fnamemodify(path, ":t") .. (vim.bo[target_buf].modified and " ●" or "")
     dir = vim.fn.fnamemodify(path, ":~:.:h")
     dir = (dir == "." or dir == "") and "" or ("  " .. dir)
     text = name .. dir
@@ -103,39 +131,36 @@ function M.setup()
     end,
   })
   -- Only events that can change the name or the row: nothing runs per cursor move or keystroke.
-  vim.api.nvim_create_autocmd(
-    { "BufEnter", "WinEnter", "TabEnter", "BufModifiedSet", "BufFilePost", "DirChanged", "VimResized", "InsertLeave" },
-    { group = group, callback = vim.schedule_wrap(render) }
-  )
+  vim.api.nvim_create_autocmd({
+    "BufEnter",
+    "WinEnter",
+    "TabEnter",
+    "BufModifiedSet",
+    "BufFilePost",
+    "DirChanged",
+    "VimResized",
+    "InsertLeave",
+  }, { group = group, callback = vim.schedule_wrap(render) })
   -- The diff view switches files without a buffer event of its own
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = { "CodeDiffOpen", "CodeDiffClose", "CodeDiffFileSelect" },
     callback = vim.schedule_wrap(render),
   })
-  -- Esc out of the command line (nothing was run, so there is no message to read): the name is back at once
+  -- Both executed and cancelled commands restore the filename without waiting for cursor movement.
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
     callback = function()
-      if vim.v.event.abort then
-        vim.defer_fn(function()
-          shown = nil
-          render()
-        end, 30)
-      end
+      vim.schedule(function()
+        shown = nil
+        render()
+      end)
     end,
   })
   vim.api.nvim_create_autocmd("CmdlineEnter", {
     group = group,
     callback = function()
       hide()
-      -- Stay hidden after a command so its message ("written", an :echo) can be read; the first
-      -- cursor move afterwards brings the name back, and the listener removes itself.
-      vim.api.nvim_create_autocmd("CursorMoved", {
-        group = group,
-        once = true,
-        callback = vim.schedule_wrap(render),
-      })
     end,
   })
   vim.schedule(render)

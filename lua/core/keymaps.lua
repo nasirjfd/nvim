@@ -463,7 +463,29 @@ end)
 -- selection into the unnamed register, which 'clipboard' = "unnamedplus" mirrors to the clipboard).
 -- The delete goes to the unnamed register only, with 'clipboard' emptied for that moment.
 local paste = vim.paste
+local http_paste
 vim.paste = function(lines, phase)
+  -- Buffer a streamed HTTP paste until complete: never try to format partial JSON.
+  if phase <= 1 then
+    http_paste = (vim.bo.filetype == "http" or vim.bo.filetype == "rest")
+        and vim.api.nvim_get_mode().mode ~= "c"
+        and {}
+      or nil
+  end
+  if http_paste then
+    if #http_paste == 0 then
+      http_paste = vim.list_extend({}, lines)
+    else
+      http_paste[#http_paste] = http_paste[#http_paste] .. (lines[1] or "")
+      vim.list_extend(http_paste, vim.list_slice(lines, 2))
+    end
+    if phase == 1 or phase == 2 then
+      return true
+    end
+    lines = require("core.format").json(http_paste) or http_paste
+    http_paste = nil
+    phase = -1
+  end
   -- Cmd+V in the explorer sidebar pastes the copied files (asking for a name when needed), it does
   -- not insert text (see explorer_paste_named in plugins/snacks.lua)
   if vim.bo.filetype == "snacks_picker_list" and _G.Snacks and phase <= 1 then

@@ -150,6 +150,9 @@ end, { desc = "Goto Symbol" })
 
 -- cmd+r cmd+r -> rename symbol: the first cmd+r opens the replace bar, the second one in the bar
 -- renames (core/find-bar.lua), so a single cmd+r doesn't wait for a second key
+map("n", "<F2>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
+map("n", "<S-F6>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
+map("n", "<F18>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
 
 -- cmd+g -> goto line
 map("n", "<D-g>", function()
@@ -193,7 +196,8 @@ local function focus_git()
   end
   -- the file being edited (also when the cursor is in the file explorer)
   local scm_handler = package.loaded["codediff.commands.handlers.scm"]
-  local from = scm_handler and scm_handler.editor_buffer and scm_handler.editor_buffer() or vim.api.nvim_get_current_buf()
+  local from = scm_handler and scm_handler.editor_buffer and scm_handler.editor_buffer()
+    or vim.api.nvim_get_current_buf()
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     local panel = lifecycle.get_panel(tab)
     if panel and panel.data and panel.data.kind == "scm" then
@@ -232,34 +236,16 @@ map({ "n", "x" }, "<D-C-k>", function()
   require("multicursor-nvim").lineAddCursor(-1)
 end, { desc = "Add Cursor Above" })
 
--- alt+cmd+l -> format selection
-map("x", "<D-M-l>", function()
-  require("conform").format({ async = true })
-end, { desc = "Format Selection" })
-
 -- shift+option+f -> format the selection (visual mode) or the whole file (normal mode), like VS Code.
 -- Ghostty types a character for option+shift+f, so its config sends the key as alt+shift+f
 -- instead (keybind = alt+shift+f=csi:102;4u), which Neovim reads as <M-F>.
 local function format_buffer_or_selection()
-  local range
-  local mode = vim.api.nvim_get_mode().mode
-  if mode == "v" or mode == "V" or mode == "\22" then
-    -- Whole selected lines, ending past the last character: conform's own visual range stops one
-    -- character short, so stylua/prettier skip the last statement as only partly selected.
-    local first, last = vim.fn.line("v"), vim.fn.line(".")
-    if first > last then
-      first, last = last, first
-    end
-    range = { start = { first, 0 }, ["end"] = { last, #vim.fn.getline(last) } }
-    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
-  end
-  require("conform").format({ async = true, range = range }, function(err)
-    if err then
-      vim.notify(err, vim.log.levels.WARN, { title = "Format" })
-    end
-  end)
+  require("core.format").format()
 end
 map({ "n", "x" }, "<M-F>", format_buffer_or_selection, { desc = "Format Selection / File" })
+map({ "n", "x" }, "<M-S-f>", format_buffer_or_selection, { desc = "Format Selection / File" })
+-- alt+cmd+l -> format selection
+map("x", "<D-M-l>", format_buffer_or_selection, { desc = "Format Selection" })
 
 -- alt+cmd+z -> revert the hunk under the cursor. In a diff tab that is codediff's discard-hunk (working
 -- tree side, no confirmation: cmd+z / u bring it back); elsewhere reset an unstaged hunk,

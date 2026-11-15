@@ -142,9 +142,11 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       return
     end
     local tab = vim.api.nvim_get_current_tabpage()
+    local generation = M.generation(tab)
     vim.schedule(function()
       if
         not vim.api.nvim_tabpage_is_valid(tab)
+        or M.generation(tab) ~= generation
         or #snacks_explorers(tab) == 0
         or source_of(args.buf) ~= "explorer"
       then
@@ -177,8 +179,9 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       return
     end
     local tab = vim.api.nvim_get_current_tabpage()
+    local generation = M.generation(tab)
     vim.schedule(function()
-      if not vim.api.nvim_tabpage_is_valid(tab) then
+      if not vim.api.nvim_tabpage_is_valid(tab) or M.generation(tab) ~= generation then
         return
       end
       -- A later request may already have hidden Git before this callback gets its turn.
@@ -236,8 +239,11 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       return
     end
     local tab = vim.api.nvim_get_current_tabpage()
+    local generation = M.generation(tab)
     vim.schedule(function()
-      local name = vim.api.nvim_tabpage_is_valid(tab) and name_of_source(source_of(args.buf))
+      local name = vim.api.nvim_tabpage_is_valid(tab)
+        and M.generation(tab) == generation
+        and name_of_source(source_of(args.buf))
       if not name then
         return
       end
@@ -265,10 +271,8 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
 function M.make_room(name, tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   M.request(tab)
-  if name == "explorer" then
-    explorer_pref[tab] = true
-    last_sidebar[tab] = "explorer"
-  end
+  last_sidebar[tab] = name
+  explorer_pref[tab] = name == "explorer"
   for _, picker in ipairs(snacks_explorers(tab)) do
     close_now(picker)
   end
