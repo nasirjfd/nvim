@@ -20,6 +20,22 @@ for _, action in ipairs({ "create", "paste" }) do
       h.wait(screen, function()
         return screen:exec("return vim.bo.filetype == 'snacks_input' and vim.fn.mode() == 'i'")
       end, "filename prompt did not open")
+      screen:flush()
+      lib.ok(
+        h.find_on_screen(screen, "fixed extension") == nil,
+        "redundant extension footer is still shown"
+      )
+      if action == "paste" then
+        lib.ok(
+          h.find_on_screen(screen, "from copied cURL") ~= nil,
+          "filename box does not explain the copied cURL source"
+        )
+      else
+        lib.ok(
+          h.find_on_screen(screen, "from copied cURL") == nil,
+          "ordinary creation is mislabeled as a cURL import"
+        )
+      end
       screen:input("orders.v2<End><Del><Del><Del><Del><Del>")
       screen:flush()
       lib.eq(

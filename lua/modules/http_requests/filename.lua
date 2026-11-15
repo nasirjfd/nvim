@@ -17,7 +17,6 @@ end
 function M.input(prompt, on_confirm)
   local input = vim.ui.input({
     prompt = prompt,
-    win = { footer = " .http · fixed extension ", footer_pos = "right" },
   }, function(name)
     local filename = M.normalize(name)
     if filename then

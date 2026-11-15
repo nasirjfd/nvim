@@ -487,7 +487,7 @@ end
 -- The file new requests go to: the file under the cursor (a request counts as its file). For a button it is
 -- the .http file shown in the editing window, else the last one gone to from the pane. For a folder (or
 -- when there is no such file) a new file is asked for.
-local function with_target(picker, item, fn)
+local function with_target(picker, item, fn, from_curl)
   if item and (item.kind == "request" or item.kind == "file") then
     return fn(item.file)
   end
@@ -505,9 +505,10 @@ local function with_target(picker, item, fn)
     end
   end
   local base = item and item.kind == "dir" and item.dirpath or cwd()
-  local shown = vim.fn.fnamemodify(base, ":~:.")
+  local shown = base == cwd() and "." or vim.fn.fnamemodify(base, ":~:.")
+  local prompt = from_curl and "New .http file from copied cURL in " or "New .http file in "
   require("modules.http_requests.filename").input(
-    "New .http file in " .. (shown == "" and "." or shown) .. "/ : ",
+    prompt .. (shown == "" and "." or shown) .. "/ : ",
     function(name)
       fn(base .. "/" .. name)
     end
@@ -539,7 +540,7 @@ local function add_from_curl(picker, item)
     local _, line = edit.append(file, lines)
     refresh_all()
     goto_line(picker, file, line)
-  end)
+  end, true)
 end
 
 local function request_at_cursor()
