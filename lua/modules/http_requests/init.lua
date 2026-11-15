@@ -716,21 +716,25 @@ local actions = {
   end,
   -- / shows the search input; Esc only leaves insert mode, keeping the filtered results visible.
   http_show_search = function(picker)
-    picker:toggle("input", { enable = true, focus = true })
-    vim.schedule(function()
-      if not picker.closed then
-        vim.keymap.set("n", "p", function()
-          vim.schedule(function()
-            if not picker.closed then
-              local item = picker.list:get(1)
+  picker:toggle("input", { enable = true, focus = true })
+  vim.schedule(function()
+    if not picker.closed then
+      vim.keymap.set("n", "p", function()
+        vim.schedule(function()
+          if not picker.closed then
+            -- Search keeps ancestor folders/files visible above each match.
+            for index = 1, picker.list:count() do
+              local item = picker.list:get(index)
               if item and item.kind == "request" and item.rel then
                 pinned.toggle(cwd(), item.rel, item.req)
+                break
               end
             end
-          end)
-        end, { buffer = picker.input.win.buf, silent = true, desc = "Pin filtered HTTP request" })
-      end
-    end)
+          end
+        end)
+      end, { buffer = picker.input.win.buf, silent = true, desc = "Pin filtered HTTP request" })
+    end
+  end)
   end,
   http_stop_search_insert = function()
     vim.cmd("stopinsert")
@@ -825,7 +829,18 @@ local function open()
     auto_close = false,
     jump = { close = false },
     layout = { preset = "sidebar", preview = false, hidden = { "input" } },
-    matcher = { sort_empty = false, fuzzy = false },
+    matcher = {
+      sort_empty = false,
+      fuzzy = false,
+      -- Keep search context, but do not let Snacks' ancestor handling reset
+      -- the normal tree cursor to the toolbar after every fold/refresh.
+      on_match = function(matcher)
+        matcher.opts.keep_parents = not matcher:empty()
+      end,
+      on_done = function(matcher)
+        matcher.opts.keep_parents = not matcher:empty()
+      end,
+    },
     sort = { fields = { "idx" } },
     confirm = "http_confirm",
     actions = actions,

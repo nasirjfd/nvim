@@ -1243,7 +1243,9 @@ lib.test("http pane: Esc leaves search insert mode without clearing it, and p pi
     return h.find_on_screen(screen, "make-user", 40) ~= nil
       and h.find_on_screen(screen, "List users", 40) == nil
   end, "Esc changed the search")
-  lib.eq("request:make-user POST https://example.com/users", screen:exec([[
+  lib.eq(
+    "dir:api,dir:users,file:users.http,request:make-user POST https://example.com/users",
+    screen:exec([[
     local p = require('modules.http_requests').panes()[1]
     local found = {}
     for i = 1, p.list:count() do
@@ -1251,7 +1253,9 @@ lib.test("http pane: Esc leaves search insert mode without clearing it, and p pi
       found[#found + 1] = item and (item.kind .. ':' .. item.text) or 'nil'
     end
     return table.concat(found, ',')
-  ]]), "filtered list")
+  ]]),
+    "filtered list"
+  )
   lib.eq("Pin filtered HTTP request", screen:exec("return vim.fn.maparg('p', 'n', false, true).desc"), "p mapping")
   screen:input("p")
   h.wait(screen, function()
