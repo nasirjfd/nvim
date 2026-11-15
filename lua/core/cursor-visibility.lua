@@ -96,7 +96,14 @@ function M.setup()
     {
       group = group,
       callback = function(event)
-        if event.event == "WinEnter" or event.event == "TabEnter" then
+        if
+          event.event == "WinEnter"
+          or event.event == "TabEnter"
+          or event.event == "ModeChanged"
+          or event.event == "FocusGained"
+        then
+          -- Input floats may enter with noautocmd, suppressing WinEnter. Typing
+          -- or selecting text there must release the sidebar's hidden cursor.
           focused_win = api.nvim_get_current_win()
         end
         update()

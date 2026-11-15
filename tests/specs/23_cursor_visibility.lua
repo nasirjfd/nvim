@@ -30,6 +30,35 @@ local function hidden(screen, want)
   end, want and "navigation cursor must be hidden" or "text cursor must be restored")
 end
 
+lib.test("cursor is visible in filename and text prompts opened from a hidden sidebar", function()
+  local screen = editor()
+  screen:exec("Snacks.explorer()")
+  hidden(screen, true)
+  screen:exec([[
+    _G.filename_input = Snacks.input({ prompt = 'Paste as', default = 'copy.php' }, function() end)
+  ]])
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_input' and vim.fn.mode() == 'i'")
+  end, "filename prompt did not get input focus")
+  hidden(screen, false)
+  screen:exec("vim.cmd('stopinsert')")
+  h.wait(screen, function()
+    return screen:exec("return vim.fn.mode() == 'n'")
+  end, "filename prompt did not leave insert mode")
+  screen:exec("vim.cmd('normal! 0v3l' .. vim.keycode('<C-g>'))")
+  h.wait(screen, function()
+    return screen:exec("return vim.fn.mode() == 's'")
+  end, function()
+    return "filename stem was not selected: " .. screen:exec("return vim.fn.mode()")
+  end)
+  hidden(screen, false)
+  screen:input("renamed")
+  hidden(screen, false)
+  screen:exec("_G.filename_input:execute('cancel')")
+  hidden(screen, true)
+  screen:close()
+end)
+
 for _, pane in ipairs({
   { name = "Explorer", open = "Snacks.explorer()", source = "explorer" },
   { name = "HTTP", open = "require('modules.http_requests').toggle()", source = "http_requests" },
