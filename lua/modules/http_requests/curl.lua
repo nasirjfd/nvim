@@ -16,12 +16,22 @@ function M.to_lines(text)
   local ok, spec = pcall(function()
     return require("kulala.parser.curl").parse(text)
   end)
-  if not ok or type(spec) ~= "table" or not spec.url or vim.trim(spec.url) == "" or not spec.method then
+  if
+    not ok
+    or type(spec) ~= "table"
+    or not spec.url
+    or vim.trim(spec.url) == ""
+    or not spec.method
+  then
     return nil, M.INVALID
   end
 
   local lines = { ("### %s %s"):format(spec.method, spec.url) }
-  lines[#lines + 1] = ("%s %s%s"):format(spec.method, spec.url, (spec.http_version and spec.http_version ~= "") and (" " .. spec.http_version) or "")
+  lines[#lines + 1] = ("%s %s%s"):format(
+    spec.method,
+    spec.url,
+    (spec.http_version and spec.http_version ~= "") and (" " .. spec.http_version) or ""
+  )
   local names = vim.tbl_keys(spec.headers or {})
   table.sort(names)
   for _, name in ipairs(names) do
@@ -35,6 +45,7 @@ function M.to_lines(text)
     body = { body }
   end
   if body and #body > 0 then
+    body = require("core.format").json(body) or body
     lines[#lines + 1] = ""
     for _, line in ipairs(body) do
       lines[#lines + 1] = line

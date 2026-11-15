@@ -305,47 +305,64 @@ lib.test("http pane: a folder asks for a new file name", function()
   screen:close()
 end)
 
-lib.test("http pane: the clipboard curl button adds it as a request, or says it is not valid", function()
-  local dir = project()
-  local screen = open_pane(dir)
-  click_request(screen, "List users", "users.http")
-  focus_pane(screen)
+lib.test(
+  "http pane: the clipboard curl button adds it as a request, or says it is not valid",
+  function()
+    local dir = project()
+    local screen = open_pane(dir)
+    click_request(screen, "List users", "users.http")
+    focus_pane(screen)
 
-  -- not a curl command: a message, nothing written
-  local before = h.read(dir .. "/api/users/users.http")
-  screen:exec("_G.clip = 'hello world'")
-  click_tool(screen, "curl")
-  h.wait(screen, function()
-    return screen:exec("return #_G.notes") == 1
-  end, "no message for an invalid curl")
-  lib.eq("The clipboard does not hold a valid curl command", screen:exec("return _G.notes[1][1]"))
-  lib.eq(before, h.read(dir .. "/api/users/users.http"), "an invalid curl must not touch the file")
-  screen:exec("_G.clip = ''")
-  focus_pane(screen)
-  screen:input("P")
-  h.wait(screen, function()
-    return screen:exec("return #_G.notes") == 2
-  end, "no message for an empty clipboard")
+    -- not a curl command: a message, nothing written
+    local before = h.read(dir .. "/api/users/users.http")
+    screen:exec("_G.clip = 'hello world'")
+    click_tool(screen, "curl")
+    h.wait(screen, function()
+      return screen:exec("return #_G.notes") == 1
+    end, "no message for an invalid curl")
+    lib.eq("The clipboard does not hold a valid curl command", screen:exec("return _G.notes[1][1]"))
+    lib.eq(
+      before,
+      h.read(dir .. "/api/users/users.http"),
+      "an invalid curl must not touch the file"
+    )
+    screen:exec("_G.clip = ''")
+    focus_pane(screen)
+    screen:input("P")
+    h.wait(screen, function()
+      return screen:exec("return #_G.notes") == 2
+    end, "no message for an empty clipboard")
 
-  -- a real one
-  screen:exec([[_G.clip = "curl -X POST https://api.test/orders -H 'Content-Type: application/json' -d '{\"id\":7}'"]])
-  focus_pane(screen)
-  screen:input("P")
-  h.wait(screen, function()
-    return #h.read(dir .. "/api/users/users.http") > #before
-  end, "the curl command was not added")
-  local lines = h.read(dir .. "/api/users/users.http")
-  local added = vim.list_slice(lines, #before + 2)
-  lib.eq("### POST https://api.test/orders", added[1])
-  lib.matches("^POST https://api.test/orders", added[2])
-  lib.ok(vim.tbl_contains(added, "content-type: application/json") or vim.tbl_contains(added, "Content-Type: application/json"), "the header is missing: " .. vim.inspect(added))
-  lib.ok(vim.tbl_contains(added, '{"id":7}'), "the body is missing: " .. vim.inspect(added))
-  h.wait(screen, function()
-    return where(screen)[1] == "users.http" and where(screen)[2] == #before + 3
-  end, "the cursor did not go to the new request: " .. vim.inspect(where(screen)))
-  lib.eq(2, screen:exec("return #_G.notes"), "a valid curl must not show a message")
-  screen:close()
-end)
+    -- a real one
+    screen:exec(
+      [[_G.clip = "curl -X POST https://api.test/orders -H 'Content-Type: application/json' -d '{\"id\":7}'"]]
+    )
+    focus_pane(screen)
+    screen:input("P")
+    h.wait(screen, function()
+      return #h.read(dir .. "/api/users/users.http") > #before
+    end, "the curl command was not added")
+    local lines = h.read(dir .. "/api/users/users.http")
+    local added = vim.list_slice(lines, #before + 2)
+    lib.eq("### POST https://api.test/orders", added[1])
+    lib.matches("^POST https://api.test/orders", added[2])
+    lib.ok(
+      vim.tbl_contains(added, "content-type: application/json")
+        or vim.tbl_contains(added, "Content-Type: application/json"),
+      "the header is missing: " .. vim.inspect(added)
+    )
+    lib.eq(
+      { "{", '  "id": 7', "}" },
+      vim.list_slice(added, #added - 2),
+      "the pasted JSON body must be formatted"
+    )
+    h.wait(screen, function()
+      return where(screen)[1] == "users.http" and where(screen)[2] == #before + 3
+    end, "the cursor did not go to the new request: " .. vim.inspect(where(screen)))
+    lib.eq(2, screen:exec("return #_G.notes"), "a valid curl must not show a message")
+    screen:close()
+  end
+)
 
 lib.test("http pane: replaces the file explorer, and cmd+b toggles it afterwards", function()
   local screen = open_pane(project())
@@ -378,11 +395,17 @@ lib.test("http pane: <leader>h focuses an open pane and never closes it", functi
   local screen = open_pane(project())
   screen:input("<Space>h") -- the pane has the focus: it stays open
   vim.wait(300)
-  lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "<leader>h closed the pane")
+  lib.eq(
+    1,
+    screen:exec("return #require('modules.http_requests').panes()"),
+    "<leader>h closed the pane"
+  )
   screen:input("<C-w>l")
   screen:input("<Space>h")
   h.wait(screen, function()
-    return screen:exec("return vim.api.nvim_get_current_win() == require('modules.http_requests').panes()[1].list.win.win")
+    return screen:exec(
+      "return vim.api.nvim_get_current_win() == require('modules.http_requests').panes()[1].list.win.win"
+    )
   end, "<leader>h did not put the cursor in the pane")
   screen:close()
 end)
@@ -404,39 +427,59 @@ lib.test("http pane: Cmd+Shift+H opens the pane over the Explorer and keeps it o
   end, "Cmd+Shift+H did not replace the explorer with the pane")
   screen:input("<D-S-h>") -- the pane has the focus: it stays
   vim.wait(300)
-  lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "Cmd+Shift+H closed the pane")
+  lib.eq(
+    1,
+    screen:exec("return #require('modules.http_requests').panes()"),
+    "Cmd+Shift+H closed the pane"
+  )
   screen:close()
 end)
 
-lib.test("http pane: a request row is only its name, and the search box does not repeat the title", function()
-  local screen = open_pane(project())
-  h.wait(screen, function()
-    return h.find_on_screen(screen, "List users", 40) ~= nil
-  end, "the request did not show")
-  lib.ok(h.find_on_screen(screen, "example.com/login", 60) == nil, "the URL of a named request must not show in the pane")
-  lib.ok(h.find_on_screen(screen, "example.com/users", 40) ~= nil, "an unnamed request is shown by its URL")
-  screen:input("/")
-  h.wait(screen, function()
-    return screen:exec("return vim.fn.mode()") == "i"
-  end, "the search box did not open")
-  local titles = 0
-  for row = 1, 45 do
-    local line = screen:text(row, 1, 40)
-    if line:find("HTTP Requests", 1, true) then
-      titles = titles + 1
+lib.test(
+  "http pane: a request row is only its name, and the search box does not repeat the title",
+  function()
+    local screen = open_pane(project())
+    h.wait(screen, function()
+      return h.find_on_screen(screen, "List users", 40) ~= nil
+    end, "the request did not show")
+    lib.ok(
+      h.find_on_screen(screen, "example.com/login", 60) == nil,
+      "the URL of a named request must not show in the pane"
+    )
+    lib.ok(
+      h.find_on_screen(screen, "example.com/users", 40) ~= nil,
+      "an unnamed request is shown by its URL"
+    )
+    screen:input("/")
+    h.wait(screen, function()
+      return screen:exec("return vim.fn.mode()") == "i"
+    end, "the search box did not open")
+    local titles = 0
+    for row = 1, 45 do
+      local line = screen:text(row, 1, 40)
+      if line:find("HTTP Requests", 1, true) then
+        titles = titles + 1
+      end
     end
+    lib.eq(
+      1,
+      titles,
+      "HTTP Requests must be on the screen once (the winbar), not again in the search box"
+    )
+    screen:input("log")
+    h.wait(screen, function()
+      return h.find_on_screen(screen, "Login", 40) ~= nil
+        and h.find_on_screen(screen, "List users", 40) == nil
+    end, "searching did not filter the requests")
+    screen:close()
   end
-  lib.eq(1, titles, "HTTP Requests must be on the screen once (the winbar), not again in the search box")
-  screen:input("log")
-  h.wait(screen, function()
-    return h.find_on_screen(screen, "Login", 40) ~= nil and h.find_on_screen(screen, "List users", 40) == nil
-  end, "searching did not filter the requests")
-  screen:close()
-end)
+)
 
 -- the text of the row the pane's cursor is on
 local function current_row(screen)
-  return screen:exec("local c = require('modules.http_requests').panes()[1]:current(); return c and (c.kind .. ':' .. c.text) or ''")
+  return screen:exec(
+    "local c = require('modules.http_requests').panes()[1]:current(); return c and (c.kind .. ':' .. c.text) or ''"
+  )
 end
 
 local function select_row(screen, kind_text)
@@ -450,112 +493,127 @@ local function select_row(screen, kind_text)
   lib.eq(kind_text, current_row(screen), "could not select the row")
 end
 
-lib.test("http pane: l opens and h closes folders and files, h on a request goes to its file", function()
-  local screen = open_pane(project())
-  select_row(screen, "file:users.http")
-  screen:input("h") -- open: closes
-  h.wait(screen, function()
-    return h.find_on_screen(screen, "List users", 40) == nil
-  end, "h did not close the file")
-  vim.wait(200) -- the refresh puts the cursor back on the file once it is done
-  lib.eq("file:users.http", current_row(screen), "the cursor stays on the closed file")
-  screen:input("h") -- already closed: goes to the folder it is in
-  h.wait(screen, function()
-    return current_row(screen) == "dir:users"
-  end, "h on a closed file did not go to its folder")
-  screen:input("h")
-  h.wait(screen, function()
-    return h.find_on_screen(screen, "users.http", 40) == nil
-  end, "h did not close the folder")
-  vim.wait(200)
-  screen:input("l")
-  h.wait(screen, function()
-    return h.find_on_screen(screen, "users.http", 40) ~= nil
-  end, "l did not open the folder")
-  screen:input("l") -- open: goes to its first row
-  h.wait(screen, function()
-    return current_row(screen) == "file:users.http"
-  end, "l on an open folder did not go to its first row")
-  screen:input("l") -- the file is still closed (its state was kept): opens
-  h.wait(screen, function()
-    return h.find_on_screen(screen, "List users", 40) ~= nil
-  end, "l did not open the file")
-  vim.wait(200)
-  screen:input("l") -- now open: first request
-  h.wait(screen, function()
-    return current_row(screen):find("^request:") ~= nil
-  end, "l on an open file did not go to its first request")
-  screen:input("h")
-  h.wait(screen, function()
-    return current_row(screen) == "file:users.http"
-  end, "h on a request did not go to its file")
-  lib.eq(0, screen:exec("return #_G.runs"), "h and l must not run anything")
-  screen:close()
-end)
-
-lib.test("http pane: the terminal cursor is hidden while the pane has the focus and back outside it", function()
-  local screen = open_pane(project())
-  local function cursor_hidden()
-    return screen:exec("return require('modules.pane_kit').hidden()")
+lib.test(
+  "http pane: l opens and h closes folders and files, h on a request goes to its file",
+  function()
+    local screen = open_pane(project())
+    select_row(screen, "file:users.http")
+    screen:input("h") -- open: closes
+    h.wait(screen, function()
+      return h.find_on_screen(screen, "List users", 40) == nil
+    end, "h did not close the file")
+    vim.wait(200) -- the refresh puts the cursor back on the file once it is done
+    lib.eq("file:users.http", current_row(screen), "the cursor stays on the closed file")
+    screen:input("h") -- already closed: goes to the folder it is in
+    h.wait(screen, function()
+      return current_row(screen) == "dir:users"
+    end, "h on a closed file did not go to its folder")
+    screen:input("h")
+    h.wait(screen, function()
+      return h.find_on_screen(screen, "users.http", 40) == nil
+    end, "h did not close the folder")
+    vim.wait(200)
+    screen:input("l")
+    h.wait(screen, function()
+      return h.find_on_screen(screen, "users.http", 40) ~= nil
+    end, "l did not open the folder")
+    screen:input("l") -- open: goes to its first row
+    h.wait(screen, function()
+      return current_row(screen) == "file:users.http"
+    end, "l on an open folder did not go to its first row")
+    screen:input("l") -- the file is still closed (its state was kept): opens
+    h.wait(screen, function()
+      return h.find_on_screen(screen, "List users", 40) ~= nil
+    end, "l did not open the file")
+    vim.wait(200)
+    screen:input("l") -- now open: first request
+    h.wait(screen, function()
+      return current_row(screen):find("^request:") ~= nil
+    end, "l on an open file did not go to its first request")
+    screen:input("h")
+    h.wait(screen, function()
+      return current_row(screen) == "file:users.http"
+    end, "h on a request did not go to its file")
+    lib.eq(0, screen:exec("return #_G.runs"), "h and l must not run anything")
+    screen:close()
   end
-  h.wait(screen, cursor_hidden, "the cursor must be hidden in the pane")
-  screen:input("/") -- the search box is a place to type
-  h.wait(screen, function()
-    return not cursor_hidden()
-  end, "the cursor must show in the search box")
-  screen:input("<Esc><Esc>")
-  screen:input("<C-w>l") -- the editor window
-  h.wait(screen, function()
-    return screen:exec("return #vim.tbl_filter(function(w) return vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'snacks_picker_list' end, { vim.api.nvim_get_current_win() })") == 0
-      and not cursor_hidden()
-  end, "the cursor must come back outside the pane")
-  screen:close()
-end)
+)
 
-lib.test("http pane: moving onto a request previews it in the editor without leaving the pane", function()
-  local screen = open_pane(project())
-  select_row(screen, "request:make-user POST https://example.com/users")
-  h.wait(screen, function()
-    local shown = screen:exec([[
+lib.test(
+  "http pane: the terminal cursor is hidden while the pane has the focus and back outside it",
+  function()
+    local screen = open_pane(project())
+    local function cursor_hidden()
+      return screen:exec("return require('modules.pane_kit').hidden()")
+    end
+    h.wait(screen, cursor_hidden, "the cursor must be hidden in the pane")
+    screen:input("/") -- the search box is a place to type
+    h.wait(screen, function()
+      return not cursor_hidden()
+    end, "the cursor must show in the search box")
+    screen:input("<Esc><Esc>")
+    screen:input("<C-w>l") -- the editor window
+    h.wait(screen, function()
+      return screen:exec(
+        "return #vim.tbl_filter(function(w) return vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'snacks_picker_list' end, { vim.api.nvim_get_current_win() })"
+      ) == 0 and not cursor_hidden()
+    end, "the cursor must come back outside the pane")
+    screen:close()
+  end
+)
+
+lib.test(
+  "http pane: moving onto a request previews it in the editor without leaving the pane",
+  function()
+    local screen = open_pane(project())
+    select_row(screen, "request:make-user POST https://example.com/users")
+    h.wait(screen, function()
+      local shown = screen:exec([[
       local p = require('modules.http_requests').panes()[1]
       return vim.api.nvim_win_call(p.main, function()
         return { vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'), vim.api.nvim_win_get_cursor(0)[1] }
       end)
     ]])
-    return shown[1] == "users.http" and shown[2] == 7
-  end, "moving onto a request did not reveal it")
-  lib.eq("snacks_picker_list", screen:exec("return vim.bo.filetype"), "the pane lost focus")
-  screen:close()
-end)
+      return shown[1] == "users.http" and shown[2] == 7
+    end, "moving onto a request did not reveal it")
+    lib.eq("snacks_picker_list", screen:exec("return vim.bo.filetype"), "the pane lost focus")
+    screen:close()
+  end
+)
 
-lib.test("http pane: revisiting an already loaded plain request restores its highlighter", function()
-  local screen = open_pane(project())
-  click_request(screen, "make-user", "users.http")
-  screen:exec([[
+lib.test(
+  "http pane: revisiting an already loaded plain request restores its highlighter",
+  function()
+    local screen = open_pane(project())
+    click_request(screen, "make-user", "users.http")
+    screen:exec([[
     vim.treesitter.stop(0)
     _G.plain_http_buf = vim.api.nvim_get_current_buf()
   ]])
-  focus_pane(screen)
-  screen:input("k")
-  screen:input("j")
-  h.wait(screen, function()
-    return screen:exec("return vim.treesitter.highlighter.active[_G.plain_http_buf] ~= nil")
-  end, function()
-    return "previewing an already loaded plain request did not restore highlighting: " .. vim.inspect(screen:exec([[
+    focus_pane(screen)
+    screen:input("k")
+    screen:input("j")
+    h.wait(screen, function()
+      return screen:exec("return vim.treesitter.highlighter.active[_G.plain_http_buf] ~= nil")
+    end, function()
+      return "previewing an already loaded plain request did not restore highlighting: "
+        .. vim.inspect(screen:exec([[
       local p = require('modules.http_requests').panes()[1]
       return { ft = vim.bo[_G.plain_http_buf].filetype, name = vim.api.nvim_buf_get_name(_G.plain_http_buf),
         current = (p:current() or {}).text, messages = vim.fn.execute('messages') }
     ]]))
-  end)
-  screen:close()
-end)
+    end)
+    screen:close()
+  end
+)
 
 lib.test("http pane: moving in an open HTTP file selects its request in the pane", function()
   local screen = open_pane(project())
   click_request(screen, "make-user", "users.http")
   screen:exec("vim.api.nvim_win_set_cursor(0, { 12, 0 }); vim.cmd('doautocmd CursorMoved')")
   h.wait(screen, function()
-    return current_row(screen) == "request:DELETE https://example.com/users/1 DELETE https://example.com/users/1"
+    return current_row(screen)
+      == "request:DELETE https://example.com/users/1 DELETE https://example.com/users/1"
   end, "the pane did not follow the request under the editor cursor")
   screen:close()
 end)
@@ -623,17 +681,39 @@ lib.test("http curl: commands become requests, anything else is invalid", functi
     return screen:exec("return package.loaded['kulala'] ~= nil")
   end, "kulala did not load")
   local function convert(text)
-    return screen:exec("local lines, err = require('modules.http_requests.curl').to_lines(...); return { lines = lines, err = err }", { text })
+    return screen:exec(
+      "local lines, err = require('modules.http_requests.curl').to_lines(...); return { lines = lines, err = err }",
+      { text }
+    )
   end
   local get = convert("curl https://api.test/users")
   lib.eq({ "### GET https://api.test/users", "GET https://api.test/users" }, get.lines)
-  local post = convert("curl -X POST https://api.test/orders -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{\"id\":7}'")
+  local post = convert(
+    "curl -X POST https://api.test/orders -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{\"id\":7}'"
+  )
   lib.eq("### POST https://api.test/orders", post.lines[1])
   lib.eq("POST https://api.test/orders", post.lines[2])
-  lib.ok(vim.tbl_contains(post.lines, "accept: application/json") and vim.tbl_contains(post.lines, "content-type: application/json"), vim.inspect(post.lines))
-  lib.eq({ "", '{"id":7}' }, vim.list_slice(post.lines, #post.lines - 1))
+  lib.ok(
+    vim.tbl_contains(post.lines, "accept: application/json")
+      and vim.tbl_contains(post.lines, "content-type: application/json"),
+    vim.inspect(post.lines)
+  )
+  lib.eq({ "", "{", '  "id": 7', "}" }, vim.list_slice(post.lines, #post.lines - 3))
+  local nested =
+    convert([[curl https://api.test/orders --data-raw '{"items":[1,2],"active":true}']])
+  lib.eq(
+    { "{", '  "items": [', "    1,", "    2", "  ],", '  "active": true', "}" },
+    vim.list_slice(nested.lines, #nested.lines - 6)
+  )
+  for _, body in ipairs({ "plain text", "field=value&other=two", '{"incomplete":' }) do
+    local raw = convert("curl https://api.test/orders -d '" .. body .. "'")
+    lib.eq(body, raw.lines[#raw.lines], "non-JSON and invalid JSON bodies must be preserved")
+  end
   local multi = convert("curl -X DELETE \\\n  https://api.test/users/1 \\\n  -H 'X-Token: abc'")
-  lib.eq({ "### DELETE https://api.test/users/1", "DELETE https://api.test/users/1", "x-token: abc" }, multi.lines)
+  lib.eq(
+    { "### DELETE https://api.test/users/1", "DELETE https://api.test/users/1", "x-token: abc" },
+    multi.lines
+  )
   for _, bad in ipairs({ "", "   ", "hello world", "git status", "curl", "curl --verbose" }) do
     local result = convert(bad)
     lib.eq(vim.NIL, result.lines or vim.NIL, "'" .. bad .. "' must not convert")
