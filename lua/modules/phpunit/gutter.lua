@@ -44,6 +44,10 @@ end
 
 function M.setup()
   vim.keymap.set("n", "<LeftMouse>", function()
+    local merge = package.loaded["codediff.ui.conflict.chips"]
+    if merge and merge.handle_click and merge.handle_click() then
+      return ""
+    end
     if M.click() then
       return ""
     end
