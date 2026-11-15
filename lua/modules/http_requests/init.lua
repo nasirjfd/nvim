@@ -493,7 +493,10 @@ local function with_target(picker, item, fn)
   end
   if not item or item.kind == "button" then
     local win = picker.main
-    local shown = win and api.nvim_win_is_valid(win) and vim.fs.normalize(api.nvim_buf_get_name(api.nvim_win_get_buf(win))) or ""
+    local shown = win
+        and api.nvim_win_is_valid(win)
+        and vim.fs.normalize(api.nvim_buf_get_name(api.nvim_win_get_buf(win)))
+      or ""
     if shown ~= "" and is_http(shown) then
       return fn(shown)
     end
@@ -503,16 +506,12 @@ local function with_target(picker, item, fn)
   end
   local base = item and item.kind == "dir" and item.dirpath or cwd()
   local shown = vim.fn.fnamemodify(base, ":~:.")
-  vim.ui.input({ prompt = "New .http file in " .. (shown == "" and "." or shown) .. "/ : " }, function(name)
-    name = vim.trim(name or "")
-    if name == "" then
-      return
+  require("modules.http_requests.filename").input(
+    "New .http file in " .. (shown == "" and "." or shown) .. "/ : ",
+    function(name)
+      fn(base .. "/" .. name)
     end
-    if not name:find("%.%w+$") then
-      name = name .. ".http"
-    end
-    fn(base .. "/" .. name)
-  end)
+  )
 end
 
 local function add_request(picker, item)
