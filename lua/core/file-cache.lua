@@ -32,7 +32,10 @@ function M.opts()
 end
 
 local function key_of(opts)
-  return table.concat({ opts.cwd, tostring(opts.ignored), tostring(opts.hidden), table.concat(opts.args or {}, " ") }, "\0")
+  return table.concat(
+    { opts.cwd, tostring(opts.ignored), tostring(opts.hidden), table.concat(opts.args or {}, " ") },
+    "\0"
+  )
 end
 
 local function command(opts)
@@ -87,7 +90,12 @@ local function refresh(opts, on_change)
         return
       end
       local changed = not current or current.raw ~= result.stdout
-      cache[key] = { raw = result.stdout, scanned = now(), used = current and current.used or now(), running = false }
+      cache[key] = {
+        raw = result.stdout,
+        scanned = now(),
+        used = current and current.used or now(),
+        running = false,
+      }
       evict()
       if changed and current and on_change then
         on_change()
@@ -106,9 +114,20 @@ end
 
 ---@type snacks.picker.finder
 function M.finder(opts, ctx)
+  -- Attach before the first scan/render, not on_show (which is already too late
+  -- to stop the initial empty picker from flashing on screen).
+  require("core.picker-stable").attach(ctx.picker)
   local original = require("snacks.picker.source.files").files
   -- Anything but a plain listing of the folder goes through snacks' own finder
-  if opts.live or opts.ft or opts.dirs or opts.rtp or opts.follow or opts.exclude and #opts.exclude > 0 or ctx.filter.search ~= "" then
+  if
+    opts.live
+    or opts.ft
+    or opts.dirs
+    or opts.rtp
+    or opts.follow
+    or opts.exclude and #opts.exclude > 0
+    or ctx.filter.search ~= ""
+  then
     return original(opts, ctx)
   end
   local key = key_of(opts)

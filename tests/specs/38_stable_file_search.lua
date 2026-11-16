@@ -1,6 +1,60 @@
 local lib = require("lib")
 local h = require("support")
 
+lib.test("Cmd+Shift+O does not flash partial rankings when opening", function()
+  local files = {}
+  for i = 1, 300 do
+    files[("Shipment%03d.php"):format(i)] = { "<?php" }
+  end
+  local screen = h.nvim(h.repo(files))
+  screen:exec([[
+    _G.opening_flashes = 0
+    local Picker = require('snacks.picker.core.picker')
+    local show = Picker.show
+    Picker.show = function(self, ...)
+      local result = show(self, ...)
+      if self.shown and #self.list.visible == 0 and self:count() > 0
+        and (self.finder:running() or self.matcher:running()) then
+        _G.opening_flashes = _G.opening_flashes + 1
+      end
+      return result
+    end
+    local List = require('snacks.picker.core.list')
+    local render = List.render
+    List.render = function(self, ...)
+      local active = self.picker.finder:running() or self.picker.matcher:running()
+      local dirty = self.dirty
+      local result = render(self, ...)
+      if active and dirty and #self.visible > 0 then
+        _G.opening_flashes = _G.opening_flashes + 1
+      end
+      return result
+    end
+    local rank = require('core.file-rank')
+    local on_match = rank.on_match
+    rank.on_match = function(...)
+      on_match(...)
+      vim.uv.sleep(1)
+    end
+  ]])
+  for _ = 1, 2 do
+    screen:input("<D-S-o>")
+    h.wait(screen, function()
+      return screen:exec([[
+        local p = Snacks.picker.get({source='files'})[1]
+        return p and p.shown and not p.finder:running() and not p.matcher:running()
+          and p.list:count() == 300 and #p.list.visible > 0
+      ]])
+    end, "Cmd+Shift+O did not settle")
+    screen:input("<Esc>")
+    h.wait(screen, function()
+      return screen:exec("return #Snacks.picker.get({source='files'}) == 0")
+    end, "file picker did not close")
+  end
+  lib.eq(0, screen:exec("return _G.opening_flashes"), "partial rankings flashed on opening")
+  screen:close()
+end)
+
 lib.test("file search publishes complete rankings while typing shipment", function()
   local dir = h.repo({ ["Shipment.php"] = { "<?php" } })
   local screen = h.nvim(dir)

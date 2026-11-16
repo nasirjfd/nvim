@@ -25,7 +25,7 @@ end, { desc = "Recent Files" })
 
 -- cmd+shift+o -> all files (recent files sorted to the top, see snacks.lua matcher opts)
 map("n", "<D-S-o>", function()
-  Snacks.picker.files()
+  Snacks.picker.files(require("core.file-cache").opts())
 end, { desc = "All Files" })
 -- with a selection: the search box starts with the selected text (first line), editable
 map("x", "<D-S-o>", function()
@@ -34,7 +34,9 @@ map("x", "<D-S-o>", function()
     "\n"
   )
   vim.cmd("normal! \27")
-  Snacks.picker.files({ pattern = text:match("^[^\n]*") })
+  Snacks.picker.files(
+    vim.tbl_extend("force", require("core.file-cache").opts(), { pattern = text:match("^[^\n]*") })
+  )
 end, { desc = "All Files (selection)" })
 
 -- cmd+b -> toggle the sidebar (show/hide), matches workbench.action.toggleSidebarVisibility.
