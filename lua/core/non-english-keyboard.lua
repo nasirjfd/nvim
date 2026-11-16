@@ -90,7 +90,7 @@ local function show_alert()
     alert.win = api.nvim_open_win(buf, false, {
       relative = "editor",
       row = 0,
-      col = math.max(0, vim.o.columns - width - 2),
+      col = math.max(0, math.floor((vim.o.columns - width - 2) / 2)),
       width = width,
       height = 1,
       style = "minimal",
@@ -100,6 +100,7 @@ local function show_alert()
       zindex = 250,
       noautocmd = true,
     })
+    vim.wo[alert.win].winhighlight = "Normal:DiagnosticError,FloatBorder:DiagnosticError"
   end)
 end
 
@@ -144,7 +145,6 @@ local function normalize_names(buf)
   if translated == text then
     return
   end
-  show_alert()
   local win = picker.input.win.win
   local cursor = api.nvim_win_get_cursor(win)
   picker.input:set(picker.opts.live and nil or translated, picker.opts.live and translated or nil)
@@ -235,7 +235,6 @@ function M.attach(buf)
       for character, english in pairs(letters) do
         vim.keymap.set({ "i", "s" }, character, function()
           if name_picker(buf) or vim.g.non_english_search and search(buf) then
-            show_alert()
             return english
           end
           return character
@@ -264,6 +263,15 @@ end
 function M.setup()
   vim.on_key(function(_, typed)
     if typed == "" or M.english(typed) == typed then
+      return
+    end
+    local ft = vim.bo.filetype
+    if
+      ft == "snacks_picker_input"
+      or ft == "findbar"
+      or vim.bo.buftype == "prompt"
+      or vim.fn.keytrans(typed):find("<[DCMA]%-")
+    then
       return
     end
     local mode = api.nvim_get_mode().mode:sub(1, 1)

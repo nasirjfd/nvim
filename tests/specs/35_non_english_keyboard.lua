@@ -21,7 +21,7 @@ local function alerts(screen)
 end
 
 lib.test(
-  "Non-English motion alert is top-right, never stacks and expires after the last key",
+  "Non-English motion alert is red and top-center, never stacks and expires after the last key",
   function()
     local screen = editor()
     local editor_win = screen:exec("return vim.api.nvim_get_current_win()")
@@ -34,9 +34,10 @@ lib.test(
       screen:exec(([[
     local cfg=vim.api.nvim_win_get_config(%d)
     return cfg.relative=='editor' and cfg.row==0 and not cfg.focusable
-      and cfg.col+cfg.width+2==vim.o.columns
-  ]]):format(win)),
-      "alert is not in the top-right"
+       and cfg.col==math.floor((vim.o.columns-cfg.width-2)/2)
+       and vim.wo[%d].winhighlight=='Normal:DiagnosticError,FloatBorder:DiagnosticError'
+   ]]):format(win, win)),
+      "alert is not red and top-center"
     )
     lib.eq(editor_win, screen:exec("return vim.api.nvim_get_current_win()"), "alert stole focus")
     vim.wait(850)
@@ -56,7 +57,7 @@ lib.test(
   end
 )
 
-lib.test("Non-English search alert appears only for translated input", function()
+lib.test("Non-English search translation never shows the motion alert", function()
   local screen = editor()
   screen:input("iسلام<Esc>")
   lib.eq({}, alerts(screen), "ordinary inserted text showed a translation alert")
@@ -69,10 +70,11 @@ lib.test("Non-English search alert appears only for translated input", function(
   screen:input("pro")
   lib.eq({}, alerts(screen), "English input showed a translation alert")
   screen:input("تثزفخق")
-  h.wait(screen, function()
-    return #alerts(screen) == 1
-  end, "search alert did not appear")
   lib.eq("projector", screen:exec("return vim.api.nvim_get_current_line()"))
+  lib.eq({}, alerts(screen), "translated search input showed a motion alert")
+  screen:exec("vim.cmd('stopinsert')")
+  screen:input("ت")
+  lib.eq({}, alerts(screen), "normal-mode search input showed a motion alert")
   screen:close()
 end)
 
