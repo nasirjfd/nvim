@@ -3,7 +3,9 @@ local h = require("support")
 
 -- Exercise Snacks' real persistent fallback store, isolated from the user's search history.
 local function nvim(dir, history)
-  return h.nvim(dir, nil, nil, { "-c", "lua " .. [[
+  return h.nvim(dir, nil, nil, {
+    "-c",
+    "lua " .. [[
     local kv = require('snacks.picker.util.kv')
     local new = kv.new
     kv.new = function(path, opts)
@@ -16,7 +18,8 @@ local function nvim(dir, history)
       if path:find('picker-frecency', 1, true) then error('use isolated fallback store') end
       return db_new(path, ...)
     end
-  ]] })
+  ]],
+  })
 end
 
 local function visit_files(dir, history)
@@ -35,15 +38,22 @@ end
 
 local function expect_first(screen, source, path)
   h.wait(screen, function()
-    return screen:exec([[
+    return screen:exec(
+      [[
       local source, file = ...
       local p = Snacks.picker.get({ source = source })[1]
       if not p or p.finder:running() or p.matcher:running() or p:count() ~= 2 then return false end
       local first = p.list:get(1)
       return first and vim.fs.basename(first.file) == file
-    ]], { source, path })
+    ]],
+      { source, path }
+    )
   end, function()
-    return "frequently opened file did not rank first in " .. source .. ": " .. vim.inspect(screen:exec([[
+    return "frequently opened file did not rank first in "
+      .. source
+      .. ": "
+      .. vim.inspect(screen:exec(
+        [[
       local p = Snacks.picker.get({ source = ... })[1]
       local items = {}
       for i = 1, p.list:count() do
@@ -51,7 +61,9 @@ local function expect_first(screen, source, path)
         items[#items + 1] = { file = item.file, score = item.score, frecency = item.frecency }
       end
       return { items = items, matcher = p.matcher.opts }
-    ]], { source }))
+    ]],
+        { source }
+      ))
   end)
 end
 
@@ -63,20 +75,25 @@ local function project()
   return dir, dir .. "/history.dat"
 end
 
-lib.test("search usage: text results prefer frequently opened files after a Neovim restart", function()
-  local dir, history = project()
-  visit_files(dir, history)
-  local screen = nvim(dir, history)
-  screen:exec("Snacks.picker.grep({ search = 'needle' })")
-  expect_first(screen, "grep", "z_used.lua")
-  screen:close()
-end)
+lib.test(
+  "search usage: text results prefer frequently opened files after a Neovim restart",
+  function()
+    local dir, history = project()
+    visit_files(dir, history)
+    local screen = nvim(dir, history)
+    screen:exec("Snacks.picker.grep({ search = 'needle' })")
+    expect_first(screen, "grep", "z_used.lua")
+    screen:close()
+  end
+)
 
-lib.test("search usage: workspace symbols prefer frequently opened files after a Neovim restart", function()
-  local dir, history = project()
-  visit_files(dir, history)
-  local screen = nvim(dir, history)
-  screen:exec([[
+lib.test(
+  "search usage: workspace symbols prefer frequently opened files after a Neovim restart",
+  function()
+    local dir, history = project()
+    visit_files(dir, history)
+    local screen = nvim(dir, history)
+    screen:exec([[
     vim.cmd('enew')
     local dir = vim.fn.getcwd()
     require('snacks.picker.source.lsp').request = function(_, _, params, cb)
@@ -93,6 +110,60 @@ lib.test("search usage: workspace symbols prefer frequently opened files after a
     end
     Snacks.picker.lsp_workspace_symbols()
   ]])
-  expect_first(screen, "lsp_workspace_symbols", "z_used.lua")
-  screen:close()
-end)
+    expect_first(screen, "lsp_workspace_symbols", "z_used.lua")
+    screen:close()
+  end
+)
+
+lib.test(
+  "Cmd+Shift+O prefers the most-used Projector match over a shorter cold filename",
+  function()
+    local used = "digikala/supernova-digiexpress/src/DomainEventsProjector.php"
+    local cold = "src/CapacityShadowProjector.php"
+    local fuzzy = "src/ProjectionRecord.php"
+    local dir = h.repo({
+      [used] = { "<?php" },
+      [cold] = { "<?php" },
+      [fuzzy] = { "<?php" },
+      ["src/Projector.php"] = { "<?php" },
+    })
+    local history = dir .. "/history.dat"
+    local first = nvim(dir, history)
+    first:exec(
+      [[
+    local cold, used, fuzzy = ...
+    vim.cmd.edit(cold)
+    for _ = 1, 8 do vim.cmd.enew(); vim.cmd.edit(used) end
+    for _ = 1, 15 do vim.cmd.enew(); vim.cmd.edit(fuzzy) end
+    vim.cmd.enew()
+  ]],
+      { cold, used, fuzzy }
+    )
+    first:close()
+    local screen = nvim(dir, history)
+    screen:input("<D-S-o>")
+    h.wait(screen, function()
+      return screen:exec("return vim.bo.filetype == 'snacks_picker_input' and vim.fn.mode() == 'i'")
+    end, "Cmd+Shift+O did not open file search")
+    screen:input("projector")
+    h.wait(screen, function()
+      return screen:exec(
+        [[
+      local p = Snacks.picker.get({source='files'})[1]
+      if not p or p.finder:running() or p.matcher:running() or p.list:count() ~= 4 then return false end
+      return p.list:get(1).file == ... and p.list:get(2).file:find('CapacityShadowProjector', 1, true) ~= nil
+    ]],
+        { used }
+      )
+    end, function()
+      return "most-used Projector was not first: "
+        .. vim.inspect(screen:exec([[
+      local p = Snacks.picker.get({source='files'})[1]
+      local rows = {}
+      for i=1,p.list:count() do local item=p.list:get(i); rows[#rows+1]={file=item.file, rank=item.file_match_rank, usage=item.file_usage, score=item.score} end
+      return {rows=rows, sort=p.opts.sort}
+    ]]))
+    end)
+    screen:close()
+  end
+)

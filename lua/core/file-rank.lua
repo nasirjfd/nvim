@@ -5,6 +5,7 @@
 --      fewer skipped ranks higher)
 --   2. the search is a piece of the file name: `post` in PostPaymentAPIPayload.php
 -- Case never matters. Files that only match through their folders or by scattered letters come after.
+-- Within the same match class, Files sorts opening history before skip/fuzzy-score differences.
 local M = {}
 
 local WORD_BONUS = 1000
@@ -61,6 +62,10 @@ end
 local cache = {} -- file name -> words
 
 function M.on_match(matcher, item)
+  -- Actual opening history, not the file's modification timestamp. Small
+  -- fuzzy-score differences must not outweigh usage among comparable names.
+  item.file_match_rank = 0
+  item.file_usage = matcher.frecency and matcher.frecency:get(item, { seed = false }) or 0
   local q = (matcher.pattern or ""):lower():gsub("%s+", "")
   if #q < 2 or not item.file or q:find("[^%w]") then
     return
@@ -81,6 +86,7 @@ function M.on_match(matcher, item)
       or (prev:match("%l") and char:match("%u"))
       or (prev:match("%a") and char:match("%d"))
     then
+      item.file_match_rank = 1
       item.score = item.score + PIECE_BONUS + (at == 1 and 100 or 0)
       break
     end
@@ -93,6 +99,7 @@ function M.on_match(matcher, item)
   end
   local skips = skipped_words(q, list)
   if skips then
+    item.file_match_rank = 2
     -- fewer skipped words first: scl → ScannableCodeLookup… before Shipment…Cause…Claimed…
     item.score = item.score + WORD_BONUS - math.min(skips, 10) * 40
   end
