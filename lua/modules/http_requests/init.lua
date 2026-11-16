@@ -667,10 +667,14 @@ local actions = {
   -- pin the request under the cursor to the top of the pane (or unpin it)
   http_pin = function(picker, item)
     item = item or picker:current()
-    -- While the search input has focus, Snacks keeps `current()` on the row that was selected before
-    -- filtering. Pin the first visible request instead (normally the search result the user sees).
-    if picker.input and picker.input.filter
-      and (picker.input.filter.pattern ~= "" or picker.input.filter.search ~= "") then
+    -- Ancestor rows are search context, not requests. Fall back only for those rows; a selected
+    -- request always wins, even while the search remains active.
+    if
+      picker.input
+      and picker.input.filter
+      and (picker.input.filter.pattern ~= "" or picker.input.filter.search ~= "")
+      and (not item or item.kind ~= "request")
+    then
       for index = 1, picker.list:count() do
         local candidate = picker.list:get(index)
         if candidate and candidate.kind == "request" then
@@ -725,18 +729,7 @@ local actions = {
     vim.schedule(function()
       if not picker.closed then
         vim.keymap.set("n", "p", function()
-          vim.schedule(function()
-            if not picker.closed then
-              -- Search keeps ancestor folders/files visible above each match.
-              for index = 1, picker.list:count() do
-                local item = picker.list:get(index)
-                if item and item.kind == "request" and item.rel then
-                  pinned.toggle(cwd(), item.rel, item.req)
-                  break
-                end
-              end
-            end
-          end)
+          picker:action("http_pin")
         end, { buffer = picker.input.win.buf, silent = true, desc = "Pin filtered HTTP request" })
       end
     end)
