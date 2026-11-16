@@ -269,6 +269,8 @@ return {
       -- (like VS Code) instead of the shortcuts page (g? shows those)
       -- Cursor visibility is owned by core.cursor-visibility, shared with the other sidebars.
       scm = { empty_view = "buffer", hide_cursor = false },
+      -- Enter opens the selected file at its first change and focuses the diff.
+      explorer = { focus_on_select = true },
       keymaps = {
         view = {
           quit = { "q", "<leader>dc" },
