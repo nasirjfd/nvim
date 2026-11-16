@@ -1,5 +1,5 @@
 -- The HTTP Requests pane (<leader>h): a sidebar like the Explorer that lists the requests of the
--- project's .http / .rest files, grouped by folder and file.
+-- project's .http / .rest files, grouped by folder and file, plus its Kulala environment files.
 --
 --   Enter / click   open the file or request                (folders fold / unfold)
 --   Ctrl+Enter / r  run the request (and go to it)
@@ -138,6 +138,7 @@ local function rows(opts)
   local searching = opts and opts.http_search_expanded
   local dir = cwd()
   local list = files.cached(dir) or {}
+  local environment_files = files.cached_envs(dir) or {}
   local loaded = loaded_buffers()
   -- the toolbar: new request, request from the clipboard curl, the hidden folders (their number)
   local toolbar = { text = "Toolbar", kind = "button", toolbar = true, hidden_count = 0, showing = hidden.showing(), key = "h:toolbar" }
@@ -170,6 +171,24 @@ local function rows(opts)
   end
 
   local pins = pinned.list(dir)
+  if #environment_files > 0 then
+    items[#items + 1] = {
+      text = "Environments",
+      kind = "section",
+      key = "env:header",
+      count = #environment_files,
+      environment = true,
+    }
+    for index, rel in ipairs(environment_files) do
+      items[#items + 1] = {
+        text = rel,
+        kind = "env",
+        key = "e:" .. rel,
+        file = dir .. "/" .. rel,
+        last = index == #environment_files,
+      }
+    end
+  end
   local pin_header
   if #pins > 0 then
     pin_header = { text = "Pinned", kind = "section", key = "pin:header", last = false, open = true }
@@ -352,8 +371,8 @@ local function format(item, picker)
   end
   if item.kind == "section" then -- a label, not a folder: no fold arrow, nothing to open
     return {
-      { " 󰐃 ", "HttpPanePin" },
-      { "Pinned", "SnacksPickerDirectory" },
+      { item.environment and " 󰒓 " or " 󰐃 ", "HttpPanePin" },
+      { item.text, "SnacksPickerDirectory" },
       { "  " .. (item.count or 0), "HttpPaneCount" },
     }
   end
@@ -381,6 +400,10 @@ local function format(item, picker)
     ret[#ret + 1] = { (icon or "") .. " ", item.dim and hidden_highlight(hl) or hl }
     ret[#ret + 1] = { item.text, item.dim and hidden_highlight("SnacksPickerFile") or "SnacksPickerFile" }
     ret[#ret + 1] = { "  " .. item.count, "HttpPaneCount" }
+  elseif item.kind == "env" then
+    local icon, hl = Snacks.util.icon(item.text, "file")
+    ret[#ret + 1] = { (icon or "") .. " ", hl }
+    ret[#ret + 1] = { item.text, "SnacksPickerFile" }
   else
     local method = item.req.method
     local group = "HttpPane" .. (vim.fn.hlexists("HttpPane" .. method) == 1 and method or "Other")
@@ -595,7 +618,7 @@ local actions = {
       return -- the toolbar acts on clicks (http_click) and on its keys
     elseif item.kind == "request" then
       goto_line(picker, item.file, item.req.line)
-    elseif item.kind == "file" then
+    elseif item.kind == "file" or item.kind == "env" then
       goto_line(picker, item.file, 1)
     else
       toggle(picker, item)

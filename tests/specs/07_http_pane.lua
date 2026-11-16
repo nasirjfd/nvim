@@ -228,6 +228,23 @@ lib.test("http pane: shows folders, files and their requests; folders and files 
   screen:close()
 end)
 
+lib.test("http pane: shows and opens Kulala environment files", function()
+  local dir = project()
+  h.write(dir .. "/http-client.env.json", { '{ "dev": {} }' })
+  h.write(dir .. "/http-client.private.env.json", { '{ "dev": {} }' })
+  local screen = open_pane(dir)
+  click_on(screen, "http-client.env.json")
+  h.wait(screen, function()
+    return where(screen)[1] == "http-client.env.json"
+  end, "clicking the environment file did not open it")
+  focus_pane(screen)
+  click_on(screen, "http-client.private.env.json")
+  h.wait(screen, function()
+    return where(screen)[1] == "http-client.private.env.json"
+  end, "clicking the private environment file did not open it")
+  screen:close()
+end)
+
 lib.test("http pane: clicking a request goes to it in its file", function()
   local screen = open_pane(project())
   click_on(screen, "make-user")
