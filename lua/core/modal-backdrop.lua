@@ -3,7 +3,7 @@
 -- darkness; when one is already on screen nothing is added.
 local M = {}
 
-M.blend = 40 -- lower = darker
+M.blend = 20 -- lower = darker
 M.sidebar_dim = 0.25 -- how much darker the explorer sidebar gets behind a modal (0..1)
 
 local api = vim.api
