@@ -1,4 +1,4 @@
--- Keyboard-position translation, separate from optional Persian text shaping.
+-- Non-English keyboard-position translation; ordinary editor text is unchanged.
 local M = {}
 local api = vim.api
 local letters = {
@@ -47,9 +47,9 @@ local letters = {
   ["۹"] = "9",
 }
 local physical = {}
-for persian, english in pairs(letters) do
-  if persian ~= "ي" and persian ~= "ك" then
-    physical[english] = persian
+for character, english in pairs(letters) do
+  if character ~= "ي" and character ~= "ك" then
+    physical[english] = character
   end
 end
 local modes = { "n", "x", "o", "i", "s", "c", "t" }
@@ -63,12 +63,51 @@ local function search(buf)
   return ft == "snacks_picker_input" or (ft == "findbar" and api.nvim_win_get_cursor(0)[1] == 1)
 end
 
+-- Names are English even when the keyboard is not. Content searches keep the
+-- optional toggle so searching actual non-English text still works.
+local name_sources = {
+  files = true,
+  recent = true,
+  buffers = true,
+  smart = true,
+  lsp_symbols = true,
+  lsp_workspace_symbols = true,
+}
+
+local function name_picker(buf)
+  if vim.bo[buf].filetype ~= "snacks_picker_input" then
+    return
+  end
+  for _, picker in ipairs(Snacks.picker.get()) do
+    if picker.input and picker.input.win.buf == buf and name_sources[picker.opts.source] then
+      return picker
+    end
+  end
+end
+
+local function normalize_names(buf)
+  local picker = name_picker(buf)
+  if not picker then
+    return
+  end
+  local text = api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
+  local translated = M.english(text)
+  if translated == text then
+    return
+  end
+  local win = picker.input.win.win
+  local cursor = api.nvim_win_get_cursor(win)
+  picker.input:set(picker.opts.live and nil or translated, picker.opts.live and translated or nil)
+  api.nvim_win_set_cursor(win, { 1, #M.english(text:sub(1, cursor[2])) })
+  picker:find({ refresh = false })
+end
+
 function M.toggle(value)
   local enabled = value
   if enabled == nil then
-    enabled = not vim.g.persian_search_english
+    enabled = not vim.g.non_english_search
   end
-  vim.g.persian_search_english = enabled
+  vim.g.non_english_search = enabled
   local buf = api.nvim_get_current_buf()
   if enabled and search(buf) then
     local cursor = api.nvim_win_get_cursor(0)
@@ -79,7 +118,7 @@ function M.toggle(value)
       api.nvim_win_set_cursor(0, { cursor[1], #M.english(text:sub(1, cursor[2])) })
     end
   end
-  vim.notify("English search from Persian keyboard: " .. (enabled and "on" or "off"))
+  vim.notify("English search from non-English keyboard: " .. (enabled and "on" or "off"))
 end
 
 -- Alias modified shortcuts to the existing English mapping, including maps
@@ -129,7 +168,7 @@ function M.shortcuts(buf)
           remap = true,
           silent = mapping.silent == 1,
           nowait = mapping.nowait == 1,
-          desc = (mapping.desc or "Shortcut") .. " (Persian keyboard)",
+          desc = (mapping.desc or "Shortcut") .. " (non-English keyboard)",
         })
       end
     end
@@ -141,33 +180,42 @@ function M.attach(buf)
     return
   end
   if vim.bo[buf].filetype == "snacks_picker_input" or vim.bo[buf].filetype == "findbar" then
-    if not vim.b[buf].persian_search_keys then
-      vim.b[buf].persian_search_keys = true
-      for persian, english in pairs(letters) do
-        vim.keymap.set({ "i", "s" }, persian, function()
-          return vim.g.persian_search_english and search(buf) and english or persian
+    if not vim.b[buf].non_english_search_keys then
+      vim.b[buf].non_english_search_keys = true
+      for character, english in pairs(letters) do
+        vim.keymap.set({ "i", "s" }, character, function()
+          return (name_picker(buf) or vim.g.non_english_search and search(buf)) and english
+            or character
         end, {
           buffer = buf,
           expr = true,
-          desc = "Optional English search from Persian keyboard",
+          desc = "Optional English text search from non-English keyboard",
         })
       end
       vim.keymap.set({ "i", "n", "s" }, "<C-S-l>", function()
         M.toggle()
-      end, { buffer = buf, desc = "Toggle Persian keyboard English search" })
+      end, { buffer = buf, desc = "Toggle non-English keyboard English text search" })
+      -- Pasting and prefilled queries bypass insert-mode key mappings.
+      api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+        buffer = buf,
+        callback = function()
+          normalize_names(buf)
+        end,
+      })
     end
+    normalize_names(buf)
   end
   M.shortcuts(buf)
 end
 
 function M.setup()
-  api.nvim_create_user_command("PersianSearch", function(args)
+  api.nvim_create_user_command("NonEnglishSearch", function(args)
     if args.args == "" or args.args == "toggle" then
       M.toggle()
     elseif args.args == "on" or args.args == "off" then
       M.toggle(args.args == "on")
     else
-      vim.notify("Usage: PersianSearch [on|off|toggle]", vim.log.levels.WARN)
+      vim.notify("Usage: NonEnglishSearch [on|off|toggle]", vim.log.levels.WARN)
     end
   end, {
     nargs = "?",
@@ -176,13 +224,13 @@ function M.setup()
     end,
   })
   local langmap = {}
-  for persian, english in pairs(letters) do
-    langmap[#langmap + 1] = persian .. english:gsub("([,;\\])", "\\%1")
+  for character, english in pairs(letters) do
+    langmap[#langmap + 1] = character .. english:gsub("([,;\\])", "\\%1")
   end
   table.sort(langmap)
   vim.opt.langmap:append(table.concat(langmap, ","))
   vim.o.langremap = false
-  local group = api.nvim_create_augroup("PersianKeyboard", { clear = true })
+  local group = api.nvim_create_augroup("NonEnglishKeyboard", { clear = true })
   api.nvim_create_autocmd({ "FileType", "BufEnter", "BufWinEnter" }, {
     group = group,
     callback = function(args)

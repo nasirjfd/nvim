@@ -9,7 +9,7 @@ local function editor()
 end
 
 lib.test(
-  "Persian keyboard normal shortcuts work while ordinary inserted Persian stays unchanged",
+  "Non-English keyboard shortcuts work while ordinary inserted text stays unchanged",
   function()
     local screen = editor()
     screen:input("تت") -- physical j j
@@ -27,7 +27,7 @@ lib.test(
   end
 )
 
-lib.test("Persian keyboard Cmd+Shift+O invokes file search using the English shortcut", function()
+lib.test("Non-English keyboard Cmd+Shift+O invokes file search using the English shortcut", function()
   local screen = editor()
   screen:input("<D-S-خ>") -- physical Cmd+Shift+O
   h.wait(screen, function()
@@ -37,16 +37,10 @@ lib.test("Persian keyboard Cmd+Shift+O invokes file search using the English sho
   end, "Persian-layout Cmd+Shift+O did not open Files")
   screen:input("حقختثزفخق") -- projector in the Persian layout
   lib.eq(
-    "حقختثزفخق",
+    "projector",
     screen:exec("return vim.api.nvim_get_current_line()"),
-    "search conversion must be opt-in"
+    "file names must automatically use the English keyboard layout"
   )
-  screen:input("<C-S-l>")
-  h.wait(screen, function()
-    return screen:exec(
-      "return vim.api.nvim_get_current_line() == 'projector' and vim.g.persian_search_english == true"
-    )
-  end, "search toggle did not convert the existing query")
   h.wait(screen, function()
     return screen:exec([[
       local p=Snacks.picker.get({source='files'})[1]
@@ -56,14 +50,66 @@ lib.test("Persian keyboard Cmd+Shift+O invokes file search using the English sho
   screen:close()
 end)
 
+lib.test("Non-English recent-file search translates typing and pasted mixed queries", function()
+  local screen = editor()
+  screen:exec([[
+    vim.cmd('NonEnglishSearch off')
+    vim.v.oldfiles = {vim.api.nvim_buf_get_name(0)}
+    vim.cmd('enew')
+  ]])
+  screen:input("<D-e>")
+  h.wait(screen, function()
+    return screen:exec([[
+      local p=Snacks.picker.get({source='recent'})[1]
+      return p and vim.bo.filetype=='snacks_picker_input' and vim.b.non_english_search_keys
+    ]])
+  end, function()
+    return "Cmd+E did not open recent files: " .. vim.inspect(screen:exec([[
+      local ps={}
+      for _,p in ipairs(Snacks.picker.get()) do ps[#ps+1]={source=p.opts.source,buf=p.input.win.buf} end
+      return {pickers=ps,ft=vim.bo.filetype,keys=vim.b.non_english_search_keys,mode=vim.fn.mode()}
+    ]]))
+  end)
+  screen:input("حقختثزفخق")
+  h.wait(screen, function()
+    return screen:exec([[
+      local p=Snacks.picker.get({source='recent'})[1]
+      return vim.api.nvim_get_current_line()=='projector' and p.list:count()==1
+    ]])
+  end, "recent files did not translate typed Persian")
+  screen:exec([[
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, {''})
+    vim.api.nvim_win_set_cursor(0, {1, 0})
+    vim.api.nvim_paste('حقختثزفخق.lua', false, -1)
+  ]])
+  h.wait(screen, function()
+    return screen:exec([[
+      local p=Snacks.picker.get({source='recent'})[1]
+      return vim.api.nvim_get_current_line()=='projector.lua' and p.list:count()==1
+    ]])
+  end, "recent files did not translate a pasted mixed-language query")
+  screen:close()
+end)
+
+lib.test("Non-English text searches stay unchanged without the optional toggle", function()
+  local screen = editor()
+  screen:exec("vim.cmd('NonEnglishSearch off'); Snacks.picker.grep()")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype=='snacks_picker_input' and vim.b.non_english_search_keys")
+  end, "grep did not attach")
+  screen:input("سلام")
+  lib.eq("سلام", screen:exec("return vim.api.nvim_get_current_line()"))
+  screen:close()
+end)
+
 lib.test(
-  "Persian search conversion is optional in file and find bars and never changes commit text",
+  "Non-English search conversion is optional in find bars and never changes commit text",
   function()
     local screen = editor()
-    screen:exec("vim.cmd('PersianSearch on')")
+    screen:exec("vim.cmd('NonEnglishSearch on')")
     screen:input("<D-ب>") -- physical Cmd+F
     h.wait(screen, function()
-      return screen:exec("return vim.bo.filetype=='findbar' and vim.b.persian_search_keys == true")
+      return screen:exec("return vim.bo.filetype=='findbar' and vim.b.non_english_search_keys == true")
     end, "Persian-layout Cmd+F did not open Find")
     screen:input("حقختثزفخق")
     h.wait(screen, function()
@@ -91,20 +137,20 @@ lib.test(
       screen:exec("return vim.api.nvim_get_current_line()"),
       "commit message Persian was translated"
     )
-    screen:exec("vim.cmd('PersianSearch off'); vim.cmd('PersianSearch off')")
+    screen:exec("vim.cmd('NonEnglishSearch off'); vim.cmd('NonEnglishSearch off')")
     lib.eq(
       false,
-      screen:exec("return vim.g.persian_search_english"),
+      screen:exec("return vim.g.non_english_search"),
       "off must disable, not toggle conversion"
     )
     screen:close()
   end
 )
 
-lib.test("Persian-layout symbol search sends English queries when conversion is enabled", function()
+lib.test("Non-English symbol search automatically sends English queries", function()
   local screen = editor()
   screen:exec([[
-    vim.cmd('PersianSearch on')
+    vim.cmd('NonEnglishSearch off')
     local symbol_file = vim.api.nvim_buf_get_name(0)
     require('snacks.picker.source.lsp').request = function(_, _, params, cb)
       local request = params()
@@ -120,7 +166,7 @@ lib.test("Persian-layout symbol search sends English queries when conversion is 
   ]])
   h.wait(screen, function()
     return screen:exec(
-      "return vim.bo.filetype=='snacks_picker_input' and vim.b.persian_search_keys==true"
+      "return vim.bo.filetype=='snacks_picker_input' and vim.b.non_english_search_keys==true"
     )
   end, "symbol search input did not attach")
   screen:input("حقختثزفخق")
@@ -141,16 +187,16 @@ lib.test("Persian-layout symbol search sends English queries when conversion is 
 end)
 
 lib.test(
-  "Persian keyboard supports multi-key and Insert-mode modified shortcuts without changing text",
+  "Non-English keyboard supports multi-key and Insert-mode modified shortcuts without changing text",
   function()
     local screen = editor()
     screen:exec([[
     _G.persian_shortcuts = 0
-    vim.cmd('PersianSearch on')
+    vim.cmd('NonEnglishSearch on')
     vim.keymap.set('n', '<Space>xy', function() _G.persian_shortcuts=_G.persian_shortcuts+1 end)
     vim.keymap.set('i', '<D-x>', function() _G.persian_shortcuts=_G.persian_shortcuts+1 end, {buffer=true})
-    require('core.persian-keyboard').shortcuts()
-    require('core.persian-keyboard').shortcuts(vim.api.nvim_get_current_buf())
+    require('core.non-english-keyboard').shortcuts()
+    require('core.non-english-keyboard').shortcuts(vim.api.nvim_get_current_buf())
   ]])
     screen:input("<Space>طغ")
     lib.eq(
