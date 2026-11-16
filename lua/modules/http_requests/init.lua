@@ -667,17 +667,22 @@ local actions = {
   -- pin the request under the cursor to the top of the pane (or unpin it)
   http_pin = function(picker, item)
     item = item or picker:current()
-    -- Ancestor rows are search context, not requests. Fall back only for those rows; a selected
-    -- request always wins, even while the search remains active.
+    -- A filtered file/folder row activates its own first matching request,
+    -- never the first request in a different file at the top of the results.
     if
       picker.input
       and picker.input.filter
       and (picker.input.filter.pattern ~= "" or picker.input.filter.search ~= "")
       and (not item or item.kind ~= "request")
     then
+      local ancestor = item
       for index = 1, picker.list:count() do
         local candidate = picker.list:get(index)
-        if candidate and candidate.kind == "request" then
+        local parent = candidate and candidate.parent
+        while parent and ancestor and parent.key ~= ancestor.key do
+          parent = parent.parent
+        end
+        if candidate and candidate.kind == "request" and parent and ancestor then
           item = candidate
           break
         end
