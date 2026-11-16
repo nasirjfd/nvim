@@ -429,6 +429,9 @@ return {
           end,
         },
         files = {
+          on_show = function(picker)
+            require("core.picker-stable").attach(picker)
+          end,
           git_status = false,
           ignored = false,
           diagnostics = false,
