@@ -60,7 +60,6 @@ return {
       contenttypes = {
         ["kulala/values"] = { ft = "json" },
       },
-      default_env = "dev", -- environment name in http-client.env.json
       lsp = { enable = true },
       ui = {
         display_mode = "split",

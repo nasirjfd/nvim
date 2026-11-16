@@ -153,13 +153,24 @@ function _G.blame_status(room)
   return author
 end
 
+function _G.kulala_env_status()
+  if vim.bo.filetype ~= "http" and vim.bo.filetype ~= "rest" then
+    return ""
+  end
+  local ok, kulala = pcall(require, "kulala")
+  if not ok then
+    return ""
+  end
+  return "  Env: " .. kulala.get_selected_env()
+end
+
 -- No status line under the window: the blame and line:col go to the right of the command line
 -- (the ruler), and the file name to its left (core/cmdline-file.lua); both are hidden while a
 -- command is being typed. A status line still
 -- appears between stacked splits, showing the file name there.
 vim.opt.laststatus = 0
-vim.opt.statusline = "%f %m%r%=%{v:lua.blame_status()}  %l:%c "
-vim.opt.rulerformat = "%90(%=%{v:lua.blame_status()}  %l:%c%)"
+vim.opt.statusline = "%f %m%r%=%{v:lua.blame_status()}%{v:lua.kulala_env_status()}  %l:%c "
+vim.opt.rulerformat = "%90(%=%{v:lua.blame_status()}%{v:lua.kulala_env_status()}  %l:%c%)"
 
 -- Terminal title: the file path from the project root (Neovim's cwd). In a diff tab
 -- (multi-repo-code-diff) it is the file being compared, whichever pane has focus; for other
@@ -196,4 +207,3 @@ function _G.title_string()
   return vim.fn.fnamemodify(name, ":~:.") .. (vim.bo.modified and " ●" or "")
 end
 vim.opt.titlestring = "%{v:lua.title_string()}"
-
