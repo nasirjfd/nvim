@@ -31,6 +31,58 @@ local function filename_score(matcher, text, original, chars)
 end
 
 function M.attach(matcher)
+  local run = matcher.run
+  matcher.run = function(self, picker)
+    local items = picker.finder.items
+    local fields =
+      { "file_match_rank:desc", "file_usage:desc", "score:desc", "#text", "text", "idx" }
+    if
+      not self:empty()
+      or self.opts.sort == false
+      or picker.finder:running()
+      or picker.opts.transform
+      or not items[1]
+      or not items[1]._cached_file
+      or type(picker.opts.sort) ~= "table"
+      or not vim.deep_equal(picker.opts.sort.fields, fields)
+    then
+      return run(self, picker)
+    end
+    -- The cache already has the complete file list. Build its opening order in
+    -- one cheap pass instead of starting an async fuzzy match/heap for no query.
+    -- These plain fd items cannot have seeded history, directories or score mods.
+    self:abort()
+    picker.list:clear()
+    local history = self.frecency
+    local cwd = vim.fs.normalize(picker.opts.cwd or vim.fn.getcwd()):gsub("/$", "")
+    local ranked = {}
+    for i, item in ipairs(items) do
+      local path = cwd .. "/" .. item.file:gsub("^%./", "")
+      local deadline = history and history.cache[path]
+      local usage = deadline and history:to_score(deadline) or 0
+      item.file_usage, item.frecency = usage, usage
+      item._file_usage_source = history
+      item.file_match_rank = 0
+      item.score = 1000 + (1 - 1 / (1 + usage)) * 8 + (self.opts.cwd_bonus and 10 or 0)
+      item.match_tick, item.match_topk = self.tick, nil
+      ranked[i] = item
+    end
+    table.sort(ranked, function(a, b)
+      if a.file_usage ~= b.file_usage then
+        return a.file_usage > b.file_usage
+      elseif #a.text ~= #b.text then
+        return #a.text < #b.text
+      elseif a.text ~= b.text then
+        return a.text < b.text
+      end
+      return a.idx < b.idx
+    end)
+    self.sorting = true
+    picker.list.items = ranked
+    picker.list:unpause()
+    picker:update({ force = true })
+    self:on_done(picker)
+  end
   local match = matcher.match
   matcher.match = function(self, item)
     local mod = self.one

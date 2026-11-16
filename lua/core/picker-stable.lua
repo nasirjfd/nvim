@@ -8,14 +8,6 @@ function M.attach(picker)
   end
   picker._stable_attached = true
   require("core.file-match").attach(picker.matcher)
-  local show = picker.show
-  picker.show = function(self, ...)
-    -- Open once with a complete ranking instead of flashing an empty list first.
-    if not self.shown and (self.finder:running() or self.matcher:running()) then
-      return
-    end
-    return show(self, ...)
-  end
   local list = picker.list
   local render = list.render
   list.render = function(self, ...)

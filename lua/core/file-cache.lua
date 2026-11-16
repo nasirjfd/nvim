@@ -114,8 +114,7 @@ end
 
 ---@type snacks.picker.finder
 function M.finder(opts, ctx)
-  -- Attach before the first scan/render, not on_show (which is already too late
-  -- to stop the initial empty picker from flashing on screen).
+  -- Attach before the first scan/render, including the immediate cached opening.
   require("core.picker-stable").attach(ctx.picker)
   local original = require("snacks.picker.source.files").files
   -- Anything but a plain listing of the folder goes through snacks' own finder
@@ -148,7 +147,7 @@ function M.finder(opts, ctx)
   end
   local items, cwd = {}, opts.cwd
   for line in entry.raw:gmatch("[^\n]+") do
-    items[#items + 1] = { text = line, file = line, cwd = cwd }
+    items[#items + 1] = { text = line, file = line, cwd = cwd, _cached_file = true }
   end
   return items
 end

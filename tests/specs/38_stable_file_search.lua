@@ -1,12 +1,26 @@
 local lib = require("lib")
 local h = require("support")
 
-lib.test("Cmd+Shift+O does not flash partial rankings when opening", function()
+lib.test("Cmd+Shift+O opens cached rankings immediately without a matching task", function()
   local files = {}
   for i = 1, 300 do
     files[("Shipment%03d.php"):format(i)] = { "<?php" }
   end
   local screen = h.nvim(h.repo(files))
+  screen:exec([[
+    local cache = require('core.file-cache')
+    _G.warm_picker = Snacks.picker.files(vim.tbl_extend('force', cache.opts(), {find=false}))
+    _G.warm_picker.finder:init(_G.warm_picker.input.filter)
+    cache.warm()
+  ]])
+  h.wait(screen, function()
+    return screen:exec([[
+      local p = _G.warm_picker
+      local result = require('core.file-cache').finder(p.opts, p.finder:ctx(p))
+      return type(result) == 'table' and #result == 300
+    ]])
+  end, "file cache did not warm")
+  screen:exec("_G.warm_picker:close(); _G.warm_picker = nil")
   screen:exec([[
     _G.opening_flashes = 0
     local Picker = require('snacks.picker.core.picker')
@@ -37,8 +51,18 @@ lib.test("Cmd+Shift+O does not flash partial rankings when opening", function()
       vim.uv.sleep(1)
     end
   ]])
-  for _ = 1, 2 do
+  for opening = 1, 2 do
+    if opening == 2 then
+      screen:exec("vim.cmd.edit('Shipment299.php'); vim.cmd.enew()")
+    end
     screen:input("<D-S-o>")
+    lib.ok(
+      screen:exec([[
+      local p = Snacks.picker.get({source='files'})[1]
+      return p and p.shown and not p.matcher:running() and #p.list.visible > 0
+    ]]),
+      "cached opening waited for an async matching pass"
+    )
     h.wait(screen, function()
       return screen:exec([[
         local p = Snacks.picker.get({source='files'})[1]
@@ -46,6 +70,15 @@ lib.test("Cmd+Shift+O does not flash partial rankings when opening", function()
           and p.list:count() == 300 and #p.list.visible > 0
       ]])
     end, "Cmd+Shift+O did not settle")
+    if opening == 2 then
+      lib.eq(
+        "Shipment299.php",
+        screen:exec([[
+        return Snacks.picker.get({source='files'})[1].list:get(1).file
+      ]]),
+        "immediate opening did not use the latest file history"
+      )
+    end
     screen:input("<Esc>")
     h.wait(screen, function()
       return screen:exec("return #Snacks.picker.get({source='files'}) == 0")
