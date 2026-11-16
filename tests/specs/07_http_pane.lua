@@ -245,6 +245,38 @@ lib.test("http pane: shows and opens Kulala environment files", function()
   screen:close()
 end)
 
+lib.test("http pane: environment files collapse and hide like other pane items", function()
+  local dir = project()
+  h.write(dir .. "/http-client.env.json", { '{ "dev": {} }' })
+  h.write(dir .. "/http-client.private.env.json", { '{ "dev": {} }' })
+  local screen = open_pane(dir)
+  screen:exec([[
+    local p = require('modules.http_requests').panes()[1]
+    for i, item in ipairs(p:items()) do
+      if item.key == 'env:header' then p.list:move(i, true); break end
+    end
+    p:action('http_close')
+  ]])
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "http-client.env.json", 40) == nil
+  end, "environment files did not collapse")
+  screen:exec("require('modules.http_requests').panes()[1]:action('http_open')")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "http-client.env.json", 40) ~= nil
+  end, "environment files did not expand")
+  screen:exec([[
+    local p = require('modules.http_requests').panes()[1]
+    for i, item in ipairs(p:items()) do
+      if item.key == 'e:http-client.env.json' then p.list:move(i, true); break end
+    end
+    p:action('http_hide')
+  ]])
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "http-client.env.json", 40) == nil
+  end, "environment file did not hide")
+  screen:close()
+end)
+
 lib.test("http pane: clicking a request goes to it in its file", function()
   local screen = open_pane(project())
   click_on(screen, "make-user")

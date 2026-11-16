@@ -140,13 +140,17 @@ local function rows(opts)
   local list = files.cached(dir) or {}
   local environment_files = files.cached_envs(dir) or {}
   local loaded = loaded_buffers()
-  -- the toolbar: new request, request from the clipboard curl, the hidden folders (their number)
+  -- the toolbar: new request, request from the clipboard curl, the hidden items (their number)
   local toolbar = { text = "Toolbar", kind = "button", toolbar = true, hidden_count = 0, showing = hidden.showing(), key = "h:toolbar" }
   local items = { toolbar }
   local hidden_set = hidden.set(dir)
   local hidden_files = hidden.set(dir, "files")
   local hidden_requests = hidden.set(dir, "requests")
-  toolbar.hidden_count = vim.tbl_count(hidden_set) + vim.tbl_count(hidden_files) + vim.tbl_count(hidden_requests)
+  local hidden_envs = hidden.set(dir, "envs")
+  toolbar.hidden_count = vim.tbl_count(hidden_set)
+    + vim.tbl_count(hidden_files)
+    + vim.tbl_count(hidden_requests)
+    + vim.tbl_count(hidden_envs)
 
   local function request_hidden(rel, req)
     return hidden_requests[hidden.request_key(rel, req)] == true
@@ -171,22 +175,37 @@ local function rows(opts)
   end
 
   local pins = pinned.list(dir)
-  if #environment_files > 0 then
-    items[#items + 1] = {
+  local visible_envs = {}
+  for _, rel in ipairs(environment_files) do
+    local is_hidden = hidden_envs[rel] == true
+    if not is_hidden or toolbar.showing then
+      visible_envs[#visible_envs + 1] = { rel = rel, hidden = is_hidden }
+    end
+  end
+  if #visible_envs > 0 then
+    local environment_header = {
       text = "Environments",
       kind = "section",
       key = "env:header",
-      count = #environment_files,
+      count = #visible_envs,
       environment = true,
+      open = searching or not collapsed["env:header"],
     }
-    for index, rel in ipairs(environment_files) do
-      items[#items + 1] = {
-        text = rel,
-        kind = "env",
-        key = "e:" .. rel,
-        file = dir .. "/" .. rel,
-        last = index == #environment_files,
-      }
+    items[#items + 1] = environment_header
+    if environment_header.open then
+      for index, env in ipairs(visible_envs) do
+        items[#items + 1] = {
+          text = env.rel,
+          kind = "env",
+          key = "e:" .. env.rel,
+          file = dir .. "/" .. env.rel,
+          parent = environment_header,
+          last = index == #visible_envs,
+          rel = env.rel,
+          hidden = env.hidden,
+          dim = env.hidden,
+        }
+      end
     end
   end
   local pin_header
@@ -369,12 +388,20 @@ local function format(item, picker)
     end
     return ret
   end
-  if item.kind == "section" then -- a label, not a folder: no fold arrow, nothing to open
-    return {
-      { item.environment and " 󰒓 " or " 󰐃 ", "HttpPanePin" },
-      { item.text, "SnacksPickerDirectory" },
-      { "  " .. (item.count or 0), "HttpPaneCount" },
-    }
+  if item.kind == "section" then
+    if item.environment then
+      return {
+        { item.open and " 󰅀 " or " 󰅂 ", "SnacksPickerDirectory" },
+        { item.text, "SnacksPickerDirectory" },
+        { "  " .. (item.count or 0), "HttpPaneCount" },
+      }
+    else
+      return {
+        { " 󰐃 ", "HttpPanePin" },
+        { item.text, "SnacksPickerDirectory" },
+        { "  " .. (item.count or 0), "HttpPaneCount" },
+      }
+    end
   end
   vim.list_extend(ret, Snacks.picker.format.tree(item, picker))
   local icons = picker.opts.icons.files
@@ -402,8 +429,11 @@ local function format(item, picker)
     ret[#ret + 1] = { "  " .. item.count, "HttpPaneCount" }
   elseif item.kind == "env" then
     local icon, hl = Snacks.util.icon(item.text, "file")
-    ret[#ret + 1] = { (icon or "") .. " ", hl }
-    ret[#ret + 1] = { item.text, "SnacksPickerFile" }
+    ret[#ret + 1] = { (icon or "") .. " ", item.dim and hidden_highlight(hl) or hl }
+    ret[#ret + 1] = { item.text, item.dim and hidden_highlight("SnacksPickerFile") or "SnacksPickerFile" }
+    if item.hidden then
+      ret[#ret + 1] = { "  󰈉", "HttpPaneIconHidden" }
+    end
   else
     local method = item.req.method
     local group = "HttpPane" .. (vim.fn.hlexists("HttpPane" .. method) == 1 and method or "Other")
@@ -474,7 +504,7 @@ local move_to = kit.move_to
 
 -- l: open a closed folder/file; on an open one go to its first row
 local function open_node(picker, item)
-  if not item or (item.kind ~= "dir" and item.kind ~= "file") then
+  if not item or (item.kind ~= "dir" and item.kind ~= "file" and not item.environment) then
     return
   end
   if not item.open then
@@ -496,7 +526,7 @@ local function close_node(picker, item)
   if not item then
     return
   end
-  if (item.kind == "dir" or item.kind == "file") and item.open then
+  if (item.kind == "dir" or item.kind == "file" or item.environment) and item.open then
     collapsed[item.key] = true
     refresh(picker, item.key)
   elseif item.parent and item.parent.key then
@@ -614,8 +644,10 @@ local actions = {
     if not item then
       return
     end
-    if item.kind == "button" or item.kind == "section" then
+    if item.kind == "button" or (item.kind == "section" and not item.environment) then
       return -- the toolbar acts on clicks (http_click) and on its keys
+    elseif item.environment then
+      toggle(picker, item)
     elseif item.kind == "request" then
       goto_line(picker, item.file, item.req.line)
     elseif item.kind == "file" or item.kind == "env" then
@@ -682,6 +714,8 @@ local actions = {
       hidden.toggle(cwd(), item.rel, "files")
     elseif item and item.kind == "request" and item.rel then
       hidden.toggle(cwd(), hidden.request_key(item.rel, item.req), "requests")
+    elseif item and item.kind == "env" and item.rel then
+      hidden.toggle(cwd(), item.rel, "envs")
     else
       return
     end

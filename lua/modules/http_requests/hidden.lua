@@ -16,7 +16,7 @@ local function load()
   if data then
     return data
   end
-  data = { dirs = {}, files = {}, requests = {}, show = false }
+  data = { dirs = {}, files = {}, requests = {}, envs = {}, show = false }
   local fd = io.open(file, "r")
   if fd then
     local ok, decoded = pcall(vim.json.decode, fd:read("*a"))
@@ -25,6 +25,7 @@ local function load()
       data.dirs = type(decoded.dirs) == "table" and decoded.dirs or {}
       data.files = type(decoded.files) == "table" and decoded.files or {}
       data.requests = type(decoded.requests) == "table" and decoded.requests or {}
+      data.envs = type(decoded.envs) == "table" and decoded.envs or {}
       data.show = decoded.show == true
     end
   end
