@@ -1222,7 +1222,7 @@ lib.test("http pane: p pins a request under Pinned (a reference, it also stays i
   screen:close()
 end)
 
-lib.test("http pane: Esc leaves search insert mode without clearing it, and p pins the selected request", function()
+lib.test("http pane: Esc focuses search results without clearing them, and p pins the selected request", function()
   local dir = project()
   local screen = open_pane(dir)
   screen:exec("require('modules.http_requests.pinned').set_file(...)", { dir .. "/pinned.json" })
@@ -1237,8 +1237,8 @@ lib.test("http pane: Esc leaves search insert mode without clearing it, and p pi
   end, "search did not filter to the matching request")
   screen:input("<Esc>")
   h.wait(screen, function()
-    return screen:exec("return vim.bo.filetype == 'snacks_picker_input' and vim.fn.mode() == 'n'")
-  end, "Esc did not leave search insert mode")
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_list' and vim.fn.mode() == 'n'")
+  end, "Esc did not focus the filtered request list")
   h.wait(screen, function()
     return h.find_on_screen(screen, "make-user", 40) ~= nil
       and h.find_on_screen(screen, "List users", 40) == nil
@@ -1256,7 +1256,6 @@ lib.test("http pane: Esc leaves search insert mode without clearing it, and p pi
   ]]),
     "filtered list"
   )
-  lib.eq("Pin filtered HTTP request", screen:exec("return vim.fn.maparg('p', 'n', false, true).desc"), "p mapping")
   screen:input("p")
   h.wait(screen, function()
     return screen:exec("return #require('modules.http_requests.pinned').list(vim.uv.cwd())") == 1

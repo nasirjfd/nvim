@@ -1,7 +1,7 @@
 -- The HTTP Requests pane (<leader>h): a sidebar like the Explorer that lists the requests of the
 -- project's .http / .rest files, grouped by folder and file.
 --
---   Enter / click   go to the request in its file           (folders and files fold / unfold)
+--   Enter / click   open the file or request                (folders fold / unfold)
 --   Ctrl+Enter / r  run the request (and go to it)
 --   a               add a request to the file under the cursor (a folder asks for a new file name)
 --   P               add the curl command in the clipboard as a request (a message when it is not valid)
@@ -134,7 +134,8 @@ end
 
 -- The rows: two buttons, then folders -> files -> requests (folders that hold nothing but one folder are
 -- shown as one row "a/b/c", like the Explorer of VS Code).
-local function rows()
+local function rows(opts)
+  local searching = opts and opts.http_search_expanded
   local dir = cwd()
   local list = files.cached(dir) or {}
   local loaded = loaded_buffers()
@@ -228,7 +229,7 @@ local function rows()
         if not is_hidden or toolbar.showing then
           local item = {
             text = entry.label, kind = "dir", key = key, parent = parent, last = last,
-            open = not collapsed[key], dirpath = dir .. "/" .. entry.node.path,
+            open = searching or not collapsed[key], dirpath = dir .. "/" .. entry.node.path,
             relpath = entry.node.path, hidden = is_hidden, dim = dim or is_hidden,
           }
           items[#items + 1] = item
@@ -255,7 +256,7 @@ local function rows()
         local key = "f:" .. entry.file.rel
         local item = {
           text = entry.file.name, kind = "file", key = key, parent = parent, last = last, file = abs,
-          open = not collapsed[key], count = #visible, dim = dim or entry.hidden,
+          open = searching or not collapsed[key], count = #visible, dim = dim or entry.hidden,
           rel = entry.file.rel, hidden = entry.hidden,
         }
         items[#items + 1] = item
@@ -594,6 +595,8 @@ local actions = {
       return -- the toolbar acts on clicks (http_click) and on its keys
     elseif item.kind == "request" then
       goto_line(picker, item.file, item.req.line)
+    elseif item.kind == "file" then
+      goto_line(picker, item.file, 1)
     else
       toggle(picker, item)
     end
@@ -686,7 +689,7 @@ local actions = {
     local lines = {
       " HTTP pane keys",
       "",
-      " Enter / click   go to the request",
+      " Enter / click   open file / request",
       " r  Ctrl+Enter   run request",
       " a               new request",
       " P               request from clipboard curl",
@@ -714,33 +717,43 @@ local actions = {
     hidden.toggle_show()
     refresh(picker, "h:toolbar")
   end,
-  -- / shows the search input; Esc only leaves insert mode, keeping the filtered results visible.
+  -- / shows search; Esc focuses its filtered results for immediate j/k preview.
   http_show_search = function(picker)
-  picker:toggle("input", { enable = true, focus = true })
-  vim.schedule(function()
-    if not picker.closed then
-      vim.keymap.set("n", "p", function()
-        vim.schedule(function()
-          if not picker.closed then
-            -- Search keeps ancestor folders/files visible above each match.
-            for index = 1, picker.list:count() do
-              local item = picker.list:get(index)
-              if item and item.kind == "request" and item.rel then
-                pinned.toggle(cwd(), item.rel, item.req)
-                break
+    picker.opts.http_search_expanded = true
+    picker:find()
+    picker:toggle("input", { enable = true, focus = true })
+    vim.schedule(function()
+      if not picker.closed then
+        vim.keymap.set("n", "p", function()
+          vim.schedule(function()
+            if not picker.closed then
+              -- Search keeps ancestor folders/files visible above each match.
+              for index = 1, picker.list:count() do
+                local item = picker.list:get(index)
+                if item and item.kind == "request" and item.rel then
+                  pinned.toggle(cwd(), item.rel, item.req)
+                  break
+                end
               end
             end
-          end
-        end)
-      end, { buffer = picker.input.win.buf, silent = true, desc = "Pin filtered HTTP request" })
-    end
-  end)
+          end)
+        end, { buffer = picker.input.win.buf, silent = true, desc = "Pin filtered HTTP request" })
+      end
+    end)
   end,
-  http_stop_search_insert = function()
+  http_stop_search_insert = function(picker)
     vim.cmd("stopinsert")
+    picker:focus("list")
+    preview_current(picker)
+  end,
+  http_list_escape = function(picker)
+    if picker.opts.http_search_expanded then
+      picker:action("http_clear_search")
+    end
   end,
   -- A second Esc, now in normal mode, clears the search and restores the full list.
   http_clear_search = function(picker)
+    picker.opts.http_search_expanded = nil
     picker.input:set("", "")
     picker:find()
     picker:toggle("input", { enable = false })
@@ -818,7 +831,8 @@ end
 local function open()
   -- nothing else may be a sidebar while this one is created (see core/sidebars.lua)
   require("core.sidebars").make_room_for_http()
-  return Snacks.picker.pick({
+  local picker
+  picker = Snacks.picker.pick({
     source = SOURCE,
     title = "", -- the title is the winbar (set_title); the search box must not repeat it
     finder = rows,
@@ -838,7 +852,9 @@ local function open()
         matcher.opts.keep_parents = not matcher:empty()
       end,
       on_done = function(matcher)
-        matcher.opts.keep_parents = not matcher:empty()
+        if picker then
+          require("modules.http_requests.search").done(matcher, picker)
+        end
       end,
     },
     sort = { fields = { "idx" } },
@@ -878,18 +894,18 @@ local function open()
           ["?"] = "http_help",
           ["/"] = "http_show_search",
           ["q"] = "close",
-          ["<Esc>"] = "http_noop",
+          ["<Esc>"] = "http_list_escape",
         }),
       },
       input = {
         keys = {
-          ["<Esc>"] = { "http_stop_search_insert", mode = { "i" } },
-          ["<Esc>"] = { "http_clear_search", mode = { "n" } },
+          ["<Esc>"] = { "http_stop_search_insert", mode = { "i", "n" } },
           ["p"] = { "http_pin", mode = { "n" } },
         },
       },
      },
   })
+  return picker
 end
 
 --- <leader>h: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
