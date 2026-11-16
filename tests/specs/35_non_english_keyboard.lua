@@ -8,6 +8,74 @@ local function editor()
   return screen
 end
 
+local function alerts(screen)
+  return screen:exec([[
+    local found={}
+    for _,win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.bo[vim.api.nvim_win_get_buf(win)].filetype=='non_english_keyboard_alert' then
+        found[#found+1]=win
+      end
+    end
+    return found
+  ]])
+end
+
+lib.test(
+  "Non-English motion alert is top-right, never stacks and expires after the last key",
+  function()
+    local screen = editor()
+    local editor_win = screen:exec("return vim.api.nvim_get_current_win()")
+    screen:input("ت")
+    h.wait(screen, function()
+      return #alerts(screen) == 1
+    end, "motion alert did not appear")
+    local win = alerts(screen)[1]
+    lib.ok(
+      screen:exec(([[
+    local cfg=vim.api.nvim_win_get_config(%d)
+    return cfg.relative=='editor' and cfg.row==0 and not cfg.focusable
+      and cfg.col+cfg.width+2==vim.o.columns
+  ]]):format(win)),
+      "alert is not in the top-right"
+    )
+    lib.eq(editor_win, screen:exec("return vim.api.nvim_get_current_win()"), "alert stole focus")
+    vim.wait(850)
+    screen:input("ن")
+    vim.wait(850)
+    lib.eq({ win }, alerts(screen), "alert stacked or expired before the restarted timeout")
+    screen:input("تنتن")
+    lib.eq({ win }, alerts(screen), "a burst created another alert")
+    h.wait(screen, function()
+      return #alerts(screen) == 0
+    end, "alert did not expire", 2500)
+    screen:input("ت")
+    h.wait(screen, function()
+      return #alerts(screen) == 1
+    end, "alert did not reappear")
+    screen:close()
+  end
+)
+
+lib.test("Non-English search alert appears only for translated input", function()
+  local screen = editor()
+  screen:input("iسلام<Esc>")
+  lib.eq({}, alerts(screen), "ordinary inserted text showed a translation alert")
+  screen:input("<D-S-o>")
+  h.wait(screen, function()
+    return screen:exec(
+      "return vim.bo.filetype=='snacks_picker_input' and vim.b.non_english_search_keys"
+    )
+  end, "file picker did not open")
+  screen:input("pro")
+  lib.eq({}, alerts(screen), "English input showed a translation alert")
+  screen:input("تثزفخق")
+  h.wait(screen, function()
+    return #alerts(screen) == 1
+  end, "search alert did not appear")
+  lib.eq("projector", screen:exec("return vim.api.nvim_get_current_line()"))
+  screen:close()
+end)
+
 lib.test(
   "Non-English keyboard shortcuts work while ordinary inserted text stays unchanged",
   function()
@@ -27,28 +95,31 @@ lib.test(
   end
 )
 
-lib.test("Non-English keyboard Cmd+Shift+O invokes file search using the English shortcut", function()
-  local screen = editor()
-  screen:input("<D-S-خ>") -- physical Cmd+Shift+O
-  h.wait(screen, function()
-    return screen:exec(
-      "return #Snacks.picker.get({source='files'}) == 1 and vim.bo.filetype == 'snacks_picker_input'"
+lib.test(
+  "Non-English keyboard Cmd+Shift+O invokes file search using the English shortcut",
+  function()
+    local screen = editor()
+    screen:input("<D-S-خ>") -- physical Cmd+Shift+O
+    h.wait(screen, function()
+      return screen:exec(
+        "return #Snacks.picker.get({source='files'}) == 1 and vim.bo.filetype == 'snacks_picker_input'"
+      )
+    end, "Persian-layout Cmd+Shift+O did not open Files")
+    screen:input("حقختثزفخق") -- projector in the Persian layout
+    lib.eq(
+      "projector",
+      screen:exec("return vim.api.nvim_get_current_line()"),
+      "file names must automatically use the English keyboard layout"
     )
-  end, "Persian-layout Cmd+Shift+O did not open Files")
-  screen:input("حقختثزفخق") -- projector in the Persian layout
-  lib.eq(
-    "projector",
-    screen:exec("return vim.api.nvim_get_current_line()"),
-    "file names must automatically use the English keyboard layout"
-  )
-  h.wait(screen, function()
-    return screen:exec([[
+    h.wait(screen, function()
+      return screen:exec([[
       local p=Snacks.picker.get({source='files'})[1]
       return p and p.list:count()==1 and p.list:get(1).file:find('Projector.lua',1,true) ~= nil
     ]])
-  end, "translated query did not find the English filename")
-  screen:close()
-end)
+    end, "translated query did not find the English filename")
+    screen:close()
+  end
+)
 
 lib.test("Non-English recent-file search translates typing and pasted mixed queries", function()
   local screen = editor()
@@ -64,7 +135,8 @@ lib.test("Non-English recent-file search translates typing and pasted mixed quer
       return p and vim.bo.filetype=='snacks_picker_input' and vim.b.non_english_search_keys
     ]])
   end, function()
-    return "Cmd+E did not open recent files: " .. vim.inspect(screen:exec([[
+    return "Cmd+E did not open recent files: "
+      .. vim.inspect(screen:exec([[
       local ps={}
       for _,p in ipairs(Snacks.picker.get()) do ps[#ps+1]={source=p.opts.source,buf=p.input.win.buf} end
       return {pickers=ps,ft=vim.bo.filetype,keys=vim.b.non_english_search_keys,mode=vim.fn.mode()}
@@ -95,7 +167,9 @@ lib.test("Non-English text searches stay unchanged without the optional toggle",
   local screen = editor()
   screen:exec("vim.cmd('NonEnglishSearch off'); Snacks.picker.grep()")
   h.wait(screen, function()
-    return screen:exec("return vim.bo.filetype=='snacks_picker_input' and vim.b.non_english_search_keys")
+    return screen:exec(
+      "return vim.bo.filetype=='snacks_picker_input' and vim.b.non_english_search_keys"
+    )
   end, "grep did not attach")
   screen:input("سلام")
   lib.eq("سلام", screen:exec("return vim.api.nvim_get_current_line()"))
@@ -109,7 +183,9 @@ lib.test(
     screen:exec("vim.cmd('NonEnglishSearch on')")
     screen:input("<D-ب>") -- physical Cmd+F
     h.wait(screen, function()
-      return screen:exec("return vim.bo.filetype=='findbar' and vim.b.non_english_search_keys == true")
+      return screen:exec(
+        "return vim.bo.filetype=='findbar' and vim.b.non_english_search_keys == true"
+      )
     end, "Persian-layout Cmd+F did not open Find")
     screen:input("حقختثزفخق")
     h.wait(screen, function()

@@ -53,6 +53,55 @@ for character, english in pairs(letters) do
   end
 end
 local modes = { "n", "x", "o", "i", "s", "c", "t" }
+local alert = { generation = 0 }
+
+local function show_alert()
+  alert.generation = alert.generation + 1
+  local generation = alert.generation
+  alert.timer = alert.timer or assert(vim.uv.new_timer())
+  alert.timer:stop()
+  alert.timer:start(
+    1500,
+    0,
+    vim.schedule_wrap(function()
+      if generation == alert.generation and alert.win and api.nvim_win_is_valid(alert.win) then
+        api.nvim_win_close(alert.win, true)
+        alert.win = nil
+      end
+    end)
+  )
+  -- Key listeners and expression mappings run under textlock. Coalesce bursts
+  -- into one scheduled, non-focusable window, not a notification per key.
+  if alert.pending then
+    return
+  end
+  alert.pending = true
+  vim.schedule(function()
+    alert.pending = false
+    if alert.win and api.nvim_win_is_valid(alert.win) then
+      return
+    end
+    local text = " Non-English keys → English "
+    local width = math.min(vim.fn.strdisplaywidth(text), math.max(1, vim.o.columns - 4))
+    local buf = api.nvim_create_buf(false, true)
+    vim.bo[buf].bufhidden = "wipe"
+    vim.bo[buf].filetype = "non_english_keyboard_alert"
+    api.nvim_buf_set_lines(buf, 0, -1, false, { text })
+    alert.win = api.nvim_open_win(buf, false, {
+      relative = "editor",
+      row = 0,
+      col = math.max(0, vim.o.columns - width - 2),
+      width = width,
+      height = 1,
+      style = "minimal",
+      border = "rounded",
+      focusable = false,
+      mouse = false,
+      zindex = 250,
+      noautocmd = true,
+    })
+  end)
+end
 
 function M.english(text)
   return (text:gsub("[\194-\244][\128-\191]+", letters))
@@ -95,6 +144,7 @@ local function normalize_names(buf)
   if translated == text then
     return
   end
+  show_alert()
   local win = picker.input.win.win
   local cursor = api.nvim_win_get_cursor(win)
   picker.input:set(picker.opts.live and nil or translated, picker.opts.live and translated or nil)
@@ -184,8 +234,11 @@ function M.attach(buf)
       vim.b[buf].non_english_search_keys = true
       for character, english in pairs(letters) do
         vim.keymap.set({ "i", "s" }, character, function()
-          return (name_picker(buf) or vim.g.non_english_search and search(buf)) and english
-            or character
+          if name_picker(buf) or vim.g.non_english_search and search(buf) then
+            show_alert()
+            return english
+          end
+          return character
         end, {
           buffer = buf,
           expr = true,
@@ -209,6 +262,15 @@ function M.attach(buf)
 end
 
 function M.setup()
+  vim.on_key(function(_, typed)
+    if typed == "" or M.english(typed) == typed then
+      return
+    end
+    local mode = api.nvim_get_mode().mode:sub(1, 1)
+    if mode == "n" or mode == "v" or mode == "V" or mode == "\22" then
+      show_alert()
+    end
+  end, api.nvim_create_namespace("NonEnglishKeyboardAlert"))
   api.nvim_create_user_command("NonEnglishSearch", function(args)
     if args.args == "" or args.args == "toggle" then
       M.toggle()
