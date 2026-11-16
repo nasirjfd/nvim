@@ -61,17 +61,12 @@ end
 
 local cache = {} -- file name -> words
 
-function M.on_match(matcher, item)
-  -- Actual opening history, not the file's modification timestamp. Small
-  -- fuzzy-score differences must not outweigh usage among comparable names.
-  item.file_match_rank = 0
-  item.file_usage = matcher.frecency and matcher.frecency:get(item, { seed = false }) or 0
-  local q = (matcher.pattern or ""):lower():gsub("%s+", "")
-  if #q < 2 or not item.file or q:find("[^%w]") then
-    return
-  end
-  local name = vim.fs.basename(item.file)
+local function rank(q, name)
+  local match_rank, bonus = 0, 0
   local lower = name:lower()
+  if lower:sub(1, #q) == q then
+    return { rank = 2, bonus = PIECE_BONUS + 100 + WORD_BONUS }
+  end
   -- a piece that starts a word (not parcel*s* + *cl*aimed for scl)
   local from = 1
   while true do
@@ -86,8 +81,8 @@ function M.on_match(matcher, item)
       or (prev:match("%l") and char:match("%u"))
       or (prev:match("%a") and char:match("%d"))
     then
-      item.file_match_rank = 1
-      item.score = item.score + PIECE_BONUS + (at == 1 and 100 or 0)
+      match_rank = 1
+      bonus = PIECE_BONUS + (at == 1 and 100 or 0)
       break
     end
     from = at + 1
@@ -99,10 +94,38 @@ function M.on_match(matcher, item)
   end
   local skips = skipped_words(q, list)
   if skips then
-    item.file_match_rank = 2
+    match_rank = 2
     -- fewer skipped words first: scl → ScannableCodeLookup… before Shipment…Cause…Claimed…
-    item.score = item.score + WORD_BONUS - math.min(skips, 10) * 40
+    bonus = bonus + WORD_BONUS - math.min(skips, 10) * 40
   end
+  return { rank = match_rank, bonus = bonus }
+end
+
+function M.on_match(matcher, item)
+  -- History is a snapshot for this picker. Resolve it once, not for every letter.
+  if item._file_usage_source ~= matcher.frecency or item.file_usage == nil then
+    item.file_usage = matcher.frecency and matcher.frecency:get(item, { seed = false }) or 0
+    item._file_usage_source = matcher.frecency
+  end
+  item.file_match_rank = 0
+  local state = matcher._file_rank
+  if not state or state.pattern ~= matcher.pattern then
+    local q = (matcher.pattern or ""):lower():gsub("%s+", "")
+    state =
+      { pattern = matcher.pattern, query = q, valid = #q >= 2 and not q:find("[^%w]"), names = {} }
+    matcher._file_rank = state
+  end
+  if not state.valid or not item.file then
+    return
+  end
+  local name = item._file_match and item._file_match.name or vim.fs.basename(item.file)
+  local result = state.names[name]
+  if not result then
+    result = rank(state.query, name)
+    state.names[name] = result
+  end
+  item.file_match_rank = result.rank
+  item.score = item.score + result.bonus
 end
 
 return M

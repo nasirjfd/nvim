@@ -3,6 +3,7 @@
 local M = {}
 
 function M.attach(picker)
+  require("core.file-match").attach(picker.matcher)
   local list = picker.list
   local render = list.render
   list.render = function(self, ...)
