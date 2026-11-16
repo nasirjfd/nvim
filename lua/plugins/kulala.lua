@@ -62,6 +62,16 @@ return {
       },
       lsp = { enable = true },
       ui = {
+        pickers = {
+          snacks = {
+            layout = function()
+              local layout = require("snacks.picker").config.layout("telescope")
+              layout.reverse = true
+              layout.layout.backdrop = { blend = 20 }
+              return layout
+            end,
+          },
+        },
         display_mode = "split",
         split_direction = "vertical", -- response to the right of the request
         -- client.log() in a script is shown in the result's Script Output tab. In a terminal Kulala
