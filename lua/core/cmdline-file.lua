@@ -144,7 +144,7 @@ function M.setup()
   -- The diff view switches files without a buffer event of its own
   vim.api.nvim_create_autocmd("User", {
     group = group,
-    pattern = { "CodeDiffOpen", "CodeDiffClose", "CodeDiffFileSelect" },
+    pattern = { "CodeDiffOpen", "CodeDiffClose", "CodeDiffFileSelect", "CodeDiffReady" },
     callback = vim.schedule_wrap(render),
   })
   -- Both executed and cancelled commands restore the filename without waiting for cursor movement.

@@ -99,15 +99,18 @@ vim.keymap.set("t", "<C-k>", "<cmd>wincmd k<cr>", { desc = "Go Up" })
 vim.keymap.set("t", "<C-l>", "<cmd>wincmd l<cr>", { desc = "Go Right" })
 
 local function copy_reference(selection)
+  local graph_reference = require("core.herdr-ref").graph_reference()
   local file = vim.fn.expand("%:p")
-  if file == "" or vim.bo.buftype ~= "" then
+  if not graph_reference and (file == "" or vim.bo.buftype ~= "") then
     vim.notify("Current buffer has no file reference", vim.log.levels.WARN)
     return
   end
 
   local reference_path = vim.fn.fnamemodify(file, ":.")
   local reference
-  if selection then
+  if graph_reference then
+    reference = graph_reference
+  elseif selection then
     local start_line = vim.fn.getpos("v")[2]
     local end_line = vim.fn.line(".")
     if start_line > end_line then
