@@ -62,7 +62,8 @@ return {
     -- closes the gh popup, clears multiple cursors, closes the find bar, or clears highlights.
     -- (Esc in visual mode only ends the selection.)
     set("n", "<esc>", function()
-      if require("core.modal-backdrop").escape_to_topmost() then
+      local modals = require("core.modal-backdrop")
+      if modals.close_shortcuts_help() or modals.escape_to_topmost() then
         return
       end
       local popup = hover_popup()

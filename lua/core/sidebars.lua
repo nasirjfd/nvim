@@ -127,7 +127,12 @@ local function snacks_explorers(tab)
   end
   for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
     local win = picker.list and picker.list.win and picker.list.win.win
-    if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == tab then
+    if
+      win
+      and vim.api.nvim_win_is_valid(win)
+      and not vim.api.nvim_win_get_config(win).hide
+      and vim.api.nvim_win_get_tabpage(win) == tab
+    then
       found[#found + 1] = picker
     end
   end
@@ -297,7 +302,9 @@ function M.make_room_for_codediff(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   M.request(tab)
   for _, picker in ipairs(snacks_explorers(tab)) do
-    close_now(picker)
+    -- The Explorer is often swapped straight back in with Cmd+Shift+E. Hide its layout rather than
+    -- destroying it, so its tree and Git state return without a visible rebuild/flash.
+    pcall(picker.layout.hide, picker.layout)
   end
   for _, picker in ipairs(extra_panes(tab)) do
     close_now(picker)

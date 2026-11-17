@@ -93,7 +93,7 @@ lib.test("cmd+shift+g never shows the git pane and the explorer together, not ev
     for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
       local ft = vim.bo[vim.api.nvim_win_get_buf(w)].filetype
       git = git + (ft == "codediff-explorer" and 1 or 0)
-      lists = lists + (ft == "snacks_picker_list" and 1 or 0)
+      lists = lists + (ft == "snacks_picker_list" and not vim.api.nvim_win_get_config(w).hide and 1 or 0)
     end
     return git > 0 and lists > 0
   ]])
@@ -116,7 +116,7 @@ lib.test("rapid Explorer Git switching never overlaps their windows in either di
       for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
         local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
         git = git + (ft == 'codediff-explorer' and 1 or 0)
-        lists = lists + (ft == 'snacks_picker_list' and 1 or 0)
+        lists = lists + (ft == 'snacks_picker_list' and not vim.api.nvim_win_get_config(win).hide and 1 or 0)
       end
       if git > 0 and lists > 0 then _G.sidebar_overlaps = _G.sidebar_overlaps + 1 end
     end })
@@ -129,7 +129,7 @@ lib.test("rapid Explorer Git switching never overlaps their windows in either di
       for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
         local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
         git = git + (ft == 'codediff-explorer' and 1 or 0)
-        lists = lists + (ft == 'snacks_picker_list' and 1 or 0)
+        lists = lists + (ft == 'snacks_picker_list' and not vim.api.nvim_win_get_config(win).hide and 1 or 0)
       end
       return git > 0 and lists > 0
     ]], { key })
@@ -137,5 +137,29 @@ lib.test("rapid Explorer Git switching never overlaps their windows in either di
     vim.wait(i % 3 == 0 and 1 or 10)
   end
   lib.eq(0, screen:exec("return _G.sidebar_overlaps"), "sidebars overlapped during window creation")
+  screen:close()
+end)
+
+lib.test("switching between Explorer and Git reuses the Explorer layout", function()
+  local dir = h.repo({ ["a.txt"] = { "one", "two" } })
+  h.write(dir .. "/a.txt", { "one", "CHANGED" })
+  local screen = h.nvim(dir)
+  screen:exec("vim.cmd('edit a.txt'); vim.cmd('CodeDiff scm')")
+  h.wait(screen, function()
+    return screen:exec("return require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage()) ~= nil")
+  end, "Git pane did not open")
+  press(screen, "<D-S-e>")
+  h.wait(screen, function()
+    return explorer_open(screen)
+  end, "Explorer did not open")
+  screen:exec("_G.explorer_before = Snacks.picker.get({ source = 'explorer' })[1]")
+  for _ = 1, 4 do
+    press(screen, "<D-S-g>")
+    press(screen, "<D-S-e>")
+    h.wait(screen, function()
+      return explorer_open(screen)
+    end, "Explorer did not return after switching to Git")
+    lib.ok(screen:exec("return Snacks.picker.get({ source = 'explorer' })[1] == _G.explorer_before"), "Explorer was rebuilt")
+  end
   screen:close()
 end)

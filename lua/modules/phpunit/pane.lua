@@ -859,7 +859,9 @@ local function run_item(item)
 end
 
 local actions = {
-  tests_noop = function() end,
+  tests_noop = function()
+    require("core.modal-backdrop").close_shortcuts_help()
+  end,
   tests_show_search = function(picker)
     picker:toggle("input", { enable = true, focus = true })
   end,
@@ -961,7 +963,7 @@ local actions = {
       border = "rounded",
       backdrop = false,
       wo = { wrap = false },
-      bo = { modifiable = false },
+      bo = { filetype = "pane_shortcuts_help", modifiable = false },
       keys = { q = "close", ["<Esc>"] = "close", ["?"] = "close" },
     })
   end,

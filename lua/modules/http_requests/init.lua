@@ -774,7 +774,7 @@ local actions = {
       border = "rounded",
       backdrop = false,
       wo = { wrap = false },
-      bo = { modifiable = false },
+      bo = { filetype = "pane_shortcuts_help", modifiable = false },
       keys = { q = "close", ["<Esc>"] = "close", ["?"] = "close" },
     })
   end,
@@ -802,7 +802,9 @@ local actions = {
     preview_current(picker)
   end,
   http_list_escape = function(picker)
-    if picker.opts.http_search_expanded then
+    if require("core.modal-backdrop").close_shortcuts_help() then
+      return
+    elseif picker.opts.http_search_expanded then
       picker:action("http_clear_search")
     end
   end,

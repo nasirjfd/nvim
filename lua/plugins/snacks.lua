@@ -599,7 +599,12 @@ return {
             explorer_stop_search_insert = function()
               vim.cmd("stopinsert")
             end,
-            explorer_noop = function() end,
+            -- Keep Escape from closing the persistent explorer, but let it dismiss the keymap
+            -- overlay opened by `?`. Snacks makes that overlay non-focusable, so it cannot receive
+            -- Escape itself.
+            explorer_hide_help = function()
+              require("core.modal-backdrop").close_shortcuts_help()
+            end,
           },
           win = {
             input = {
@@ -614,7 +619,7 @@ return {
               keys = {
                 ["<C-q>"] = "quit_nvim",
                 ["/"] = "show_search",
-                ["<Esc>"] = "explorer_noop",
+                ["<Esc>"] = "explorer_hide_help",
                 ["<D-c>"] = { "explorer_yank", mode = { "n", "x" } },
                 ["<D-v>"] = "explorer_paste_named",
               },

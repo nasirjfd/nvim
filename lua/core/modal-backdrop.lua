@@ -153,6 +153,28 @@ function M.escape_to_topmost()
   return true
 end
 
+-- Snacks' keymap overlay is intentionally non-focusable, as are the compact shortcut overlays for
+-- side panes. They must therefore be dismissed from the pane that is still focused.
+function M.close_shortcuts_help()
+  local target
+  local target_zindex = -math.huge
+  for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+    local ft = vim.bo[api.nvim_win_get_buf(win)].filetype
+    if ft == "snacks_win_help" or ft == "pane_shortcuts_help" then
+      local zindex = api.nvim_win_get_config(win).zindex or 50
+      if zindex > target_zindex or (zindex == target_zindex and (not target or win > target)) then
+        target = win
+        target_zindex = zindex
+      end
+    end
+  end
+  if target then
+    api.nvim_win_close(target, true)
+    return true
+  end
+  return false
+end
+
 local function close(modal)
   local win = backdrops[modal]
   backdrops[modal] = nil
