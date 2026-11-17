@@ -91,6 +91,7 @@ return {
           },
         },
       })
+      require("core.completion-trigger").setup()
     end,
   },
 

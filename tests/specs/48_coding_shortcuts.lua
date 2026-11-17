@@ -19,7 +19,7 @@ local function editor()
             id = id + 1
             local result
             if method == 'initialize' then
-              result = {capabilities = {codeActionProvider=true, completionProvider={}}}
+              result = {capabilities = {codeActionProvider=true, completionProvider={triggerCharacters={'>','.',':'}}}}
             elseif method == 'textDocument/codeAction' then
               _G.shortcut_requests[#_G.shortcut_requests+1] = params
               result = {{title='Import WidgetService', kind='quickfix', edit={changes={
@@ -59,6 +59,30 @@ local function editor()
   end, "LSP shortcut did not attach")
   return screen
 end
+
+lib.test(
+  "LSP completion automatically follows inserted trigger characters without re-entering insert",
+  function()
+    local screen = editor()
+    for _, input in ipairs({ "typed", "buffered" }) do
+      for _, trigger in ipairs({ "->", ".", "::" }) do
+        screen:exec("vim.api.nvim_buf_set_lines(0, 0, -1, false, {'object'})")
+        screen:input("A")
+        screen:exec("require('blink.cmp').hide()")
+        if input == "typed" then
+          screen:input(trigger)
+        else
+          screen:exec("vim.api.nvim_paste(..., false, -1)", { trigger })
+        end
+        h.wait(screen, function()
+          return screen:exec("return require('blink.cmp').is_visible() and vim.fn.mode() == 'i'")
+        end, "LSP menu did not open after inserted " .. trigger)
+        screen:input("<Esc>")
+      end
+    end
+    screen:close()
+  end
+)
 
 for _, mode in ipairs({ "normal", "visual", "insert" }) do
   lib.test("Cmd+. requests and applies an LSP import quick fix in " .. mode .. " mode", function()
