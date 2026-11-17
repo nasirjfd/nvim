@@ -65,8 +65,10 @@ return {
         pickers = {
           snacks = {
             layout = function()
-              local layout = require("snacks.picker").config.layout("telescope")
-              layout.reverse = true
+              -- Environment names stay above their variables: the selected environment's content
+              -- updates below instead of competing for horizontal space beside the list.
+              local layout = require("snacks.picker").config.layout("vertical")
+              layout.layout.width = 0.7
               layout.layout.backdrop = { blend = 20 }
               return layout
             end,
