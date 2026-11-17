@@ -30,7 +30,7 @@ lib.test("skipped files stay searchable and editable in cold and cached file sea
   local dir = fixture()
   local screen = h.nvim(dir)
   -- Isolate search/editing from PHP tooling (servers, parsers and formatters).
-  screen:exec("vim.filetype.add({pattern = {['.*/Test%.php'] = 'text'}})")
+  screen:exec("vim.filetype.add({filename = {['Test.php'] = 'text'}})")
   for _, cached in ipairs({ false, true }) do
     screen:exec(
       [[

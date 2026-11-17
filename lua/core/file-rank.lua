@@ -1,5 +1,6 @@
 -- JetBrains-like ranking for the file pickers (snacks matcher `on_match`), on top of snacks' fuzzy
 -- score (~16 per matched letter):
+--   0. an exact file name, including its extension, always beats fuzzy matches and history
 --   1. the search is made of the starts of words of the file name, in order: `pprecord` =
 --      Parcel Projection Record, `ppr` too, `scl` = ScannableCodeLookup… (words may be skipped,
 --      fewer skipped ranks higher)
@@ -64,6 +65,9 @@ local cache = {} -- file name -> words
 local function rank(q, name)
   local match_rank, bonus = 0, 0
   local lower = name:lower()
+  if lower == q then
+    return { rank = 3, bonus = WORD_BONUS + PIECE_BONUS + 200 }
+  end
   if lower:sub(1, #q) == q then
     return { rank = 2, bonus = PIECE_BONUS + 100 + WORD_BONUS }
   end
@@ -92,7 +96,7 @@ local function rank(q, name)
     list = words(name)
     cache[name] = list
   end
-  local skips = skipped_words(q, list)
+  local skips = not q:find("[^%w]") and skipped_words(q, list)
   if skips then
     match_rank = 2
     -- fewer skipped words first: scl → ScannableCodeLookup… before Shipment…Cause…Claimed…
@@ -111,8 +115,12 @@ function M.on_match(matcher, item)
   local state = matcher._file_rank
   if not state or state.pattern ~= matcher.pattern then
     local q = (matcher.pattern or ""):lower():gsub("%s+", "")
-    state =
-      { pattern = matcher.pattern, query = q, valid = #q >= 2 and not q:find("[^%w]"), names = {} }
+    state = {
+      pattern = matcher.pattern,
+      query = q,
+      valid = #q >= 2 and not q:find("[^%w._%-]"),
+      names = {},
+    }
     matcher._file_rank = state
   end
   if not state.valid or not item.file then
