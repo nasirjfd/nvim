@@ -290,6 +290,8 @@ local function setup_keymaps(bufnr)
 
   -- <leader>c = Code
   map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, "Code Action")
+  -- Keep this buffer-local: Ctrl+Enter still runs entries in the HTTP/tests panes.
+  map({ "n", "x", "i" }, "<C-CR>", vim.lsp.buf.code_action, "Code Action / Quick Fix")
   map("n", "<leader>cr", vim.lsp.buf.rename, "Rename Symbol")
   map("n", "<leader>cd", vim.diagnostic.open_float, "Line Diagnostic")
   map("n", "<leader>cv", "<cmd>vsplit | lua vim.lsp.buf.definition()<cr>", "Definition in Vsplit")

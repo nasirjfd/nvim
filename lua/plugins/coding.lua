@@ -46,6 +46,8 @@ return {
           },
         },
         keymap = {
+          -- Cmd+I requests the existing completion sources without accepting an item.
+          ["<D-i>"] = { "show" },
           ["<C-f>"] = {},
           -- Ctrl+j / Ctrl+k move down / up in the menu; Enter accepts the selected item.
           -- With the menu closed they all fall back to their usual insert-mode behavior.
