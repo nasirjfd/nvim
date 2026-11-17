@@ -163,3 +163,37 @@ lib.test("switching between Explorer and Git reuses the Explorer layout", functi
   end
   screen:close()
 end)
+
+lib.test("rapid cycling across Git and picker panes keeps one complete sidebar", function()
+  local dir = h.repo({ ["a.txt"] = { "one", "two" }, ["api.http"] = { "GET https://example.com" } })
+  h.write(dir .. "/a.txt", { "one", "CHANGED" })
+  local screen = h.nvim(dir)
+  screen:exec("vim.cmd('edit a.txt'); vim.cmd('CodeDiff scm')")
+  h.wait(screen, function()
+    return screen:exec("return require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage()) ~= nil")
+  end, "Git pane did not open")
+  screen:exec([[
+    local function press(key)
+      vim.fn.maparg(key, "n", false, true).callback()
+    end
+    for _ = 1, 8 do
+      press("<D-S-e>")
+      press("<D-S-g>")
+      press("<leader>h")
+      press("<D-S-t>")
+    end
+    press("<D-S-e>")
+  ]])
+  h.wait(screen, function()
+    return screen:exec([[
+      local lists, boxes = 0, 0
+      for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+        lists = lists + (ft == "snacks_picker_list" and 1 or 0)
+        boxes = boxes + (ft == "snacks_layout_box" and 1 or 0)
+      end
+      return vim.o.cmdheight == 1 and lists == 1 and boxes == 1
+    ]])
+  end, "rapid Git/sidebar switching left an incomplete layout")
+  screen:close()
+end)

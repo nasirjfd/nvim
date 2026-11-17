@@ -376,3 +376,30 @@ lib.test("tests pane: next to the Explorer and the HTTP pane the layout stays wh
   whole("http pane next to the tests pane")
   screen:close()
 end)
+
+lib.test("rapid sidebar cycling leaves only the final pane visible", function()
+  local screen = h.nvim(fake_project())
+  screen:exec([[
+    local function press(key)
+      vim.fn.maparg(key, "n", false, true).callback()
+    end
+    for _ = 1, 12 do
+      press("<D-S-t>")
+      press("<D-S-e>")
+      press("<leader>h")
+    end
+    press("<D-S-e>")
+  ]])
+  h.wait(screen, function()
+    return screen:exec([[
+      local explorers, extra = 0, 0
+      for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+        explorers = explorers + (ft == "snacks_picker_list" and 1 or 0)
+        extra = extra + (ft == "snacks_layout_box" and 1 or 0)
+      end
+      return vim.o.cmdheight == 1 and explorers == 1 and extra == 1
+    ]])
+  end, "rapid switching left stale sidebar layouts")
+  screen:close()
+end)

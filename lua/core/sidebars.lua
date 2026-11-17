@@ -13,6 +13,9 @@ local panels = {}
 local explorer_pref = {}
 -- The sidebar opened last in each tab: "explorer", "codediff", "http" (HTTP Requests) or "tests".
 local last_sidebar = {}
+-- The sidebar currently being opened. Scheduled BufWinEnter cleanup from an older picker must never
+-- be allowed to close a newer one while the user switches panes quickly.
+local target_sidebar = {}
 local request_id = {} -- per-tab generation: delayed directory opens yield to explicit pane/picker requests
 
 function M.request(tab)
@@ -27,6 +30,10 @@ end
 
 function M.last(tab)
   return last_sidebar[tab]
+end
+
+function M.target(tab)
+  return target_sidebar[tab or vim.api.nvim_get_current_tabpage()]
 end
 
 -- The source ("explorer", "http_requests", …) of the picker whose list is shown in `buf`.
@@ -156,6 +163,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       if
         not vim.api.nvim_tabpage_is_valid(tab)
         or M.generation(tab) ~= generation
+        or M.target(tab) ~= "explorer"
         or #snacks_explorers(tab) == 0
         or source_of(args.buf) ~= "explorer"
       then
@@ -191,6 +199,9 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
     local generation = M.generation(tab)
     vim.schedule(function()
       if not vim.api.nvim_tabpage_is_valid(tab) or M.generation(tab) ~= generation then
+        return
+      end
+      if M.target(tab) ~= "codediff" then
         return
       end
       -- A later request may already have hidden Git before this callback gets its turn.
@@ -253,7 +264,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       local name = vim.api.nvim_tabpage_is_valid(tab)
         and M.generation(tab) == generation
         and name_of_source(source_of(args.buf))
-      if not name then
+      if not name or M.target(tab) ~= name then
         return
       end
       last_sidebar[tab] = name
@@ -280,6 +291,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
 function M.make_room(name, tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   M.request(tab)
+  target_sidebar[tab] = name
   last_sidebar[tab] = name
   explorer_pref[tab] = name == "explorer"
   for _, picker in ipairs(snacks_explorers(tab)) do
@@ -305,6 +317,7 @@ end
 function M.make_room_for_codediff(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   M.request(tab)
+  target_sidebar[tab] = "codediff"
   for _, picker in ipairs(snacks_explorers(tab)) do
     -- The Explorer is often swapped straight back in with Cmd+Shift+E. Hide its layout rather than
     -- destroying it, so its tree and Git state return without a visible rebuild/flash.
