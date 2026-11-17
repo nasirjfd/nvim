@@ -58,10 +58,13 @@ return {
       end
     end
 
-    -- Escape closes the gh popup first, then clears multiple cursors, then closes the find bar
-    -- (core/find-bar.lua; Esc in visual mode only ends the selection); falls through to normal
-    -- <Esc> behavior (clear search highlight) when there is none of them.
+    -- Escape goes to a visible modal first when mouse focus is in a window behind it. Otherwise it
+    -- closes the gh popup, clears multiple cursors, closes the find bar, or clears highlights.
+    -- (Esc in visual mode only ends the selection.)
     set("n", "<esc>", function()
+      if require("core.modal-backdrop").escape_to_topmost() then
+        return
+      end
       local popup = hover_popup()
       local find_bar = package.loaded["core.find-bar"]
       if popup then

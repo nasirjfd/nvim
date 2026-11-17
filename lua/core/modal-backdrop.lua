@@ -119,6 +119,40 @@ local function is_modal(win)
   return cfg.width >= vim.o.columns * 0.3 and cfg.height >= vim.o.lines * 0.2
 end
 
+-- Move Escape to the visually topmost real modal when a mouse click left focus in a window behind
+-- it. Small floats (hover docs, completion menus, notifications) are deliberately excluded: they
+-- are not dialogs and taking focus from the editor for them would make Escape surprising.
+function M.escape_to_topmost()
+  local current = api.nvim_get_current_win()
+  local target
+  local target_zindex = -math.huge
+
+  for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+    if win ~= current and is_modal(win) then
+      local zindex = api.nvim_win_get_config(win).zindex or 50
+      -- Neovim layers equal-zindex floats by creation order; window handles increase with creation.
+      if zindex > target_zindex or (zindex == target_zindex and (not target or win > target)) then
+        target = win
+        target_zindex = zindex
+      end
+    end
+  end
+
+  if not target then
+    return false
+  end
+
+  api.nvim_set_current_win(target)
+  -- Use mapped input so the modal's own Escape behavior decides whether it closes, cancels, or
+  -- steps back. Feeding it after this mapping returns avoids recursively invoking the global map.
+  vim.schedule(function()
+    if api.nvim_win_is_valid(target) and api.nvim_get_current_win() == target then
+      api.nvim_feedkeys(vim.keycode("<Esc>"), "m", false)
+    end
+  end)
+  return true
+end
+
 local function close(modal)
   local win = backdrops[modal]
   backdrops[modal] = nil
