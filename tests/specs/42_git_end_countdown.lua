@@ -96,7 +96,7 @@ for _, mode in ipairs({ "Git pane", "commit page" }) do
         return screen:exec([[
           for _, win in ipairs(vim.api.nvim_list_wins()) do
             local cfg = vim.api.nvim_win_get_config(win)
-            if cfg.relative == 'editor' and cfg.row == 1 then
+            if cfg.relative == 'editor' and cfg.row == 1 and cfg.height == 3 and type(cfg.border) == 'table' then
               local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), '\n')
               if text:find('You are back at the first change', 1, true) then return true end
             end
