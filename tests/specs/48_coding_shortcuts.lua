@@ -26,6 +26,18 @@ local function editor()
                 [params.textDocument.uri] = {{range={start={line=0,character=0},
                   ['end']={line=0,character=0}}, newText='use Example.WidgetService;\n'}}
               }}}}
+              if _G.shortcut_mixed_actions then
+                local import = result[1]
+                import.title = 'use Example.WidgetService'
+                result = {
+                  {title='Add PHPDoc for WidgetService', kind='refactor.rewrite'},
+                  {title='Rename symbol', kind='refactor.rename'},
+                  import,
+                  {title='Generate docstring', kind='refactor.rewrite'},
+                  {title='Resolve missing types', kind='source.addMissingImports'},
+                  {title='Extract method', kind='refactor.extract'},
+                }
+              end
             elseif method == 'textDocument/completion' then
               _G.shortcut_completions = (_G.shortcut_completions or 0) + 1
               result = {{label='WidgetService', kind=7, insertText='WidgetService'}}
@@ -85,6 +97,44 @@ for _, mode in ipairs({ "normal", "visual", "insert" }) do
       screen:close()
     end
   )
+end
+
+for _, key in ipairs({ "<C-CR>", "<Space>ca" }) do
+  lib.test("code actions put imports first and documentation last via " .. key, function()
+    local screen = editor()
+    screen:exec("_G.shortcut_mixed_actions = true")
+    screen:input(key)
+    h.wait(screen, function()
+      return screen:exec([[
+        local p = Snacks.picker.get({source='select'})[1]
+        return p and p:count() == 6 and not p.matcher:running()
+      ]])
+    end, "code action menu did not open")
+    lib.eq(
+      {
+        "use Example.WidgetService",
+        "Resolve missing types",
+        "Rename symbol",
+        "Extract method",
+        "Add PHPDoc for WidgetService",
+        "Generate docstring",
+      },
+      screen:exec([[
+      local p = Snacks.picker.get({source='select'})[1]
+      local titles = {}
+      for i = 1, p.list:count() do titles[i] = p.list:get(i).item.action.title end
+      return titles
+    ]]),
+      "code actions did not keep stable import/other/documentation groups"
+    )
+    screen:input("<CR>")
+    h.wait(screen, function()
+      return screen:exec(
+        "return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1] == 'use Example.WidgetService;'"
+      )
+    end, "first action no longer applies the import edit")
+    screen:close()
+  end)
 end
 
 lib.test(
