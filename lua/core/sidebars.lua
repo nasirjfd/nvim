@@ -187,7 +187,8 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   end,
 })
 
--- The codediff sidebar appeared: hide the other sidebars of the tab.
+-- The codediff sidebar appeared: close the Explorer rather than hiding it. Snacks' sidebar layout
+-- includes a normal split box; hiding only its floats leaves an empty "Explorer" split behind.
 vim.api.nvim_create_autocmd("BufWinEnter", {
   group = group,
   callback = function(args)
@@ -213,7 +214,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       last_sidebar[tab] = "codediff"
       codediff_panel(tab)
       for _, picker in ipairs(snacks_explorers(tab)) do
-        hide_picker(picker)
+        close_now(picker)
       end
       for _, picker in ipairs(extra_panes(tab)) do
         close_now(picker)
@@ -311,7 +312,7 @@ function M.make_room(name, tab)
   restore_cmdheight()
 end
 
--- Called right before the codediff sidebar (Git pane) is shown: hide Explorer and close other sidebars at
+-- Called right before the codediff sidebar (Git pane) is shown: close every other sidebar at
 -- once. The BufWinEnter handler above does it one tick later, and for that tick two sidebars are on
 -- screen (a visible jump).
 function M.make_room_for_codediff(tab)
@@ -319,9 +320,7 @@ function M.make_room_for_codediff(tab)
   M.request(tab)
   target_sidebar[tab] = "codediff"
   for _, picker in ipairs(snacks_explorers(tab)) do
-    -- The Explorer is often swapped straight back in with Cmd+Shift+E. Hide its layout rather than
-    -- destroying it, so its tree and Git state return without a visible rebuild/flash.
-    hide_picker(picker)
+    close_now(picker)
   end
   for _, picker in ipairs(extra_panes(tab)) do
     close_now(picker)

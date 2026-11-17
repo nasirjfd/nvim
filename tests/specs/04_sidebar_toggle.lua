@@ -140,7 +140,7 @@ lib.test("rapid Explorer Git switching never overlaps their windows in either di
   screen:close()
 end)
 
-lib.test("switching between Explorer and Git reuses the Explorer layout", function()
+lib.test("switching from Explorer to Git leaves no empty Explorer split", function()
   local dir = h.repo({ ["a.txt"] = { "one", "two" } })
   h.write(dir .. "/a.txt", { "one", "CHANGED" })
   local screen = h.nvim(dir)
@@ -152,14 +152,20 @@ lib.test("switching between Explorer and Git reuses the Explorer layout", functi
   h.wait(screen, function()
     return explorer_open(screen)
   end, "Explorer did not open")
-  screen:exec("_G.explorer_before = Snacks.picker.get({ source = 'explorer' })[1]")
   for _ = 1, 4 do
     press(screen, "<D-S-g>")
+    h.wait(screen, function()
+      return screen:exec([[
+        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "snacks_layout_box" then return false end
+        end
+        return true
+      ]])
+    end, "Git pane kept an empty Explorer split")
     press(screen, "<D-S-e>")
     h.wait(screen, function()
       return explorer_open(screen)
     end, "Explorer did not return after switching to Git")
-    lib.ok(screen:exec("return Snacks.picker.get({ source = 'explorer' })[1] == _G.explorer_before"), "Explorer was rebuilt")
   end
   screen:close()
 end)
