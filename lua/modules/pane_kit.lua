@@ -13,9 +13,12 @@ function M.panes(source, tab)
   if not _G.Snacks or not Snacks.picker then
     return found
   end
-  for _, picker in ipairs(Snacks.picker.get({ source = source })) do
+  for _, picker in ipairs(Snacks.picker.get({ source = source, tab = false })) do
     local win = picker.list and picker.list.win and picker.list.win.win
-    if win and api.nvim_win_is_valid(win) and api.nvim_win_get_tabpage(win) == tab then
+    if
+      picker._sidebar_tab == tab
+      or (win and api.nvim_win_is_valid(win) and api.nvim_win_get_tabpage(win) == tab)
+    then
       found[#found + 1] = picker
     end
   end

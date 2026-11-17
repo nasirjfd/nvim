@@ -105,10 +105,8 @@ local function focus_explorer()
   local buf = vim.api.nvim_get_current_buf()
   local ordinary = vim.bo[buf].buftype == "" and vim.api.nvim_buf_get_name(buf) ~= ""
   if explorer then
-    -- It may be the layout hidden while the Git sidebar was visible. Reuse it instead of rebuilding
-    -- the tree, which also avoids a flash on repeated Explorer/Git switches.
-    require("core.sidebars").make_room("explorer", current_tab)
-    pcall(explorer.layout.unhide, explorer.layout)
+    -- Focus an existing Explorer without closing its own layout during sidebar arbitration.
+    require("core.sidebars").make_room("explorer", current_tab, explorer)
     explorer:focus("list")
   elseif ordinary and not in_codediff then
     explorer = Snacks.explorer.reveal()

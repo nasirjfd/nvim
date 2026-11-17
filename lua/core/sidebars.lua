@@ -41,7 +41,7 @@ local function source_of(buf)
   if not _G.Snacks or not Snacks.picker then
     return nil
   end
-  for _, picker in ipairs(Snacks.picker.get()) do
+  for _, picker in ipairs(Snacks.picker.get({ tab = false })) do
     local list = picker.list and picker.list.win
     if list and list.buf == buf then
       return picker.opts.source
@@ -126,28 +126,23 @@ local function panel_visible(panel)
     and vim.api.nvim_win_is_valid(panel.split.winid)
 end
 
--- The Snacks explorer pickers whose list is shown in `tab`.
-local function snacks_explorers(tab, include_hidden)
+-- Include pending pickers: Snacks' default get() excludes layouts without a valid root window.
+-- Those must be cancelled too, before their asynchronous show runs in a different tab.
+local function snacks_explorers(tab)
   local found = {}
   if not _G.Snacks or not Snacks.picker then
     return found
   end
-  for _, picker in ipairs(Snacks.picker.get({ source = "explorer" })) do
+  for _, picker in ipairs(Snacks.picker.get({ source = "explorer", tab = false })) do
     local win = picker.list and picker.list.win and picker.list.win.win
     if
-      win
-      and vim.api.nvim_win_is_valid(win)
-      and (include_hidden or not vim.api.nvim_win_get_config(win).hide)
-      and vim.api.nvim_win_get_tabpage(win) == tab
+      picker._sidebar_tab == tab
+      or (win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == tab)
     then
       found[#found + 1] = picker
     end
   end
   return found
-end
-
-local function hide_picker(picker)
-  pcall(picker.layout.hide, picker.layout)
 end
 
 -- The file explorer appeared: hide the codediff sidebar of the tab.
@@ -270,7 +265,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       end
       last_sidebar[tab] = name
       for _, picker in ipairs(snacks_explorers(tab)) do
-        hide_picker(picker)
+        close_now(picker)
       end
       for _, picker in ipairs(extra_panes(tab, name)) do
         close_now(picker)
@@ -289,14 +284,16 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
 
 -- Called by an extra pane ("http", "tests") right before it opens: close the other sidebars in the
 -- same tick, before their layouts can overlap.
-function M.make_room(name, tab)
+function M.make_room(name, tab, keep)
   tab = tab or vim.api.nvim_get_current_tabpage()
   M.request(tab)
   target_sidebar[tab] = name
   last_sidebar[tab] = name
   explorer_pref[tab] = name == "explorer"
   for _, picker in ipairs(snacks_explorers(tab)) do
-    close_now(picker)
+    if picker ~= keep then
+      close_now(picker)
+    end
   end
   for _, picker in ipairs(extra_panes(tab, name)) do
     close_now(picker)
@@ -346,28 +343,46 @@ vim.api.nvim_create_autocmd("VimEnter", {
     local pick = Snacks.picker.pick
     Snacks.picker.pick = function(source, opts)
       local name = type(source) == "table" and source.source or source
-      if name == "explorer" then
-        require("core.leave-codediff").leave_graph()
+      local sidebar = name == "explorer" and "explorer" or name_of_source(name)
+      if sidebar then
+        if sidebar == "explorer" then
+          require("core.leave-codediff").leave_graph()
+        end
         local tab = vim.api.nvim_get_current_tabpage()
-        local existing = snacks_explorers(tab, true)[1]
-        if existing and vim.api.nvim_win_get_config(existing.list.win.win).hide then
-          M.make_room("explorer", tab)
-          existing.layout:unhide()
-          existing:focus("list")
-          return existing
+        M.make_room(sidebar, tab)
+        local generation = M.generation(tab)
+        local options =
+          vim.tbl_extend("force", {}, type(source) == "table" and source or opts or {})
+        local on_show = options.on_show
+        options.on_show = function(picker)
+          picker._sidebar_tab = tab
+          if
+            not vim.api.nvim_tabpage_is_valid(tab)
+            or vim.api.nvim_get_current_tabpage() ~= tab
+            or M.generation(tab) ~= generation
+            or M.target(tab) ~= sidebar
+          then
+            close_now(picker)
+            return
+          end
+          if on_show then
+            on_show(picker)
+          end
         end
-        -- Hide Git synchronously, before Snacks constructs (and can render) any Explorer windows.
-        -- BufWinEnter's scheduled cleanup is too late during fast switching.
-        if #snacks_explorers(tab) == 0 then
-          M.make_room("explorer")
+        local picker
+        if type(source) == "table" then
+          picker = pick(options)
         else
-          M.request()
+          picker = pick(source, options)
         end
-      else
-        -- A search/recent-files popup is an explicit request too. A directory Explorer
-        -- still waiting for its initial Git scan must not replace it when that scan finishes.
-        M.request()
+        if picker then
+          picker._sidebar_tab = tab
+        end
+        return picker
       end
+      -- A search/recent-files popup is an explicit request too. A directory Explorer
+      -- still waiting for its initial Git scan must not replace it when that scan finishes.
+      M.request()
       return pick(source, opts)
     end
     Snacks.picker._sidebars_wrapped = true
