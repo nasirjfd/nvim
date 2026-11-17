@@ -4,7 +4,7 @@ local M = {}
 
 -- A forward/backward pass finds a compact alignment without rescoring every
 -- occurrence of the first letter (Snacks' exhaustive fuzzy scorer is quadratic).
-local function filename_score(matcher, text, original, chars)
+local function filename_start(text, chars)
   local first, last = 1, nil
   for _, char in ipairs(chars) do
     last = text:find(char, (last or 0) + 1, true)
@@ -21,13 +21,49 @@ local function filename_score(matcher, text, original, chars)
     first = at
     at = at - 1
   end
+  return first
+end
+
+local function filename_score(matcher, text, original, chars)
+  local first = filename_start(text, chars)
+  if not first then
+    return nil
+  end
   matcher.score:init(original, first)
-  at = first
+  local at = first
   for i = 2, #chars do
     at = text:find(chars[i], at + 1, true)
     matcher.score:update(at)
   end
   return math.max(1, matcher.score.score)
+end
+
+-- Snacks uses a separate matcher on the formatted row for highlighting. Its normal
+-- full-row scorer can prefer a folder over the filename our ranking actually matched.
+-- Use the same filename alignment for both, and leave advanced/path queries untouched.
+function M.attach_highlights(matcher)
+  if matcher._filename_highlights then
+    return
+  end
+  matcher._filename_highlights = true
+  local positions = matcher.positions
+  matcher.positions = function(self, item)
+    local mod = self.one
+    if item.file and mod and mod.fuzzy and not mod.field and not mod.inverse and not mod.regex then
+      local name = vim.fs.basename(item.file)
+      local offset = item.text:find(name, 1, true)
+      local text = mod.ignorecase and name:lower() or name
+      local first = offset and filename_start(text, mod.chars)
+      if first then
+        local matched = self:fuzzy_positions(text, mod.chars, first)
+        for i, pos in ipairs(matched) do
+          matched[i] = offset + pos - 1
+        end
+        return { text = matched }
+      end
+    end
+    return positions(self, item)
+  end
 end
 
 function M.attach(matcher)

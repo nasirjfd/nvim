@@ -9,6 +9,7 @@ function M.attach(picker)
   picker._stable_attached = true
   require("core.file-match").attach(picker.matcher)
   local list = picker.list
+  require("core.file-match").attach_highlights(list.matcher)
   local render = list.render
   list.render = function(self, ...)
     if picker.finder:running() or picker.matcher:running() then
