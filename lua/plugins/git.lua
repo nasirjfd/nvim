@@ -341,9 +341,23 @@ return {
       })
     end,
     keys = {
-      { "<leader>gg", "<cmd>CodeDiff scm<cr>", desc = "Git (All Repositories)" },
+      {
+        "<leader>gg",
+        function()
+          require("core.sidebars").make_room_for_codediff()
+          vim.cmd("CodeDiff scm")
+        end,
+        desc = "Git (All Repositories)",
+      },
       { "<leader>gvv", "<cmd>CodeDiff<cr>", desc = "Working Tree" },
-      { "<leader>gvr", "<cmd>CodeDiff scm<cr>", desc = "All Repositories" },
+      {
+        "<leader>gvr",
+        function()
+          require("core.sidebars").make_room_for_codediff()
+          vim.cmd("CodeDiff scm")
+        end,
+        desc = "All Repositories",
+      },
       { "<leader>gvg", "<cmd>CodeDiff graph<cr>", desc = "Commit Graph" },
       { "<leader>gvs", "<cmd>CodeDiff --staged<cr>", desc = "Staged" },
       { "<leader>gvm", "<cmd>CodeDiff main...<cr>", desc = "Branch vs main" },

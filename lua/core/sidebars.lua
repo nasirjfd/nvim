@@ -120,7 +120,7 @@ local function panel_visible(panel)
 end
 
 -- The Snacks explorer pickers whose list is shown in `tab`.
-local function snacks_explorers(tab)
+local function snacks_explorers(tab, include_hidden)
   local found = {}
   if not _G.Snacks or not Snacks.picker then
     return found
@@ -130,13 +130,17 @@ local function snacks_explorers(tab)
     if
       win
       and vim.api.nvim_win_is_valid(win)
-      and not vim.api.nvim_win_get_config(win).hide
+      and (include_hidden or not vim.api.nvim_win_get_config(win).hide)
       and vim.api.nvim_win_get_tabpage(win) == tab
     then
       found[#found + 1] = picker
     end
   end
   return found
+end
+
+local function hide_picker(picker)
+  pcall(picker.layout.hide, picker.layout)
 end
 
 -- The file explorer appeared: hide the codediff sidebar of the tab.
@@ -175,7 +179,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   end,
 })
 
--- The codediff sidebar appeared: close the file explorer of the tab.
+-- The codediff sidebar appeared: hide the other sidebars of the tab.
 vim.api.nvim_create_autocmd("BufWinEnter", {
   group = group,
   callback = function(args)
@@ -198,7 +202,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       last_sidebar[tab] = "codediff"
       codediff_panel(tab)
       for _, picker in ipairs(snacks_explorers(tab)) do
-        close_now(picker)
+        hide_picker(picker)
       end
       for _, picker in ipairs(extra_panes(tab)) do
         close_now(picker)
@@ -235,7 +239,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   end,
 })
 
--- An extra pane (HTTP Requests, Tests) appeared: close the file explorer and the other extra pane, hide the
+-- An extra pane (HTTP Requests, Tests) appeared: hide the file explorer and other extra pane, hide the
 -- codediff sidebar of the tab.
 vim.api.nvim_create_autocmd("BufWinEnter", {
   group = group,
@@ -254,7 +258,7 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
       end
       last_sidebar[tab] = name
       for _, picker in ipairs(snacks_explorers(tab)) do
-        close_now(picker)
+        hide_picker(picker)
       end
       for _, picker in ipairs(extra_panes(tab, name)) do
         close_now(picker)
@@ -271,8 +275,8 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   end,
 })
 
--- Called by an extra pane ("http", "tests") right before it opens: nothing else may be a sidebar at that
--- moment.
+-- Called by an extra pane ("http", "tests") right before it opens: close the other sidebars in the
+-- same tick, before their layouts can overlap.
 function M.make_room(name, tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   M.request(tab)
@@ -295,7 +299,7 @@ function M.make_room(name, tab)
   restore_cmdheight()
 end
 
--- Called right before the codediff sidebar (Git pane) is shown: close every other sidebar of the tab at
+-- Called right before the codediff sidebar (Git pane) is shown: hide Explorer and close other sidebars at
 -- once. The BufWinEnter handler above does it one tick later, and for that tick two sidebars are on
 -- screen (a visible jump).
 function M.make_room_for_codediff(tab)
@@ -304,7 +308,7 @@ function M.make_room_for_codediff(tab)
   for _, picker in ipairs(snacks_explorers(tab)) do
     -- The Explorer is often swapped straight back in with Cmd+Shift+E. Hide its layout rather than
     -- destroying it, so its tree and Git state return without a visible rebuild/flash.
-    pcall(picker.layout.hide, picker.layout)
+    hide_picker(picker)
   end
   for _, picker in ipairs(extra_panes(tab)) do
     close_now(picker)
@@ -316,8 +320,8 @@ function M.make_room_for_http(tab)
   M.make_room("http", tab)
 end
 
--- The file explorer is about to open (Snacks.explorer(), <leader>e, cmd+b, …): close the HTTP pane first,
--- for the same reason as in close_now. Every way of opening it goes through Snacks.picker.pick.
+-- The file explorer is about to open (Snacks.explorer(), <leader>e, cmd+b, …): hide the other sidebars
+-- before it renders. Every way of opening it goes through Snacks.picker.pick.
 vim.api.nvim_create_autocmd("VimEnter", {
   group = group,
   once = true,
@@ -332,9 +336,17 @@ vim.api.nvim_create_autocmd("VimEnter", {
       local name = type(source) == "table" and source.source or source
       if name == "explorer" then
         require("core.leave-codediff").leave_graph()
+        local tab = vim.api.nvim_get_current_tabpage()
+        local existing = snacks_explorers(tab, true)[1]
+        if existing and vim.api.nvim_win_get_config(existing.list.win.win).hide then
+          M.make_room("explorer", tab)
+          existing.layout:unhide()
+          existing:focus("list")
+          return existing
+        end
         -- Hide Git synchronously, before Snacks constructs (and can render) any Explorer windows.
         -- BufWinEnter's scheduled cleanup is too late during fast switching.
-        if #snacks_explorers(vim.api.nvim_get_current_tabpage()) == 0 then
+        if #snacks_explorers(tab) == 0 then
           M.make_room("explorer")
         else
           M.request()
