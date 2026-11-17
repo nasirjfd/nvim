@@ -81,7 +81,7 @@ local function show_alert()
     if alert.win and api.nvim_win_is_valid(alert.win) then
       return
     end
-    local text = " Non-English keys → English "
+    local text = " Switch to English keyboard layout "
     local width = math.min(vim.fn.strdisplaywidth(text), math.max(1, vim.o.columns - 4))
     local buf = api.nvim_create_buf(false, true)
     vim.bo[buf].bufhidden = "wipe"

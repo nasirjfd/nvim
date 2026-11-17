@@ -29,6 +29,10 @@ lib.test(
     h.wait(screen, function()
       return #alerts(screen) == 1
     end, "motion alert did not appear")
+    lib.ok(
+      h.find_on_screen(screen, "Switch to English keyboard layout"),
+      "keyboard alert wording was not updated"
+    )
     local win = alerts(screen)[1]
     lib.ok(
       screen:exec(([[

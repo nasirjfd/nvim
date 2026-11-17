@@ -25,6 +25,7 @@ return {
     end,
     config = function(_, opts)
       require("kulala").setup(opts)
+      require("core.kulala-workflow").setup()
       -- HTML responses filtered by a hand-written CSS selector (# @css / @css / "css" in the env file)
       require("core.kulala-ui").setup_css()
     end,
