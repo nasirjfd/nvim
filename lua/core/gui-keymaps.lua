@@ -42,7 +42,7 @@ end, { desc = "All Files (selection)" })
 -- cmd+b -> toggle the sidebar (show/hide), matches workbench.action.toggleSidebarVisibility.
 -- In a codediff tab (diff, history or the multi-repo Source Control pane) it
 -- toggles that tab's own sidebar; anywhere else it toggles the file explorer.
-map("n", "<D-b>", function()
+local function toggle_sidebar()
   local tab = vim.api.nvim_get_current_tabpage()
   local sidebars = require("core.sidebars")
   -- the HTTP Requests or the Tests pane was the sidebar opened last: toggle that
@@ -58,7 +58,7 @@ map("n", "<D-b>", function()
   local panel = lifecycle and lifecycle.get_panel_view(tab)
   -- The file explorer was the sidebar opened last (e.g. cmd+shift+e in the git tab): toggle that.
   if panel and sidebars.prefers_explorer(tab) then
-    Snacks.explorer()
+    sidebars.toggle_explorer()
     return
   end
   if panel then
@@ -78,7 +78,10 @@ map("n", "<D-b>", function()
   if orphan and pcall(require("codediff.ui.explorer").toggle_visibility, orphan) then
     return
   end
-  Snacks.explorer()
+  sidebars.toggle_explorer()
+end
+map("n", "<D-b>", function()
+  require("core.sidebars").switch(toggle_sidebar)
 end, { desc = "Toggle Sidebar" })
 
 -- cmd+shift+e -> focus the file explorer (workbench.view.explorer), always, also inside a codediff tab
@@ -118,7 +121,9 @@ local function focus_explorer()
   end
 end
 
-map("n", "<D-S-e>", focus_explorer, { desc = "Focus Explorer" })
+map("n", "<D-S-e>", function()
+  require("core.sidebars").switch(focus_explorer)
+end, { desc = "Focus Explorer" })
 
 -- cmd+f4 -> close buffer
 map("n", "<D-F4>", function()
@@ -205,6 +210,7 @@ local function focus_git()
     local panel = lifecycle.get_panel(tab)
     if panel and panel.data and panel.data.kind == "scm" then
       local came_from_other_tab = tab ~= vim.api.nvim_get_current_tabpage()
+      require("core.sidebars").make_room_for_codediff(tab)
       vim.api.nvim_set_current_tabpage(tab)
       -- with no change selected, the right side shows the file you came from (like VS Code)
       if came_from_other_tab then
@@ -229,7 +235,9 @@ local function focus_git()
   end
   vim.cmd("CodeDiff scm")
 end
-map("n", "<D-S-g>", focus_git, { desc = "Focus Git" })
+map("n", "<D-S-g>", function()
+  require("core.sidebars").switch(focus_git)
+end, { desc = "Focus Git" })
 
 -- cmd+ctrl+j / cmd+ctrl+k -> insert cursor below/above (multicursor.nvim)
 map({ "n", "x" }, "<D-C-j>", function()

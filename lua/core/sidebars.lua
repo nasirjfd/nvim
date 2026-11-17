@@ -17,6 +17,27 @@ local last_sidebar = {}
 -- be allowed to close a newer one while the user switches panes quickly.
 local target_sidebar = {}
 local request_id = {} -- per-tab generation: delayed directory opens yield to explicit pane/picker requests
+local switch_id = 0
+
+-- Coalesce rapid pane shortcuts before constructing layouts. This is shared across tabs: Git and
+-- HTTP can navigate to different tabs, so per-tab generations alone cannot order user intent.
+function M.switch(callback)
+  switch_id = switch_id + 1
+  local id = switch_id
+  local scm = package.loaded["codediff.commands.handlers.scm"]
+  if scm and scm.cancel_pending then
+    scm.cancel_pending()
+  end
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    M.request(tab)
+  end
+  vim.defer_fn(function()
+    if id == switch_id then
+      callback()
+      M.reconcile()
+    end
+  end, 20)
+end
 
 function M.request(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
@@ -144,6 +165,94 @@ local function snacks_explorers(tab)
   end
   return found
 end
+
+function M.toggle_explorer()
+  local tab = vim.api.nvim_get_current_tabpage()
+  local explorers = snacks_explorers(tab)
+  if #explorers > 0 then
+    M.request(tab)
+    target_sidebar[tab] = "none"
+    for _, picker in ipairs(explorers) do
+      close_now(picker)
+    end
+  else
+    Snacks.explorer.open()
+  end
+end
+
+-- Enforce the invariant from actual windows, not just a plugin's cached visibility flag. Window
+-- creation, async layout updates, and tab restores all pass through here. Never touch file splits.
+local reconciling = false
+function M.reconcile()
+  if reconciling or not _G.Snacks then
+    return
+  end
+  reconciling = true
+  local ok, err = pcall(function()
+    local keep = {}
+    for _, picker in ipairs(Snacks.picker.get({ tab = false })) do
+      local source = picker.opts.source
+      local name = source == "explorer" and "explorer" or name_of_source(source)
+      if name then
+        local win = picker.list and picker.list.win and picker.list.win.win
+        local actual_tab = win
+          and vim.api.nvim_win_is_valid(win)
+          and vim.api.nvim_win_get_tabpage(win)
+        local tab = picker._sidebar_tab or actual_tab
+        local target = tab and M.target(tab)
+        if tab then
+          if (actual_tab and actual_tab ~= tab) or (target and target ~= name) then
+            close_now(picker)
+          elseif keep[tab] then
+            close_now(keep[tab])
+            keep[tab] = picker
+          else
+            keep[tab] = picker
+          end
+        end
+      end
+    end
+    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+      local target = M.target(tab)
+      if target and target ~= "codediff" then
+        local panel = codediff_panel(tab)
+        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+          local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+          if ft == "codediff-explorer" or ft == "codediff-history" then
+            vim.api.nvim_win_hide(win)
+            if panel then
+              panel.is_hidden = true
+              if panel.split and panel.split.winid == win then
+                panel.split.winid = nil
+                panel.winid = nil
+              end
+            end
+          end
+        end
+      end
+    end
+    restore_cmdheight()
+  end)
+  reconciling = false
+  if not ok then
+    vim.notify("Sidebar reconciliation: " .. tostring(err), vim.log.levels.ERROR)
+  end
+end
+
+local reconcile_pending = false
+vim.api.nvim_create_autocmd({ "WinEnter", "BufWinEnter", "TabEnter", "WinNew" }, {
+  group = group,
+  callback = function()
+    if reconcile_pending or reconciling then
+      return
+    end
+    reconcile_pending = true
+    vim.schedule(function()
+      reconcile_pending = false
+      M.reconcile()
+    end)
+  end,
+})
 
 -- The file explorer appeared: hide the codediff sidebar of the tab.
 vim.api.nvim_create_autocmd("BufWinEnter", {
@@ -351,6 +460,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
         local tab = vim.api.nvim_get_current_tabpage()
         M.make_room(sidebar, tab)
         local generation = M.generation(tab)
+        local switch = switch_id
         local options =
           vim.tbl_extend("force", {}, type(source) == "table" and source or opts or {})
         local on_show = options.on_show
@@ -360,6 +470,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
             not vim.api.nvim_tabpage_is_valid(tab)
             or vim.api.nvim_get_current_tabpage() ~= tab
             or M.generation(tab) ~= generation
+            or switch_id ~= switch
             or M.target(tab) ~= sidebar
           then
             close_now(picker)
@@ -368,6 +479,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
           if on_show then
             on_show(picker)
           end
+          M.reconcile()
         end
         local picker
         if type(source) == "table" then

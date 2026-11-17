@@ -1056,7 +1056,7 @@ local function open()
 end
 
 --- Cmd+Shift+T: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
-function M.toggle()
+local function focus_pane()
   require("core.leave-codediff").leave_graph()
   local panes = M.panes()
   if #panes > 0 then
@@ -1064,6 +1064,10 @@ function M.toggle()
     return
   end
   open()
+end
+
+function M.toggle()
+  require("core.sidebars").switch(focus_pane)
 end
 
 --- Cmd+B: show the pane, or hide it whatever has the focus.

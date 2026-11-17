@@ -966,7 +966,7 @@ local function open()
 end
 
 --- <leader>h: show the pane and put the cursor in it; it never closes it (Cmd+B and q do).
-function M.toggle()
+local function focus_pane()
   -- The request list and its live editor must share a normal tab. Keeping the
   -- list in a Git tab made previews invisible in another tab, and Enter then
   -- exposed that tab's Explorer instead of the adjacent request editor.
@@ -1017,6 +1017,10 @@ function M.toggle()
       end
     end) -- never listed: list it first (a few tens of ms)
   end
+end
+
+function M.toggle()
+  require("core.sidebars").switch(focus_pane)
 end
 
 --- Cmd+B: show the pane, or hide it whatever has the focus.

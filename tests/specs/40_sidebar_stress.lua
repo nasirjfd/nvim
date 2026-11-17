@@ -50,5 +50,73 @@ lib.test("real shortcut bursts end in Git without foreign sidebars in any tab", 
       vim.inspect(state)
     )
   end
+  screen:input("<D-S-e>")
+  h.wait(screen, function()
+    return screen:exec("return #Snacks.picker.get({ source = 'explorer' }) == 1")
+  end, "Explorer did not open after the burst")
+  screen:input("<D-b>")
+  h.wait(screen, function()
+    return screen:exec("return #Snacks.picker.get({ source = 'explorer' }) == 0")
+  end, "Cmd+B did not close Explorer after the burst")
   screen:close()
 end)
+
+for _, final in ipairs({
+  { key = "<D-S-e>", source = "explorer" },
+  { key = "<D-S-h>", source = "http_requests" },
+  { key = "<D-S-t>", source = "phpunit_tests" },
+}) do
+  lib.test("shortcut bursts settle exclusively on " .. final.source, function()
+    local dir = h.repo({ ["api.http"] = { "GET https://example.com" } })
+    local screen = h.nvim(dir)
+    screen:input("<D-S-g>")
+    h.wait(screen, function()
+      return screen:exec("return vim.bo.filetype == 'codediff-explorer'")
+    end, "Git did not open")
+    for _ = 1, 8 do
+      screen:input(("<D-S-h><D-S-e><D-S-g><D-S-t>"):rep(3))
+      vim.wait(20)
+    end
+    screen:input(final.key)
+    h.wait(screen, function()
+      return screen:exec(
+        [[
+        local pickers = Snacks.picker.get({ source = ..., tab = false })
+        return #pickers == 1 and pickers[1].list.win.win == vim.api.nvim_get_current_win()
+      ]],
+        { final.source }
+      )
+    end, function()
+      return "final pane did not receive focus: "
+        .. vim.inspect(screen:exec([[
+        local tabs = {}
+        for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+          local wins = {}
+          for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+            wins[#wins + 1] = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+          end
+          tabs[#tabs + 1] = { target = require("core.sidebars").target(tab), wins = wins }
+        end
+        return { focus = vim.bo.filetype, tabs = tabs }
+      ]]))
+    end)
+    vim.wait(800)
+    lib.ok(
+      screen:exec([[
+      for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+        local git, lists, boxes = 0, 0, 0
+        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+          local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+          git = git + (ft == "codediff-explorer" and 1 or 0)
+          lists = lists + (ft == "snacks_picker_list" and 1 or 0)
+          boxes = boxes + (ft == "snacks_layout_box" and 1 or 0)
+        end
+        if git > 1 or lists > 1 or boxes > 1 or (git > 0 and boxes > 0) then return false end
+      end
+      return vim.o.cmdheight == 1
+    ]]),
+      "sidebars overlapped after final " .. final.source
+    )
+    screen:close()
+  end)
+end
