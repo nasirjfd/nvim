@@ -54,52 +54,49 @@ local function editor()
   ]])
   h.wait(screen, function()
     return screen:exec(
-      "return vim.fn.maparg('<C-CR>', 'n', false, true).desc == 'Code Action / Quick Fix'"
+      "return vim.fn.maparg('<D-.>', 'n', false, true).desc == 'Code Action / Quick Fix'"
     )
   end, "LSP shortcut did not attach")
   return screen
 end
 
 for _, mode in ipairs({ "normal", "visual", "insert" }) do
-  lib.test(
-    "Ctrl+Enter requests and applies an LSP import quick fix in " .. mode .. " mode",
-    function()
-      local screen = editor()
-      if mode == "visual" then
-        screen:input("Vj")
-      elseif mode == "insert" then
-        screen:input("A")
-      end
-      screen:input("<C-CR>")
-      h.wait(screen, function()
-        return screen:exec([[
+  lib.test("Cmd+. requests and applies an LSP import quick fix in " .. mode .. " mode", function()
+    local screen = editor()
+    if mode == "visual" then
+      screen:input("Vj")
+    elseif mode == "insert" then
+      screen:input("A")
+    end
+    screen:input("<D-.>")
+    h.wait(screen, function()
+      return screen:exec([[
         local p = Snacks.picker.get({source='select'})[1]
         return p and p:count() == 1
       ]])
-      end, "Ctrl+Enter did not offer the server's quick fix")
-      lib.eq(1, screen:exec("return #_G.shortcut_requests"), "code action requested more than once")
-      if mode == "visual" then
-        lib.eq(
-          { 0, 1 },
-          screen:exec([[
+    end, "Cmd+. did not offer the server's quick fix")
+    lib.eq(1, screen:exec("return #_G.shortcut_requests"), "code action requested more than once")
+    if mode == "visual" then
+      lib.eq(
+        { 0, 1 },
+        screen:exec([[
         local range = _G.shortcut_requests[1].range
         return {range.start.line, range['end'].line}
       ]]),
-          "code action lost the selected range"
-        )
-      end
-      screen:input("<CR>")
-      h.wait(screen, function()
-        return screen:exec(
-          "return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1] == 'use Example.WidgetService;'"
-        )
-      end, "selected quick fix did not apply its import edit")
-      screen:close()
+        "code action lost the selected range"
+      )
     end
-  )
+    screen:input("<CR>")
+    h.wait(screen, function()
+      return screen:exec(
+        "return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1] == 'use Example.WidgetService;'"
+      )
+    end, "selected quick fix did not apply its import edit")
+    screen:close()
+  end)
 end
 
-for _, key in ipairs({ "<C-CR>", "<Space>ca" }) do
+for _, key in ipairs({ "<D-.>", "<Space>ca" }) do
   lib.test("code actions put imports first and documentation last via " .. key, function()
     local screen = editor()
     screen:exec("_G.shortcut_mixed_actions = true")
@@ -176,6 +173,7 @@ lib.test(
     lib.ok(
       screen:exec([[
     return vim.fn.maparg('<CR>', 'n') == '' and vim.fn.maparg('<D-i>', 'n') == ''
+      and vim.fn.maparg('<C-CR>', 'n') == '' and vim.fn.maparg('<C-CR>', 'i') == ''
       and vim.fn.keytrans(vim.keycode('<D-i>')) ~= vim.fn.keytrans(vim.keycode('<Tab>'))
       and vim.fn.keytrans(vim.keycode('<C-CR>')) ~= vim.fn.keytrans(vim.keycode('<CR>'))
   ]]),
