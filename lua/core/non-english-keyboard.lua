@@ -55,6 +55,25 @@ end
 local modes = { "n", "x", "o", "i", "s", "c", "t" }
 local alert = { generation = 0 }
 
+local function dismiss_alert()
+  if not alert.pending and not alert.win then
+    return
+  end
+  alert.generation = alert.generation + 1
+  local generation = alert.generation
+  alert.pending = nil
+  if alert.timer then
+    alert.timer:stop()
+  end
+  -- Key listeners run under textlock; closing the float must be scheduled.
+  vim.schedule(function()
+    if generation == alert.generation and alert.win and api.nvim_win_is_valid(alert.win) then
+      api.nvim_win_close(alert.win, true)
+      alert.win = nil
+    end
+  end)
+end
+
 local function show_alert()
   alert.generation = alert.generation + 1
   local generation = alert.generation
@@ -75,8 +94,12 @@ local function show_alert()
   if alert.pending then
     return
   end
-  alert.pending = true
+  local pending = {}
+  alert.pending = pending
   vim.schedule(function()
+    if alert.pending ~= pending then
+      return
+    end
     alert.pending = false
     if alert.win and api.nvim_win_is_valid(alert.win) then
       return
@@ -262,6 +285,10 @@ end
 
 function M.setup()
   vim.on_key(function(_, typed)
+    if typed:match("^[A-Za-z]$") then
+      dismiss_alert()
+      return
+    end
     if typed == "" or M.english(typed) == typed then
       return
     end

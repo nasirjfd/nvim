@@ -61,6 +61,41 @@ lib.test(
   end
 )
 
+for _, key in ipairs({ "k", "G", "i" }) do
+  lib.test("Non-English keyboard alert disappears on the first English letter " .. key, function()
+    local screen = editor()
+    screen:input("ت")
+    h.wait(screen, function()
+      return #alerts(screen) == 1
+    end, "motion alert did not appear")
+    screen:input(key)
+    h.wait(screen, function()
+      return #alerts(screen) == 0
+    end, "English letter did not dismiss the alert immediately", 500)
+    if key == "i" then
+      screen:input("hello<Esc>")
+      lib.ok(screen:exec("return vim.api.nvim_get_current_line():find('hello', 1, true) ~= nil"))
+    else
+      lib.eq(key == "k" and 1 or 3, screen:exec("return vim.api.nvim_win_get_cursor(0)[1]"))
+    end
+    screen:input("ن")
+    h.wait(screen, function()
+      return #alerts(screen) == 1
+    end, "non-English input did not show the alert again")
+    screen:close()
+  end)
+end
+
+lib.test("English input cancels a keyboard alert queued in the same burst", function()
+  local screen = editor()
+  screen:input("تk")
+  h.wait(screen, function()
+    return screen:exec("return vim.api.nvim_win_get_cursor(0)[1] == 1")
+  end, "English motion was not processed")
+  lib.eq({}, alerts(screen), "a cancelled alert appeared after English input")
+  screen:close()
+end)
+
 lib.test("Non-English search translation never shows the motion alert", function()
   local screen = editor()
   screen:input("iسلام<Esc>")
