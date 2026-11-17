@@ -57,8 +57,31 @@ for _, mode in ipairs({ "Git pane", "commit page" }) do
       return screen:exec("return vim.api.nvim_win_get_cursor(0)[1] == 40")
     end, "F7 did not reach the last hunk")
     screen:input("<F7>")
+    h.wait(screen, function()
+      return screen:exec([[
+        for _, win in ipairs(vim.api.nvim_list_wins()) do
+          local cfg = vim.api.nvim_win_get_config(win)
+          if cfg.relative == 'editor' and cfg.focusable == false then
+            local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), '\n')
+            if text:find('Last change - press again 5 times', 1, true) then return true end
+          end
+        end
+        return false
+      ]])
+    end, "the end-of-changes countdown alert is not visible")
     for left = 4, 1, -1 do
       screen:input("<F7>")
+      h.wait(screen, function()
+        return screen:exec(string.format([[
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if vim.wo[win].winhighlight:find('CodeDiffHintEnd', 1, true) then
+              local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), '\n')
+              if text:find('press again %d time', 1, true) then return true end
+            end
+          end
+          return false
+        ]], left))
+      end, "the countdown alert disappeared on a repeated F7")
       lib.eq(
         { 40, left },
         screen:exec(
