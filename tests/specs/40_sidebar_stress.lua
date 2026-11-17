@@ -1,6 +1,47 @@
 local lib = require("lib")
 local h = require("support")
 
+lib.test("diff panes remain centered after shortcut bursts and sidebar close", function()
+  local dir = h.repo({ ["a.txt"] = { "one", "two" }, ["api.http"] = { "GET https://example.com" } })
+  h.write(dir .. "/a.txt", { "one", "changed" })
+  local screen = h.nvim(dir)
+  screen:input("<D-S-g>")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'codediff-explorer'")
+  end, "Git did not open")
+  screen:exec([[
+    _G.diff_tab = vim.api.nvim_get_current_tabpage()
+    local panel = require("codediff.ui.lifecycle").get_panel_view(_G.diff_tab)
+    panel.on_file_select({ path = "a.txt", group = "unstaged", status = "M", git_root = vim.fn.getcwd() })
+  ]])
+  h.wait(screen, function()
+    return screen:exec([[
+      local session = require("codediff.ui.lifecycle").get_session(_G.diff_tab)
+      return session and not session.single_pane and session.stored_diff_result
+        and session.stored_diff_result.changes and #session.stored_diff_result.changes > 0
+    ]])
+  end, "file diff did not load")
+  for _ = 1, 10 do
+    screen:input("<D-S-e><D-S-h><D-S-t><D-S-g>")
+    vim.wait(40)
+  end
+  screen:input("<D-S-g>")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'codediff-explorer'")
+  end, "Git did not regain focus")
+  screen:input("<D-b>")
+  h.wait(screen, function()
+    return screen:exec([[
+      local session = require("codediff.ui.lifecycle").get_session(_G.diff_tab)
+      local panel = session and session.panel and session.panel.view
+      return session and panel and panel.is_hidden
+        and math.abs(vim.api.nvim_win_get_width(session.original_win)
+          - vim.api.nvim_win_get_width(session.modified_win)) <= 1
+    ]])
+  end, "diff panes are uneven after hiding the sidebar")
+  screen:close()
+end)
+
 lib.test("real shortcut bursts end in Git without foreign sidebars in any tab", function()
   -- Optional read-only run against a real workspace; fixture mutations are never used there.
   local dir = vim.env.NVIM_SIDEBAR_STRESS_PROJECT
