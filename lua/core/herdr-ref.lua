@@ -26,11 +26,7 @@ function M.graph_reference()
       branch = head.code == 0 and ("detached HEAD " .. vim.trim(head.stdout)) or branch
     end
   end
-  return string.format(
-    "Project: %s\nBranch: %s",
-    graph.name or vim.fn.fnamemodify(graph.root, ":t"),
-    branch
-  )
+  return string.format("%s->branch:%s", graph.name or vim.fn.fnamemodify(graph.root, ":t"), branch)
 end
 
 function M.reference(l1, l2)

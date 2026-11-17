@@ -31,10 +31,7 @@ lib.test(
     h.wait(screen, function()
       return screen:exec("return _G.sent_reference ~= nil")
     end, "Cmd+L did not use the Claude handoff")
-    lib.eq(
-      "Project: " .. project .. "\nBranch: feat/current ",
-      screen:exec("return _G.sent_reference")
-    )
+    lib.eq(project .. "->branch:feat/current ", screen:exec("return _G.sent_reference"))
 
     screen:exec([[
     require('codediff.ui.graph').get().filters.branch = {'feat/selected'}
@@ -44,10 +41,7 @@ lib.test(
     h.wait(screen, function()
       return screen:exec("return _G.sent_reference ~= nil")
     end, "selected graph branch was not sent")
-    lib.eq(
-      "Project: " .. project .. "\nBranch: feat/selected ",
-      screen:exec("return _G.sent_reference")
-    )
+    lib.eq(project .. "->branch:feat/selected ", screen:exec("return _G.sent_reference"))
     screen:exec([[
     vim.cmd('tabnew a.txt')
   ]])
