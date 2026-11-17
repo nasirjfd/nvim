@@ -24,10 +24,9 @@ function M.opts()
   end
   return {
     cwd = cwd,
-    -- Dotfiles (including skipped .gitignore files) are editable project files too.
-    -- Ignored files stay hidden until <a-i> in the picker or <leader>uI.
+    -- Ignored files stay hidden until <a-i> in the picker or <leader>uI
     ignored = vim.g.show_ignored == true,
-    hidden = true,
+    hidden = vim.g.show_ignored or false,
     finder = M.finder,
   }
 end
