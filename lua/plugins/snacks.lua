@@ -141,10 +141,19 @@ vim.api.nvim_create_autocmd("VimEnter", {
       return
     end
     local scrolls = {} ---@type table<string, {anim: snacks.animate.Animation, cb: function, to: number}>
+    local half_page_win ---@type number?
     local animate_add = animate.add
     animate.add = function(from, to, cb, anim_opts)
-      local anim = animate_add(from, to, cb, anim_opts)
       local id = anim_opts and anim_opts.id
+      if half_page_win and (id == "scroll_" .. half_page_win or id == "scroll_repeat_" .. half_page_win) then
+        -- VS Code-like half-page glide: fixed duration, not a few milliseconds per line.
+        -- Keep repeated presses visible too, without slowing other jumps or the mouse.
+        anim_opts = vim.tbl_extend("force", anim_opts, {
+          duration = { total = id:find("^scroll_repeat_") and 120 or 180 },
+          easing = "outCubic",
+        })
+      end
+      local anim = animate_add(from, to, cb, anim_opts)
       if type(id) == "string" and id:find("^scroll") then
         scrolls[id] = { anim = anim, cb = cb, to = to }
       end
@@ -154,7 +163,12 @@ vim.api.nvim_create_autocmd("VimEnter", {
       if not typed or typed == "" then
         return -- keys the animation itself runs
       end
-      if vim.fn.keytrans(typed):find("<ScrollWheel", 1, true) then
+      local key = vim.fn.keytrans(typed)
+      half_page_win = (key == "<C-D>" or key == "<C-U>")
+          and vim.fn.mode():match("^[nvV\22]")
+          and vim.api.nvim_get_current_win()
+        or nil
+      if key:find("<ScrollWheel", 1, true) then
         return
       end
       for id, s in pairs(scrolls) do
@@ -635,10 +649,11 @@ return {
     },
     quickfile = { enabled = true },
     scope = { enabled = true },
-    -- Keyboard scrolls and jumps (Ctrl+d/u, G, search, gd, …) land almost at once and settle with a
-    -- short ease-out. Each frame moves as many lines as the curve needs in one redraw, and a new
-    -- press restarts from where the view is, so it never trails behind. Trackpad/mouse scrolling
-    -- is not animated (see mousescroll in core/options.lua).
+    -- Keyboard jumps (G, search, gd, …) land almost at once and settle with a short ease-out.
+    -- New keyboard input finishes the previous glide first, so no movement is lost or queued.
+    -- Trackpad/mouse scrolling
+    -- is not animated (see mousescroll in core/options.lua). Ctrl+d/u use a longer, fixed-duration
+    -- glide in the animation wrapper above, leaving these fast defaults for other navigation.
     scroll = {
       enabled = true,
       -- No glide while a picker is open: its preview jumps between files and lines as the selection
