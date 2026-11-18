@@ -2,7 +2,20 @@
 -- Intersect its results with the same fd/rg listing used by Find Files, including local .ignore rules.
 local M = {}
 local cache = {}
-local FRESH_MS = 3000
+local FRESH_MS = 60000
+-- Server answers per workspace + query: reopening the picker shows them at once instead of
+-- waiting for the language server again. Dropped on any save / external change (M.invalidate).
+local answers = {}
+local ANSWER_MS = 60000
+
+function M.invalidate()
+  cache, answers = {}, {}
+end
+
+vim.api.nvim_create_autocmd({ "BufWritePost", "FileChangedShellPost" }, {
+  group = vim.api.nvim_create_augroup("symbol_files_cache", { clear = true }),
+  callback = M.invalidate,
+})
 
 -- Test seam: picker tests supply workspace servers without replacing Neovim's global LSP registry.
 function M.clients()
@@ -60,7 +73,16 @@ local function symbols(opts, ctx, cwd)
   local filter = opts.filter[vim.bo[buf].filetype]
   filter = filter == nil and opts.filter.default or filter
   local query = ctx.filter.search
+  local akey = table.concat({ cwd, query, vim.inspect(filter), #clients }, "\0")
   return function(cb)
+    local hit = answers[akey]
+    if hit and vim.uv.now() - hit.time <= ANSWER_MS then
+      for _, item in ipairs(hit.items) do
+        cb(vim.deepcopy(item))
+      end
+      return
+    end
+    local collected, pending = {}, #clients
     for _, client in ipairs(clients) do
       lsp.request(client, "workspace/symbol", function()
         return { query = query }
@@ -72,7 +94,15 @@ local function symbols(opts, ctx, cwd)
           end,
         })
         for _, item in ipairs(items) do
+          collected[#collected + 1] = vim.deepcopy(item)
           cb(item)
+        end
+        pending = pending - 1
+        if pending == 0 then
+          if vim.tbl_count(answers) >= 50 then
+            answers = {}
+          end
+          answers[akey] = { items = collected, time = vim.uv.now() }
         end
       end)
     end

@@ -62,6 +62,7 @@ local function flush()
   if #paths == 0 then
     return
   end
+  require("core.symbol-files").invalidate()
 
   -- reload changed buffers (autoread skips buffers with unsaved changes)
   if vim.fn.mode() ~= "c" then
