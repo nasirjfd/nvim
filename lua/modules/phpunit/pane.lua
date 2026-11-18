@@ -61,6 +61,24 @@ function M.attach(client)
     return node ~= nil and node:data().type == "test"
   end
 
+  -- neotest's own results, as they are now: the consumer's events come a moment later, so a key pressed
+  -- right after a run (Run failed) would otherwise see the results of before its last file
+  M._latest_results = function()
+    if snap.adapter then
+      local ok, results = pcall(client.get_results, client, snap.adapter)
+      if ok and results then
+        snap.results = results
+        -- also what each test did last: a run that starts now (Run failed) keeps the tests it does not run
+        -- as they were, and neotest forgets their results while it runs
+        for id, result in pairs(results) do
+          if id:find("::", 1, true) then
+            last_results[id] = result
+          end
+        end
+      end
+    end
+  end
+
   local function update(adapter_id)
     local tree = client:get_position(nil, { adapter = adapter_id })
     snap.adapter, snap.tree = adapter_id, tree
@@ -184,19 +202,54 @@ function M.nearest(path, row)
     return nil
   end
   local best, best_row
+  local any_test = false
   for _, node in node_of(file):iter_nodes() do
     local data = node:data()
-    if data.type == "test" and data.range and data.range[1] <= row and (not best_row or data.range[1] >= best_row) then
+    any_test = any_test or data.type == "test"
+    if
+      data.type == "test"
+      and data.range
+      and data.range[1] <= row
+      and (not best_row or data.range[1] >= best_row)
+    then
       best, best_row = data.id, data.range[1]
     end
+  end
+  -- The file is known but its tests are not read yet (just after start): no answer, so the runner lets neotest
+  -- read the file itself, instead of running the whole file for the test under the cursor.
+  if not any_test then
+    return nil
   end
   return best or file
 end
 
+--- Whether a test of `path` starts on `row` (0-based): the line its gutter icon is on.
+function M.test_starts_at(path, row)
+  local file = M.file_id(path)
+  if not file then
+    return false
+  end
+  for _, node in node_of(file):iter_nodes() do
+    local data = node:data()
+    if data.type == "test" and data.range and data.range[1] == row then
+      return true
+    end
+  end
+  return false
+end
+
 --- The tests that failed in their last run: names by file, and the files.
 ---@return table<string, string[]>, string[]
+--- Catch up with neotest's results now, without waiting for its events (see attach).
+function M.sync_results()
+  if M._latest_results then
+    M._latest_results()
+  end
+end
+
 function M.failed()
   local only, files = {}, {}
+  M.sync_results()
   if not snap.tree then
     return only, files
   end
@@ -383,11 +436,18 @@ local function collect()
   for _, node in snap.tree:iter_nodes() do
     local data = node:data()
     if data.type == "file" then
-      local file = { id = data.id, path = data.path, name = vim.fs.basename(data.path), dir = vim.fs.dirname(data.path), tests = {} }
+      local file = {
+        id = data.id,
+        path = data.path,
+        name = vim.fs.basename(data.path),
+        dir = vim.fs.dirname(data.path),
+        tests = {},
+      }
       for _, child in node:iter_nodes() do
         local c = child:data()
         if c.type == "test" then
-          file.tests[#file.tests + 1] = { id = c.id, name = c.name, line = c.range and c.range[1] + 1 or 1, path = c.path }
+          file.tests[#file.tests + 1] =
+            { id = c.id, name = c.name, line = c.range and c.range[1] + 1 or 1, path = c.path }
         end
       end
       list[#list + 1] = file
@@ -405,15 +465,32 @@ local function rows(_, ctx)
   end
   local total = counts_of(all)
   local items = {
-    { text = "Tests", kind = "info", counts = total, discovering = snap.tree == nil, key = "h:info" },
-    { text = "Summary", kind = "summary", counts = total, methods = #all, discovering = snap.tree == nil, key = "h:summary" },
+    {
+      text = "Tests",
+      kind = "info",
+      counts = total,
+      discovering = snap.tree == nil,
+      key = "h:info",
+    },
+    {
+      text = "Summary",
+      kind = "summary",
+      counts = total,
+      methods = #all,
+      discovering = snap.tree == nil,
+      key = "h:summary",
+    },
     { text = "Parallel", kind = "toggle", key = "h:parallel" },
     { text = "Run all", kind = "button", failed = total.failed, key = "h:run" },
   }
   -- while tests run: how far, from 0 to the last one
   local running = require("modules.phpunit.progress").state()
   if running then
-    table.insert(items, 3, { text = "Progress", kind = "progress", progress = running, key = "h:progress" })
+    table.insert(
+      items,
+      3,
+      { text = "Progress", kind = "progress", progress = running, key = "h:progress" }
+    )
   end
 
   local function test_item(test, extra)
@@ -469,7 +546,10 @@ local function rows(_, ctx)
     local list = {}
     for _, file in ipairs(files) do
       for _, test in ipairs(file.tests) do
-        vim.list_extend(list, execution_rows(test, { flat = true, file_name = vim.fs.basename(test.path) }))
+        vim.list_extend(
+          list,
+          execution_rows(test, { flat = true, file_name = vim.fs.basename(test.path) })
+        )
       end
     end
     -- failed first; a test that runs stays where it was (it must not jump to the top and back)
@@ -501,7 +581,9 @@ local function rows(_, ctx)
     for _, test in ipairs(file.tests) do
       for _, row in ipairs(execution_rows(test, { file_name = vim.fs.basename(test.path) })) do
         -- (a failed test that runs again stays in the section, running, until its result is in)
-        if row.status == "failed" or (row.status == "running" and last_status[test.id] == "failed") then
+        if
+          row.status == "failed" or (row.status == "running" and last_status[test.id] == "failed")
+        then
           row.key = "x:" .. row.key
           failed_rows[#failed_rows + 1] = row
         end
@@ -510,7 +592,11 @@ local function rows(_, ctx)
   end
   if #failed_rows > 0 then
     local header = {
-      text = "Failed", kind = "failed", key = "x:failed", open = searching or not collapsed["x:failed"], count = #failed_rows,
+      text = "Failed",
+      kind = "failed",
+      key = "x:failed",
+      open = searching or not collapsed["x:failed"],
+      count = #failed_rows,
     }
     items[#items + 1] = header
     if header.open then
@@ -586,7 +672,15 @@ local function rows(_, ctx)
             items[#items + 1] = titem
             if titem.sets and titem.open then
               for si, set in ipairs(sets_of(test)) do
-                items[#items + 1] = set_item(test, set, { parent = titem, last = si == #sets_of(test), text = test.name .. " " .. set.label })
+                items[#items + 1] = set_item(
+                  test,
+                  set,
+                  {
+                    parent = titem,
+                    last = si == #sets_of(test),
+                    text = test.name .. " " .. set.label,
+                  }
+                )
               end
             end
           end
@@ -623,7 +717,11 @@ api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
 
 local ICON = { passed = "✓", failed = "✗", skipped = "○", running = "●", none = "·" }
 local STATUS_HL = {
-  passed = "PhpTestPassed", failed = "PhpTestFailed", skipped = "PhpTestSkipped", running = "PhpTestRunning", none = "PhpTestNone",
+  passed = "PhpTestPassed",
+  failed = "PhpTestFailed",
+  skipped = "PhpTestSkipped",
+  running = "PhpTestRunning",
+  none = "PhpTestNone",
 }
 
 local function status_chunk(status)
@@ -643,7 +741,8 @@ local function toggle_parts()
       zone = zone,
     }
   end
-  local parts = { part(options.parallel(), "Parallel", "parallel"), part(options.flat(), "Flat list", "flat") }
+  local parts =
+    { part(options.parallel(), "Parallel", "parallel"), part(options.flat(), "Flat list", "flat") }
   -- two halves of the row, each one fills its half
   for i, p in ipairs(parts) do
     p.text = kit.pad(p.text, HALF)
@@ -683,9 +782,14 @@ local function format(item, picker)
     elseif c.total == 0 then
       ret[#ret + 1] = { "  No tests found", "PhpTestDim" }
     else
-      ret[#ret + 1] = { "  ✓ " .. c.passed .. " passed", c.passed > 0 and "PhpTestPassed" or "PhpTestNone" }
-      ret[#ret + 1] = { "   ✗ " .. c.failed .. " failed", c.failed > 0 and "PhpTestFailed" or "PhpTestNone" }
-      ret[#ret + 1] = { "   ○ " .. c.skipped .. " skipped", c.skipped > 0 and "PhpTestSkipped" or "PhpTestNone" }
+      ret[#ret + 1] =
+        { "  ✓ " .. c.passed .. " passed", c.passed > 0 and "PhpTestPassed" or "PhpTestNone" }
+      ret[#ret + 1] =
+        { "   ✗ " .. c.failed .. " failed", c.failed > 0 and "PhpTestFailed" or "PhpTestNone" }
+      ret[#ret + 1] = {
+        "   ○ " .. c.skipped .. " skipped",
+        c.skipped > 0 and "PhpTestSkipped" or "PhpTestNone",
+      }
       if c.running > 0 then
         ret[#ret + 1] = { "   ● " .. c.running .. " running", "PhpTestRunning" }
       end
@@ -720,7 +824,10 @@ local function format(item, picker)
     -- Run all | Run failed (N): two buttons, each one fills its half of the row
     local n = item.failed
     ret[#ret + 1] = { kit.pad("  ▶  Run all", HALF), "PhpTestRun" }
-    ret[#ret + 1] = { kit.pad("  ✗  Run failed" .. (n > 0 and (" (" .. n .. ")") or ""), HALF), n > 0 and "PhpTestRunFailed" or "PhpTestRunIdle" }
+    ret[#ret + 1] = {
+      kit.pad("  ✗  Run failed" .. (n > 0 and (" (" .. n .. ")") or ""), HALF),
+      n > 0 and "PhpTestRunFailed" or "PhpTestRunIdle",
+    }
     return ret
   end
 
@@ -755,11 +862,17 @@ local function format(item, picker)
       ret[#ret + 1] = { " " .. item.label, "PhpTestDim" }
       ret[#ret + 1] = { "  " .. item.file_name, "PhpTestDim" }
     else
-      ret[#ret + 1] = { "with data set " .. item.label, item.status == "failed" and "PhpTestFailed" or "PhpTestDim" }
+      ret[#ret + 1] = {
+        "with data set " .. item.label,
+        item.status == "failed" and "PhpTestFailed" or "PhpTestDim",
+      }
     end
   else
     if item.sets then
-      ret[#ret + 1] = { require("modules.phpunit.dataset_signs").ICON[item.status] or "󰙅", STATUS_HL[item.status] }
+      ret[#ret + 1] = {
+        require("modules.phpunit.dataset_signs").ICON[item.status] or "󰙅",
+        STATUS_HL[item.status],
+      }
       ret[#ret + 1] = { " ", nil }
     else
       ret[#ret + 1] = status_chunk(item.status)
@@ -792,7 +905,10 @@ end
 
 -- a test row that can be unfolded into its data sets
 local function foldable(item)
-  return item.kind == "dir" or item.kind == "file" or item.kind == "failed" or (item.kind == "test" and item.sets ~= nil and not item.flat and not item.file_name)
+  return item.kind == "dir"
+    or item.kind == "file"
+    or item.kind == "failed"
+    or (item.kind == "test" and item.sets ~= nil and not item.flat and not item.file_name)
 end
 
 local function open_node(picker, item)
@@ -892,7 +1008,11 @@ local actions = {
   end,
   tests_jump = function(picker, item)
     item = item or picker:current()
-    if item and item.file and (item.kind == "test" or item.kind == "dataset" or item.kind == "file") then
+    if
+      item
+      and item.file
+      and (item.kind == "test" or item.kind == "dataset" or item.kind == "file")
+    then
       kit.goto_line(picker, item.file, item.line or 1)
     end
   end,
@@ -984,7 +1104,9 @@ local actions = {
         return
       end
       if item and item.kind == "button" then
-        run_item(vim.tbl_extend("force", item, { action = mouse.wincol > HALF and "failed" or "all" }))
+        run_item(
+          vim.tbl_extend("force", item, { action = mouse.wincol > HALF and "failed" or "all" })
+        )
         return
       end
       picker:action("tests_confirm")
@@ -1014,7 +1136,12 @@ local function open()
     focus = "list",
     auto_close = false,
     jump = { close = false },
-    layout = { preset = "sidebar", preview = false, hidden = { "input" }, layout = { width = WIDTH + 4, min_width = WIDTH + 4 } },
+    layout = {
+      preset = "sidebar",
+      preview = false,
+      hidden = { "input" },
+      layout = { width = WIDTH + 4, min_width = WIDTH + 4 },
+    },
     matcher = { sort_empty = false, fuzzy = false },
     sort = { fields = { "idx" } },
     confirm = "tests_confirm",
@@ -1038,20 +1165,20 @@ local function open()
           ["x"] = "tests_stop",
           ["o"] = "tests_output",
           ["e"] = "tests_expand_all",
-           ["E"] = "tests_collapse_all",
-           ["?"] = "tests_help",
-           ["/"] = "tests_show_search",
-           ["q"] = "close",
-           ["<Esc>"] = "tests_noop",
-         }),
-       },
-       input = {
-         keys = {
-           ["<Esc>"] = { "tests_stop_search_insert", mode = { "i" } },
-           ["<Esc>"] = { "tests_clear_search", mode = { "n" } },
-         },
-       },
-     },
+          ["E"] = "tests_collapse_all",
+          ["?"] = "tests_help",
+          ["/"] = "tests_show_search",
+          ["q"] = "close",
+          ["<Esc>"] = "tests_noop",
+        }),
+      },
+      input = {
+        keys = {
+          ["<Esc>"] = { "tests_stop_search_insert", mode = { "i" } },
+          ["<Esc>"] = { "tests_clear_search", mode = { "n" } },
+        },
+      },
+    },
   })
 end
 

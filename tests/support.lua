@@ -27,7 +27,9 @@ function M.read(path)
 end
 
 function M.git(dir, ...)
-  local out = vim.fn.system(vim.list_extend({ "git", "-C", dir, "-c", "user.name=t", "-c", "user.email=t@t" }, { ... }))
+  local out = vim.fn.system(
+    vim.list_extend({ "git", "-C", dir, "-c", "user.name=t", "-c", "user.email=t@t" }, { ... })
+  )
   assert(vim.v.shell_error == 0, "git failed: " .. out)
   return out
 end
@@ -102,8 +104,37 @@ end
 
 -- Poll `predicate` until it is true. It is polled from a plain loop, never from inside vim.wait, because
 -- the predicates talk to the embedded Neovim (a request is itself a vim.wait).
+-- What the embedded editor shows and its last messages: printed with a failed wait, so one failing run is
+-- enough to see why.
+function M.snapshot(screen)
+  local rows = {}
+  for r = 1, screen.height or 0 do
+    local cells = screen.grid and screen.grid[r]
+    if cells then
+      local text = {}
+      for c = 1, screen.width do
+        text[#text + 1] = cells[c] and cells[c][1] or " "
+      end
+      rows[#rows + 1] = (table.concat(text):gsub("%s+$", ""))
+    end
+  end
+  local ok, messages = pcall(function()
+    return screen:exec("return vim.fn.execute('messages')")
+  end)
+  local tail = ok
+      and type(messages) == "string"
+      and table.concat(
+        vim.list_slice(vim.split(messages, "\n"), math.max(1, #vim.split(messages, "\n") - 8)),
+        "\n"
+      )
+    or "(no messages)"
+  return "--- screen ---\n" .. table.concat(rows, "\n") .. "\n--- messages ---\n" .. tail
+end
+
+-- A wait returns as soon as its condition holds, so a generous limit costs nothing when things go well
+-- and keeps a busy machine (parallel workers) from failing a test that is only slow.
 function M.wait(screen, predicate, message, timeout)
-  local deadline = vim.uv.hrtime() + (timeout or 5000) * 1e6
+  local deadline = vim.uv.hrtime() + (timeout or 15000) * 1e6
   while true do
     assert(not screen.error, tostring(screen.error))
     if predicate() then
@@ -111,7 +142,14 @@ function M.wait(screen, predicate, message, timeout)
       return
     end
     if vim.uv.hrtime() > deadline then
-      error((type(message) == "function" and message() or message) .. "\n" .. screen.stderr, 2)
+      error(
+        (type(message) == "function" and message() or message)
+          .. "\n"
+          .. screen.stderr
+          .. "\n"
+          .. M.snapshot(screen),
+        2
+      )
     end
     vim.wait(20)
   end

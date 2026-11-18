@@ -101,12 +101,18 @@ lib.test(
     local screen = open()
     local ms = screen:exec([[
     local p = _G.preview_test_pane
-    local start = vim.uv.hrtime()
+    -- the editor's own CPU time, not the wall clock: other tests running at the same moment (parallel
+    -- workers) slow the clock down, not the work this measures
+    local function cpu()
+      local u = vim.uv.getrusage()
+      return (u.utime.sec + u.stime.sec) * 1e3 + (u.utime.usec + u.stime.usec) / 1e3
+    end
+    local start = cpu()
     for pass = 1, 3 do
       for _ = 1, 82 do p:action('http_down'); _G.check_http_preview() end
       for _ = 1, 82 do p:action('http_up'); _G.check_http_preview() end
     end
-    return (vim.uv.hrtime() - start) / 1e6
+    return cpu() - start
   ]])
     lib.ok(ms < 2000, ("492 moves took %.0fms; request preview blocks navigation"):format(ms))
     print(("    492 synchronous preview moves: %.0fms"):format(ms))

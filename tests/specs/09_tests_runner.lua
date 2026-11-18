@@ -45,7 +45,6 @@ local function project()
     -- a slow run ("slow" exists) says how far it is, like PHPUnit does: half of its tests after a moment
     [[if [ -f "$ROOT/slow" ]; then sleep 0.4; if [ -z "$file" ]; then t=8; h=4; else t=2; h=1; fi; printf '....  %s / %s ( 50%%)\n' "$h" "$t"; sleep 1.5; fi]],
     "sleep 0.5",
-    'rm "$ROOT/running/$$"',
     [[rmdir "$ROOT/slot-${TEST_THREAD_ID:-0}" 2>/dev/null]],
     -- no file given (a whole project): every class
     [[files="$file"; [ -z "$file" ] && files="$(ls "$ROOT"/app/tests/*Test.php | sed "s|^$ROOT|/ctr|")"]],
@@ -70,6 +69,9 @@ local function project()
     [[  printf '<testsuite name="%s" file="%s">%s%s</testsuite>\n' "$class" "$file" "$one" "$two_cases" >> "$log"]],
     "done",
     [[echo "</testsuites>" >> "$log"]],
+    -- over only now, with its log written: a test waits for this, not for a guessed time
+    'rm "$ROOT/running/$$"',
+    'echo "$$" >> "$ROOT/done.log"',
     "exit 0",
   })
   vim.fn.system({ "chmod", "+x", dir .. "/fake-phpunit.sh" })
@@ -95,8 +97,9 @@ local function start(dir)
     )
   )
   h.wait(screen, function()
-    return screen:exec("local p = require('modules.phpunit.pane'); return #(p.files_under(p.root_id() or '') or {}) == 4")
-  end, "the four test files were not found")
+    -- the files and the tests in them (a run sized before the tests are read would count 0)
+    return screen:exec("local p = require('modules.phpunit.pane'); local root = p.root_id() or ''; return #(p.files_under(root) or {}) == 4 and p.weight(root) >= 8")
+  end, "the four test files and their tests were not found")
   return screen
 end
 
@@ -119,10 +122,24 @@ local function max_concurrency(dir)
   return most
 end
 
+-- every fake phpunit that started (a line in args.log) is over (a line in done.log, written after its log)
+local function none_running(dir)
+  return #lines(dir .. "/done.log") >= #lines(dir .. "/args.log")
+end
+
+-- forget the runs so far (args.log and done.log go together)
+local function reset_runs(dir)
+  vim.fn.delete(dir .. "/args.log")
+  vim.fn.delete(dir .. "/done.log")
+end
+
 local function wait_runs(screen, dir, n, what)
   h.wait(screen, function()
-    return #lines(dir .. "/args.log") >= n and counts(screen).running == 0
-  end, what or ("phpunit did not run " .. n .. " times"), 20000)
+    return #lines(dir .. "/args.log") >= n and none_running(dir) and counts(screen).running == 0
+  end, function()
+    return (what or ("phpunit did not run " .. n .. " times"))
+      .. (" (started %d, finished %d, neotest running %s)"):format(#lines(dir .. "/args.log"), #lines(dir .. "/done.log"), tostring(counts(screen).running))
+  end, 20000)
 end
 
 lib.test("tests run: all tests one after the other when Parallel is off (one phpunit per project)", function()
@@ -130,7 +147,6 @@ lib.test("tests run: all tests one after the other when Parallel is off (one php
   local screen = start(dir)
   screen:exec("require('modules.phpunit.runner').run_all()")
   wait_runs(screen, dir, 1)
-  vim.wait(800)
   lib.eq(1, #lines(dir .. "/args.log"), "a project is run as a whole")
   lib.eq(1, max_concurrency(dir))
   lib.eq({ "none" }, lines(dir .. "/slots.log"), "a run that is not parallel has no worker slot (the project's default)")
@@ -198,10 +214,9 @@ lib.test("tests run: only the failed tests run again, by name, in their files", 
   h.wait(screen, function()
     return counts(screen).failed == 2 and counts(screen).running == 0
   end, "A and C must have one failure each", 20000)
-  vim.fn.delete(dir .. "/args.log")
+  reset_runs(dir)
   screen:exec("require('modules.phpunit.runner').run_failed()")
   wait_runs(screen, dir, 2)
-  vim.wait(500)
   local runs = lines(dir .. "/args.log")
   lib.eq(2, #runs)
   table.sort(runs)
@@ -608,10 +623,12 @@ lib.test("tests memory: after a restart the failed tests are still known and onl
     local c = counts(first)
     return c.passed == 7 and c.failed == 1 and c.running == 0
   end, "the run did not give 7 passed and 1 failed", 20000)
-  vim.wait(1200) -- the results are saved a moment after they come in
+  h.wait(first, function() -- the results are saved a moment after they come in
+    return vim.fn.filereadable(memory_file) == 1 and table.concat(vim.fn.readfile(memory_file)):find("testTwo", 1, true) ~= nil
+  end, "the results were not saved")
   first:close()
   lib.ok(vim.fn.filereadable(memory_file) == 1, "nothing was remembered")
-  vim.fn.delete(dir .. "/args.log")
+  reset_runs(dir)
   vim.fn.delete(dir .. "/fail-B") -- it would pass now, if it ran
 
   -- second session: nothing has run, yet the pane knows
@@ -635,7 +652,6 @@ lib.test("tests memory: after a restart the failed tests are still known and onl
   end, "the failure message did not come back")
   second:exec("require('modules.phpunit.runner').run_failed()")
   wait_runs(second, dir, 1)
-  vim.wait(500)
   local runs = lines(dir .. "/args.log")
   lib.eq(1, #runs, "only the failed test's file runs")
   lib.matches("BTest%.php .*%-%-filter ::testTwo%(", runs[1])
@@ -651,7 +667,6 @@ lib.test("tests run: Run failed keeps the other tests of the file as they were (
     local c = counts(screen)
     return c.passed == 7 and c.failed == 1 and c.running == 0
   end, "the first run must give 7 passed, 1 failed", 20000)
-  vim.wait(300)
   screen:exec("require('modules.phpunit.runner').run_failed()")
   wait_runs(screen, dir, 2)
   h.wait(screen, function() -- the rerun has finished and its result is in
@@ -672,10 +687,8 @@ lib.test("tests run: Run failed on one data set keeps the method's other data se
   h.wait(screen, function()
     return h.find_on_screen(screen, "✓ 9 passed", 54) ~= nil and h.find_on_screen(screen, "✗ 1 failed", 54) ~= nil
   end, "the first run must give 9 passed, 1 failed", 20000)
-  vim.wait(300)
   screen:exec("require('modules.phpunit.runner').run_failed()")
   wait_runs(screen, dir, 2)
-  vim.wait(800)
   -- still 10 runs, 9 passed, 1 failed: the run of data set #1 alone did not make the method one data set
   h.wait(screen, function()
     return h.find_on_screen(screen, "10 tests (8 methods) · all run", 54) ~= nil and h.find_on_screen(screen, "✓ 9 passed", 54) ~= nil
@@ -692,7 +705,6 @@ lib.test("tests run: running one failed test shows one test as running, the othe
   h.wait(screen, function()
     return h.find_on_screen(screen, "✓ 7 passed", 54) ~= nil and h.find_on_screen(screen, "✗ 1 failed", 54) ~= nil
   end, "the first run must give 7 passed, 1 failed", 20000)
-  vim.wait(300)
   h.write(dir .. "/slow", { "x" })
   screen:exec("require('modules.phpunit.runner').run_failed()")
   h.wait(screen, function()
@@ -857,7 +869,7 @@ lib.test("tests data sets: Run failed runs only the failed data set, the Flat li
   h.wait(screen, function()
     return h.find_on_screen(screen, "10 tests", 54) ~= nil and h.find_on_screen(screen, "Run failed (1)", 54) ~= nil
   end, "the run did not finish", 20000)
-  vim.fn.delete(dir .. "/args.log")
+  reset_runs(dir)
   screen:exec("require('modules.phpunit.runner').run_failed()")
   wait_runs(screen, dir, 1)
   local run = lines(dir .. "/args.log")[1]
@@ -895,6 +907,7 @@ lib.test("tests pane: running a row keeps it where it is (it does not go up and 
     [[  printf '<testsuite name="%s" file="%s"><testcase name="testOne" class="%s" file="%s" line="4">%s</testcase></testsuite>\n' "$class" "$file" "$class" "$file" "$f" >> "$log"]],
     "done",
     'echo "</testsuites>" >> "$log"',
+    'echo "$$" >> "$ROOT/done.log"',
   })
   vim.fn.system({ "chmod", "+x", dir .. "/fake-phpunit.sh" })
   local screen = h.nvim(dir, 120, 30)
@@ -1037,7 +1050,7 @@ lib.test("tests progress: the pane shows 0 / 8 as a run starts, 4 / 8 halfway an
   h.wait(screen, function()
     local text = row()
     return text and text:find("0 / 8", 1, true) and text:find("0%", 1, true)
-  end, "the bar must start at 0 / 8, got " .. tostring(row()), 10000)
+  end, "the bar must start at 0 / 8, got " .. tostring(row()), 30000)
   h.wait(screen, function()
     local text = row()
     return text and text:find("4 / 8", 1, true) and text:find("50%", 1, true) and text:find("█", 1, true)

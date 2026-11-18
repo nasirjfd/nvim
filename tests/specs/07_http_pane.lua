@@ -99,7 +99,9 @@ lib.test("http pane: the wheel scrolls the list and the selection stays on a vis
   for _ = 1, 35 do
     screen:request("nvim_input_mouse", { "wheel", "down", "", 0, 10, 5 })
   end
-  vim.wait(200)
+  h.wait(screen, function() -- the wheel events are handled
+    return screen:exec("return require('modules.http_requests').panes()[1].list.top") > 1
+  end, "the wheel did not scroll the list")
   lib.eq(true, screen:exec([[
     local p = require('modules.http_requests').panes()[1]
     local height = vim.api.nvim_win_get_height(p.list.win.win)
@@ -554,8 +556,9 @@ lib.test(
     h.wait(screen, function()
       return h.find_on_screen(screen, "List users", 40) == nil
     end, "h did not close the file")
-    vim.wait(200) -- the refresh puts the cursor back on the file once it is done
-    lib.eq("file:users.http", current_row(screen), "the cursor stays on the closed file")
+    h.wait(screen, function() -- the refresh puts the cursor back on the file once it is done
+      return current_row(screen) == "file:users.http"
+    end, "the cursor stays on the closed file")
     screen:input("h") -- already closed: goes to the folder it is in
     h.wait(screen, function()
       return current_row(screen) == "dir:users"

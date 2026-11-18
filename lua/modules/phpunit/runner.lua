@@ -20,7 +20,12 @@ end
 -- modified is written first, like an IDE does before it runs a test.
 local function save_modified()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.bo[buf].modified and vim.bo[buf].buftype == "" and vim.api.nvim_buf_get_name(buf) ~= "" and vim.bo[buf].modifiable then
+    if
+      vim.bo[buf].modified
+      and vim.bo[buf].buftype == ""
+      and vim.api.nvim_buf_get_name(buf) ~= ""
+      and vim.bo[buf].modifiable
+    then
       vim.api.nvim_buf_call(buf, function()
         pcall(vim.cmd, "silent write")
       end)
@@ -85,6 +90,8 @@ end
 ---@param only? table<string, string[]> test names to run, by file
 function M.run(ids, only)
   save_modified()
+  -- what every test did last, as neotest knows it now: a filtered run keeps the tests it does not run as they were
+  pane().sync_results()
   local nio = require("nio")
   last = { ids = ids, only = only }
   nio.run(function()
@@ -94,7 +101,8 @@ function M.run(ids, only)
       local files = options.parallel() and pane().files_under(id) or nil
       if files and #files > 1 then
         for _, file in ipairs(files) do
-          planned[#planned + 1] = { key = file, estimate = pane().weight(file, only and only[file]) }
+          planned[#planned + 1] =
+            { key = file, estimate = pane().weight(file, only and only[file]) }
           jobs[#jobs + 1] = function(slot)
             run_one(file, only and only[file], slot)
           end
@@ -156,15 +164,38 @@ end
 
 --- The test under the cursor (the last one that starts above it); the file when there is none.
 function M.run_nearest()
-  local id = pane().nearest(vim.api.nvim_buf_get_name(0), vim.api.nvim_win_get_cursor(0)[1] - 1)
-  if not id then
-    -- the pane does not know this file yet (neotest is still looking through the project, or the pane was
-    -- never opened): neotest reads the file in this window itself and runs the test under the cursor
-    save_modified()
-    require("neotest").run.run({ concurrent = false })
-    return
+  local file, row = vim.api.nvim_buf_get_name(0), vim.api.nvim_win_get_cursor(0)[1] - 1
+  local id = pane().nearest(file, row)
+  if id then
+    return M.run({ id })
   end
-  M.run({ id })
+  -- The pane does not know this file's tests yet (neotest is still reading the project, or the pane was never
+  -- opened). Give it a moment: running before the tests are read runs the whole file instead of this test.
+  -- After that, neotest reads the file itself and runs the test under the cursor.
+  local win = vim.api.nvim_get_current_win()
+  local waited = 0
+  local timer = assert(vim.uv.new_timer())
+  timer:start(
+    50,
+    50,
+    vim.schedule_wrap(function()
+      waited = waited + 50
+      local found = pane().nearest(file, row)
+      if found or waited >= 2000 then
+        timer:stop()
+        timer:close()
+        if found then
+          return M.run({ found })
+        end
+        save_modified()
+        if vim.api.nvim_win_is_valid(win) then
+          vim.api.nvim_win_call(win, function()
+            require("neotest").run.run({ concurrent = false })
+          end)
+        end
+      end
+    end)
+  )
 end
 
 --- The test at `row` (0-based) of `file`, wherever the cursor is (a click on its gutter icon).

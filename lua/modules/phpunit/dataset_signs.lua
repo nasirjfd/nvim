@@ -10,7 +10,11 @@ M.ICON = { test = "󰙅", passed = "󰙅", failed = "󰙅", skipped = "󰙅", ru
 
 local GROUP = "neotest-status"
 local HL = {
-  test = "NeotestTest", passed = "NeotestPassed", failed = "NeotestFailed", skipped = "NeotestSkipped", running = "NeotestRunning",
+  test = "NeotestTest",
+  passed = "NeotestPassed",
+  failed = "NeotestFailed",
+  skipped = "NeotestSkipped",
+  running = "NeotestRunning",
 }
 
 local defined = false
@@ -24,18 +28,52 @@ local function define()
   end
 end
 
+-- buffer -> { [line] = true }: the lines of the tests that ran with data sets, as last drawn
+local sets = {}
+
+-- neotest draws its signs from an async task, at times of its own: a swap made by time ("60 ms after the
+-- results") lost the race on a busy machine and the icon vanished. So every sign neotest places on the line
+-- of a test with data sets is placed as the data set icon right away, whenever neotest draws.
+local hooked = false
+local function hook()
+  if hooked then
+    return
+  end
+  hooked = true
+  local place = vim.fn.sign_place
+  vim.fn.sign_place = function(id, group, name, buf, opts)
+    if group == GROUP and type(name) == "string" and type(opts) == "table" then
+      local status = name:match("^neotest_(%a+)$")
+      local b = type(buf) == "number" and buf or vim.fn.bufnr(buf)
+      if status and HL[status] and sets[b] and sets[b][opts.lnum] then
+        define()
+        name = "phpunit_sets_" .. status
+      end
+    end
+    return place(id, group, name, buf, opts)
+  end
+end
+
 --- Swap the signs of `lines` (1-based, the tests with data sets) in `buf`.
 function M.swap(buf, lines)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
   define()
+  hook()
+  sets[buf] = lines
   local placed = vim.fn.sign_getplaced(buf, { group = GROUP })[1]
   for _, sign in ipairs(placed and placed.signs or {}) do
     local status = sign.name:match("^neotest_(%a+)$")
     if status and lines[sign.lnum] and HL[status] then
       vim.fn.sign_unplace(GROUP, { buffer = buf, id = sign.id })
-      vim.fn.sign_place(0, GROUP, "phpunit_sets_" .. status, buf, { lnum = sign.lnum, priority = 1000 })
+      vim.fn.sign_place(
+        0,
+        GROUP,
+        "phpunit_sets_" .. status,
+        buf,
+        { lnum = sign.lnum, priority = 1000 }
+      )
     end
   end
 end

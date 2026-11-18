@@ -3,3 +3,6 @@
 **/.DS_Store
 .nvimlog
 /nvim.log
+
+# test scheduler timings (tests/run.lua), per machine
+/tests/.durations.json

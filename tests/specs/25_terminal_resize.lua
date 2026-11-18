@@ -67,14 +67,22 @@ lib.test("manual Git pane width survives refresh resize and toggling", function(
   h.wait(screen, function()
     return screen:exec([[
       local s = require('codediff.ui.lifecycle').get_session(vim.api.nvim_get_current_tabpage())
+      -- open, and its first layout done: a drag before that is taken for the layout's own resizing
+      local sizes = s and s.layout_sizes
       return s and s.panel and s.panel.view and s.panel.view.winid ~= nil
+        and sizes and sizes.snapshot ~= nil and not sizes.structural
     ]])
   end, "Git pane did not open")
   screen:exec([[
     local p = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage())
     vim.api.nvim_win_set_width(p.winid, 55)
   ]])
-  vim.wait(150)
+  h.wait(screen, function() -- the drag is learned (on WinResized) before the terminal changes size
+    return screen:exec([[
+      local s = require('codediff.ui.lifecycle').get_session(vim.api.nvim_get_current_tabpage())
+      return s.layout_sizes and s.layout_sizes.panel_width == 55
+    ]])
+  end, "the Git pane's new width was not learned")
   for _, width in ipairs({ 240, 100, 180, 240, 180 }) do
     screen:request("nvim_ui_try_resize", { width, 45 })
     vim.wait(150)
@@ -83,11 +91,12 @@ lib.test("manual Git pane width survives refresh resize and toggling", function(
       require('codediff.ui.refresh').request(tab, { full = true, render = true })
       require('codediff.ui.layout').arrange(tab)
     ]])
-    vim.wait(100)
-    lib.eq(55, screen:exec([[
-      local p = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage())
-      return vim.api.nvim_win_get_width(p.winid)
-    ]]), "Git pane reset its width")
+    h.wait(screen, function()
+      return screen:exec([[
+        local p = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage())
+        return vim.api.nvim_win_get_width(p.winid)
+      ]]) == 55
+    end, "Git pane reset its width")
   end
   screen:exec([[
     local p = require('codediff.ui.lifecycle').get_panel_view(vim.api.nvim_get_current_tabpage())

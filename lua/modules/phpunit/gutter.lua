@@ -5,6 +5,14 @@
 local M = {}
 
 local function sign_line(buf, line)
+  -- a test starts on this line: its icon is there, even at the moment neotest draws its signs again (it
+  -- removes them all and puts them back, so the sign itself can be missing for an instant)
+  local ok, known = pcall(function()
+    return require("modules.phpunit.pane").test_starts_at(vim.api.nvim_buf_get_name(buf), line - 1)
+  end)
+  if ok and known then
+    return true
+  end
   -- neotest's own signs
   local placed = vim.fn.sign_getplaced(buf, { group = "neotest-status", lnum = line })[1]
   if placed and #placed.signs > 0 then

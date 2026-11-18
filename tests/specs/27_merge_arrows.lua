@@ -41,12 +41,21 @@ lib.test("rapid merge arrow clicks from the sidebar apply both blocks without op
       vim.api.nvim_set_current_win(s.original_win)
       vim.api.nvim_win_set_cursor(s.original_win, {...,0})
       vim.cmd('normal! zz')
-      vim.api.nvim_set_current_win(s.panel.view.winid)
     ]], {line})
-    screen:flush()
     local value = index == 1 and "ours-one" or "ours-two"
+    -- the panes follow the scroll on WinScrolled, which tells them which pane was scrolled: let that run
+    -- before the focus moves to the sidebar (on a busy machine it came after, and the panes went back)
+    h.wait(screen, function()
+      return h.find_on_screen(screen, value) ~= nil
+    end, "target conflict was not visible")
+    screen:exec([[
+      local s = require('codediff.ui.lifecycle').get_session(vim.api.nvim_get_current_tabpage())
+      vim.api.nvim_set_current_win(s.panel.view.winid)
+    ]])
+    h.wait(screen, function()
+      return h.find_on_screen(screen, value) ~= nil
+    end, "target conflict was not visible")
     local row = h.find_on_screen(screen, value)
-    lib.ok(row ~= nil, "target conflict was not visible")
     local col = h.find_on_row(screen, row, "→")
     lib.ok(col ~= nil, "target arrow was not visible")
     if previous_position then

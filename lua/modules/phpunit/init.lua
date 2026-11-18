@@ -19,7 +19,8 @@ end
 local ADAPTER = { name = "phpunit" }
 
 -- directories never searched for tests
-local SKIP = { vendor = true, node_modules = true, [".git"] = true, cache = true, [".neotest-results"] = true }
+local SKIP =
+  { vendor = true, node_modules = true, [".git"] = true, cache = true, [".neotest-results"] = true }
 
 function ADAPTER.root(dir)
   if not plan.is_configured() then
@@ -64,6 +65,11 @@ function ADAPTER.discover_positions(path)
   return base().discover_positions(path)
 end
 
+-- How many runs have a results log still to come. The folder of the logs is removed only when none has:
+-- with Parallel on, removing it as soon as one run was read took it from under a run that had not written
+-- its log yet, and that run's whole file showed as failed ("PHPUnit wrote no results").
+local outstanding = 0
+
 ---@param args neotest.RunArgs
 function ADAPTER.build_spec(args)
   local nio = require("nio")
@@ -79,16 +85,28 @@ function ADAPTER.build_spec(args)
   local key = position.id
   progress.expect(key, #targets)
   for index, target in ipairs(targets) do
-    local results = string.format("%s/%d-%d-%s.xml", dir, vim.uv.os_getpid(), index, nio.fn.tempname():match("[^/]+$"))
+    local results = string.format(
+      "%s/%d-%d-%s.xml",
+      dir,
+      vim.uv.os_getpid(),
+      index,
+      nio.fn.tempname():match("[^/]+$")
+    )
     -- one test, or the tests of a file that the pane picked (the ones that failed last time)
     local only = args.extra_args and args.extra_args.only
     local test = position.type == "test" and position.name or only
     local argv = plan.args(target, results, test)
+    outstanding = outstanding + 1
     specs[#specs + 1] = {
       command = { "/bin/sh", "-c", plan.command(argv, args.extra_args and args.extra_args.slot) },
       cwd = plan.get().root or vim.uv.cwd(),
       env = args.env or plan.get().env,
-      context = { results_path = results, progress_key = key, progress_sub = index, filtered = test ~= nil },
+      context = {
+        results_path = results,
+        progress_key = key,
+        progress_sub = index,
+        filtered = test ~= nil,
+      },
       -- "  61 / 1122 (  5%)": how far PHPUnit is (progress.lua)
       stream = function(data)
         return function()
@@ -129,7 +147,8 @@ local function keep_the_others(tree, results, output)
       local previous = pane.last_result(data.id)
       local now = results[data.id]
       if not now then
-        local copy = previous and vim.deepcopy(previous) or { status = "skipped", short = "not run" }
+        local copy = previous and vim.deepcopy(previous)
+          or { status = "skipped", short = "not run" }
         copy.output = output
         results[data.id] = copy
       elseif now.datasets and previous and previous.datasets then
@@ -173,10 +192,17 @@ function ADAPTER.results(spec, result, tree)
   require("modules.phpunit.progress").finish(spec.context.progress_key, spec.context.progress_sub)
   local ok, data = pcall(lib.files.read, path)
   pcall(vim.uv.fs_unlink, path)
-  pcall(vim.uv.fs_rmdir, vim.fs.dirname(path)) -- only when nothing else is in it
+  outstanding = math.max(0, outstanding - 1)
+  if outstanding == 0 then
+    pcall(vim.uv.fs_rmdir, vim.fs.dirname(path)) -- only when nothing else is in it
+  end
   local id = tree:data().id
   if not ok or not data or data == "" then
-    return failed(id, "PHPUnit wrote no results (exit code " .. tostring(result.code) .. "), see the output", result.output)
+    return failed(
+      id,
+      "PHPUnit wrote no results (exit code " .. tostring(result.code) .. "), see the output",
+      result.output
+    )
   end
   -- the log names the files as the container sees them
   for host, container in pairs(plan.get().paths) do
