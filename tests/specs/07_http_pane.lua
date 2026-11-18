@@ -114,7 +114,7 @@ lib.test("http pane: wheel keeps the selected request even when it leaves the vi
   screen:close()
 end)
 
-lib.test("http pane: x keeps the row instead of following a reordered hidden request", function()
+lib.test("http pane: x on a request leaves it and the cursor where they are (grayed out), nothing reorders", function()
   local dir = project()
   local screen = open_pane(dir)
   screen:exec([[
@@ -138,9 +138,10 @@ lib.test("http pane: x keeps the row instead of following a reordered hidden req
   h.wait(screen, function()
     return screen:exec([[
       local p = require('modules.http_requests').panes()[1]
-      return p.list.cursor == _G.hide_row and p:current().key ~= _G.hide_key
+      local cur = p:current()
+      return p.list.cursor == _G.hide_row and cur and cur.key == _G.hide_key and cur.dim == true
     ]])
-  end, "x followed the hidden item")
+  end, "the hidden request must stay under the cursor, grayed out")
   screen:close()
 end)
 
@@ -1185,7 +1186,7 @@ lib.test("http pane: x hides files, H reveals them at the bottom, and x restores
   screen:close()
 end)
 
-lib.test("http pane: x hides requests including pinned references, reveals them last, and remembers their identity", function()
+lib.test("http pane: x hides requests including pinned references, shows them grayed in place, and remembers their identity", function()
   local dir = project()
   local memory = dir .. "/hidden.json"
   local screen = open_pane(dir)
@@ -1209,9 +1210,16 @@ lib.test("http pane: x hides requests including pinned references, reveals them 
           if item.req.name == 'make-user' then make = index end
         end
       end
-      return list and make and list > make
+      return list and make and list < make
     ]])
-  end, "the hidden request must appear below normal requests")
+  end, "the hidden request must stay in its place in the file, above the later request")
+  lib.ok(screen:exec([[
+    for _, item in ipairs(require('modules.http_requests').panes()[1]:items()) do
+      if item.kind == 'request' and not item.in_pins and item.req.name == 'List users' then
+        return item.dim == true and item.hidden == true
+      end
+    end
+  ]]), "the hidden request must be grayed out")
   -- Reload the on-disk hide store and shift the request's line: its identity, not its line, is hidden.
   screen:exec([[
     require('modules.http_requests.hidden').set_file(...)
@@ -1377,5 +1385,79 @@ lib.test("http pane: ? shows the keys in a small window, Esc closes it", functio
     return h.find_on_screen(screen, "HTTP pane keys") == nil
   end, "Esc did not close the help")
   lib.eq(1, screen:exec("return #require('modules.http_requests').panes()"), "the pane itself stays open")
+  screen:close()
+end)
+
+lib.test("http pane: / again, after Esc, goes back into the search with its text selected for a new one", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  screen:input("/")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_input'")
+  end, "slash did not open search")
+  screen:input("make-user")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "make-user", 40) ~= nil and h.find_on_screen(screen, "Login", 40) == nil
+  end, "search did not filter")
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_list'")
+  end, "Esc did not go to the results")
+  -- / again: back in the search box, the old text selected
+  screen:input("/")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_input' and vim.fn.mode() == 's'")
+  end, "/ did not go back into the search (text selected)")
+  lib.ok(h.find_on_screen(screen, "make-user", 40), "the old search text is still shown")
+  -- typing replaces the old text and filters for the new one
+  screen:input("login")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Login", 40) ~= nil and h.find_on_screen(screen, "make-user", 40) == nil
+  end, "typing did not replace the old search")
+  lib.eq("login", screen:exec("return vim.api.nvim_get_current_line():gsub('^%s+', '')"))
+  -- Esc, / and Backspace-free editing: an arrow key keeps the old text to edit it
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_list'")
+  end, "Esc did not go to the results again")
+  screen:input("/")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_input'")
+  end, "second / did not go back into the search")
+  screen:input("<Right>")
+  screen:input("x")
+  h.wait(screen, function()
+    return screen:exec("return vim.api.nvim_get_current_line():gsub('^%s+', '') == 'loginx'")
+  end, "an arrow key must keep the text for editing")
+  -- Esc twice from the results clears the search as before
+  screen:input("<Esc>")
+  screen:input("<Esc>")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "List users", 40) ~= nil
+  end, "Esc in the results must still clear the search")
+  screen:close()
+end)
+
+lib.test("http pane: / again after an empty search still lets you type", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  for _ = 1, 2 do
+    screen:input("/")
+    h.wait(screen, function()
+      return screen:exec("return vim.bo.filetype == 'snacks_picker_input'")
+    end, "/ did not open the search")
+    screen:input("<Esc>")
+    h.wait(screen, function()
+      return screen:exec("return vim.bo.filetype == 'snacks_picker_list'")
+    end, "Esc did not go to the list")
+  end
+  screen:input("/")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype == 'snacks_picker_input'")
+  end, "/ did not open the search a third time")
+  screen:input("login")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Login", 40) ~= nil and h.find_on_screen(screen, "make-user", 40) == nil
+  end, "typing did not filter")
   screen:close()
 end)

@@ -285,12 +285,8 @@ local function rows(opts)
             visible[#visible + 1] = { req = req, hidden = is_hidden, order = index }
           end
         end
-        table.sort(visible, function(a, b)
-          if a.hidden ~= b.hidden then
-            return not a.hidden
-          end
-          return a.order < b.order
-        end)
+        -- A hidden request keeps its place in the file (only grayed out when shown); hidden folders
+        -- and files are the ones that sort to the bottom.
         local key = "f:" .. entry.file.rel
         local item = {
           text = entry.file.name, kind = "file", key = key, parent = parent, last = last, file = abs,
@@ -785,7 +781,36 @@ local actions = {
   end,
   -- / shows search; Esc focuses its filtered results for immediate j/k preview.
   http_show_search = function(picker)
+    local again = picker.opts.http_search_expanded and picker.input and picker.input.win:valid()
     picker.opts.http_search_expanded = true
+    if again then
+      -- A search is already there (Esc only moved to its results): go back into it with its text
+      -- selected, so typing replaces it and an arrow key or Backspace edits it instead.
+      picker:focus("input")
+      vim.schedule(function()
+        if not picker.closed and picker.input and picker.input.win:valid() then
+          local buf = picker.input.win.buf
+          -- Left/Home and Right/End leave the selection and edit the old text from its start / end
+          for _, key in ipairs({ "<Left>", "<Home>" }) do
+            vim.keymap.set("s", key, "<Esc>I", { buffer = buf, silent = true, desc = "Edit search from its start" })
+          end
+          for _, key in ipairs({ "<Right>", "<End>" }) do
+            vim.keymap.set("s", key, "<Esc>A", { buffer = buf, silent = true, desc = "Edit search from its end" })
+          end
+          vim.keymap.set("s", "<Esc>", function()
+            vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "n", false)
+            vim.schedule(function()
+              if not picker.closed then
+                picker:action("http_stop_search_insert")
+              end
+            end)
+          end, { buffer = buf, silent = true, desc = "Back to the results" })
+          vim.cmd("stopinsert")
+          vim.api.nvim_feedkeys(vim.keycode("0vg_<C-g>"), "n", false)
+        end
+      end)
+      return
+    end
     picker:find()
     picker:toggle("input", { enable = true, focus = true })
     vim.schedule(function()
