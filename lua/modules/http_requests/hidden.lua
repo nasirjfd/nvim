@@ -73,6 +73,28 @@ function M.toggle(root, path, kind)
   return not found
 end
 
+--- Make an entry hidden (`on`) or not, whatever it was before.
+function M.set_hidden(root, path, kind, on)
+  if M.set(root, kind)[path] == (on and true or nil) then
+    return
+  end
+  M.toggle(root, path, kind)
+end
+
+--- Unhide every hidden request of one file.
+function M.unhide_requests_of(root, rel)
+  local bucket = load().requests
+  local kept = {}
+  for _, key in ipairs(bucket[root] or {}) do
+    local ok, decoded = pcall(vim.json.decode, key)
+    if not (ok and type(decoded) == "table" and decoded[1] == rel) then
+      kept[#kept + 1] = key
+    end
+  end
+  bucket[root] = #kept > 0 and kept or nil
+  save()
+end
+
 -- Like pins, request identity survives edits that shift its line number.
 function M.request_key(rel, req)
   return vim.json.encode({ rel, req.method, req.url, req.name })

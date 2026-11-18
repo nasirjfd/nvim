@@ -1461,3 +1461,68 @@ lib.test("http pane: / again after an empty search still lets you type", functio
   end, "typing did not filter")
   screen:close()
 end)
+
+local function hidden_state(screen)
+  return screen:exec([[
+    local hidden = require('modules.http_requests.hidden')
+    local names = {}
+    for key in pairs(hidden.set(vim.uv.cwd(), 'requests')) do
+      names[#names + 1] = vim.json.decode(key)[4]
+    end
+    table.sort(names)
+    return { files = vim.tbl_keys(hidden.set(vim.uv.cwd(), 'files')), requests = names }
+  ]])
+end
+
+lib.test("http pane: x on a request of a hidden file shows only that request, the others stay hidden", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.hidden').set_file(...)", { dir .. "/hidden.json" })
+  select_row(screen, "file:users.http")
+  screen:input("x")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "users.http", 40) == nil
+  end, "x did not hide the file")
+  screen:input("H")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "users.http", 40) ~= nil
+  end, "H did not show the hidden file")
+  select_row(screen, "request:List users GET https://example.com/users")
+  screen:input("x")
+  h.wait(screen, function()
+    return #hidden_state(screen).files == 0
+  end, "x on a request must bring its file back")
+  local state = hidden_state(screen)
+  lib.eq({ "DELETE https://example.com/users/1", "make-user" }, state.requests)
+  lib.eq({}, state.files)
+  screen:close()
+end)
+
+local function focus_file(screen)
+  focus_pane(screen)
+  screen:exec("local p = require('modules.http_requests').panes()[1]; for i, item in ipairs(p:items()) do if item.kind == 'file' and item.rel:match('users.http$') then p.list:move(i, true); break end end")
+end
+
+lib.test("http pane: x on a hidden file again unhides all its hidden requests", function()
+  local dir = project()
+  local screen = open_pane(dir)
+  screen:exec("require('modules.http_requests.hidden').set_file(...)", { dir .. "/hidden.json" })
+  select_row(screen, "request:make-user POST https://example.com/users")
+  screen:input("x")
+  h.wait(screen, function()
+    return #hidden_state(screen).requests == 1
+  end, "x did not hide the request")
+  focus_file(screen)
+  screen:input("x") -- hide the file
+  h.wait(screen, function()
+    return #hidden_state(screen).files == 1
+  end, "x did not hide the file")
+  screen:input("H")
+  focus_file(screen)
+  screen:input("x") -- and unhide it
+  h.wait(screen, function()
+    return #hidden_state(screen).files == 0
+  end, "x did not unhide the file")
+  lib.eq({}, hidden_state(screen).requests)
+  screen:close()
+end)

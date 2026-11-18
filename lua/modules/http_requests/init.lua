@@ -707,9 +707,26 @@ local actions = {
     if item and item.kind == "dir" and item.relpath then
       hidden.toggle(cwd(), item.relpath)
     elseif item and item.kind == "file" and item.rel then
-      hidden.toggle(cwd(), item.rel, "files")
+      -- Unhiding a file brings back everything in it, its hidden requests too.
+      if not hidden.toggle(cwd(), item.rel, "files") then
+        hidden.unhide_requests_of(cwd(), item.rel)
+      end
     elseif item and item.kind == "request" and item.rel then
-      hidden.toggle(cwd(), hidden.request_key(item.rel, item.req), "requests")
+      local key = hidden.request_key(item.rel, item.req)
+      if hidden.set(cwd(), "files")[item.rel] then
+        -- A request of a hidden file: show just this one. The file comes back, and every other
+        -- request in it stays hidden.
+        local buf = vim.fn.bufnr(item.file)
+        local lines = buf ~= -1 and api.nvim_buf_is_loaded(buf) and api.nvim_buf_get_lines(buf, 0, -1, false)
+          or vim.fn.readfile(item.file)
+        for _, req in ipairs(require("modules.http_requests.parse").parse(lines)) do
+          hidden.set_hidden(cwd(), hidden.request_key(item.rel, req), "requests", true)
+        end
+        hidden.set_hidden(cwd(), key, "requests", false)
+        hidden.set_hidden(cwd(), item.rel, "files", false)
+      else
+        hidden.toggle(cwd(), key, "requests")
+      end
     elseif item and item.kind == "env" and item.rel then
       hidden.toggle(cwd(), item.rel, "envs")
     else
