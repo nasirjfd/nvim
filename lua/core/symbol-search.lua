@@ -16,7 +16,7 @@ end
 function M.open(workspace)
   local text = selection()
   vim.cmd.stopinsert()
-  local opts = text and { pattern = text } or nil
+  local opts = text and (workspace and { search = text } or { pattern = text }) or nil
   if workspace then
     Snacks.picker.lsp_workspace_symbols(opts)
   else
