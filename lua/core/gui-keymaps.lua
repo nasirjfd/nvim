@@ -152,9 +152,12 @@ map({ "n", "t" }, "<D-S-'>", function()
 end, { desc = "New Terminal" })
 
 -- cmd+f12 -> goto symbol
-map("n", "<D-F12>", function()
-  Snacks.picker.lsp_symbols()
+map({ "n", "x", "i" }, "<D-F12>", function()
+  require("core.symbol-search").open(false)
 end, { desc = "Goto Symbol" })
+map({ "n", "x", "i" }, "<D-S-F12>", function()
+  require("core.symbol-search").open(true)
+end, { desc = "Workspace Symbols" })
 
 -- cmd+r cmd+r -> rename symbol: the first cmd+r opens the replace bar, the second one in the bar
 -- renames (core/find-bar.lua), so a single cmd+r doesn't wait for a second key

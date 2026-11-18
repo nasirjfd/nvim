@@ -1019,8 +1019,9 @@ return {
     {
       "<leader>lS",
       function()
-        Snacks.picker.lsp_workspace_symbols()
+        require("core.symbol-search").open(true)
       end,
+      mode = { "n", "x" },
       desc = "Workspace Symbols",
     },
     -- li (info), lr (restart), lh (hints) - defined in lsp.lua
