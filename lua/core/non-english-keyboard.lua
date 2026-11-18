@@ -104,26 +104,31 @@ local function show_alert()
     if alert.win and api.nvim_win_is_valid(alert.win) then
       return
     end
-    local text = " Switch to English keyboard layout "
-    local width = math.min(vim.fn.strdisplaywidth(text), math.max(1, vim.o.columns - 4))
+    local text = "   ⌨   Switch to English keyboard layout   "
+    local pad = string.rep(" ", vim.fn.strdisplaywidth(text))
+    local width = math.min(vim.fn.strdisplaywidth(text) + 8, math.max(1, vim.o.columns - 4))
+    local function centered(line)
+      local gap = math.max(0, width - vim.fn.strdisplaywidth(line))
+      return string.rep(" ", math.floor(gap / 2)) .. line
+    end
     local buf = api.nvim_create_buf(false, true)
     vim.bo[buf].bufhidden = "wipe"
     vim.bo[buf].filetype = "non_english_keyboard_alert"
-    api.nvim_buf_set_lines(buf, 0, -1, false, { text })
+    api.nvim_buf_set_lines(buf, 0, -1, false, { pad, pad, centered(text), pad, pad })
     alert.win = api.nvim_open_win(buf, false, {
       relative = "editor",
       row = 0,
       col = math.max(0, math.floor((vim.o.columns - width - 2) / 2)),
       width = width,
-      height = 1,
+      height = 5,
       style = "minimal",
-      border = "rounded",
+      border = "double",
       focusable = false,
       mouse = false,
       zindex = 250,
       noautocmd = true,
     })
-    vim.wo[alert.win].winhighlight = "Normal:DiagnosticError,FloatBorder:DiagnosticError"
+    vim.wo[alert.win].winhighlight = "Normal:ErrorMsg,FloatBorder:ErrorMsg"
   end)
 end
 
