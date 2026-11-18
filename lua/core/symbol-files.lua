@@ -143,6 +143,72 @@ local function symbols(opts, ctx, cwd)
   end
 end
 
+-- Byte columns (1-based) of the typed text in a symbol name: the whole text when it occurs, else the
+-- letters in order (the server answers fuzzy), preferring the earliest start.
+function M.positions(name, query)
+  query = query:gsub("%s+", ""):lower()
+  if query == "" then
+    return {}
+  end
+  local lower = name:lower()
+  local from, to = lower:find(query, 1, true)
+  local out = {}
+  if from then
+    for i = from, to do
+      out[#out + 1] = i
+    end
+    return out
+  end
+  -- Fuzzy: take the longest chunk of the query that occurs next, so matches stay contiguous.
+  local qi, pos = 1, 1
+  while qi <= #query do
+    local found
+    for len = #query - qi + 1, 1, -1 do
+      local f = lower:find(query:sub(qi, qi + len - 1), pos, true)
+      if f then
+        for k = 0, len - 1 do
+          out[#out + 1] = f + k
+        end
+        pos, qi, found = f + len, qi + len, true
+        break
+      end
+    end
+    if not found then
+      return {}
+    end
+  end
+  return out
+end
+
+-- Snacks does not mark the typed text in symbol names (live search has no matcher positions).
+function M.format(item, picker)
+  local ret = Snacks.picker.format.lsp_symbol(item, picker)
+  local kind = item.lsp_kind or item.kind or "Unknown"
+  kind = picker.opts.icons.kinds[kind] and kind or "Unknown"
+  local name = vim.trim((item.name or ""):gsub("\r?\n", " "))
+  if name ~= "" then
+    local offset = #picker.opts.icons.kinds[kind] + 1
+    -- Entries sit right before the name's text, like Snacks' own syntax highlight of it.
+    local at
+    for i, seg in ipairs(ret) do
+      if seg[1] == name and not seg.virtual then
+        at = i
+        break
+      end
+    end
+    if at then
+      local marks = Snacks.picker.highlight.matches({}, M.positions(name, picker:filter().search or ""), offset)
+      for _, mark in ipairs(marks) do
+        mark.priority = 300 -- above the name's own syntax highlight (100)
+      end
+      for i = #marks, 1, -1 do
+        table.insert(ret, at, marks[i])
+      end
+    end
+  end
+  return ret
+end
+
 function M.finder(opts, ctx)
   local cwd = ctx:cwd()
   local key = table.concat({ cwd, tostring(opts.ignored), tostring(opts.hidden), vim.inspect(opts.exclude) }, "\0")

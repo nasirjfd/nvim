@@ -49,3 +49,15 @@ lib.test("workspace symbols are cached per query and refreshed in the background
     return screen:exec("return _G.requests") == 2
   end, "the stale answer was not refreshed")
 end)
+
+lib.test("symbol names highlight the typed text: whole when present, else contiguous chunks", function()
+  local dir = h.tmpdir()
+  local screen = h.nvim(dir)
+  local function pos(name, q)
+    return screen:exec(("return require('core.symbol-files').positions(%q, %q)"):format(name, q))
+  end
+  lib.eq(pos("xIsInProductionY", "isinproduction"), { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 })
+  lib.eq(pos("testDoesNotExistInProduction", "isinproduction"), { 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 })
+  lib.eq(pos("abc", "isinproduction"), {})
+  lib.eq(pos("abc", ""), {})
+end)

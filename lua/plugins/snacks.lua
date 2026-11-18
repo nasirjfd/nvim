@@ -389,6 +389,9 @@ return {
           hidden = false,
           ignored = false,
           matcher = { frecency = true, sort_empty = true },
+          format = function(item, picker)
+            return require("core.symbol-files").format(item, picker)
+          end,
           finder = function(opts, ctx)
             return require("core.symbol-files").finder(opts, ctx)
           end,
