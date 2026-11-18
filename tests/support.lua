@@ -137,7 +137,12 @@ function M.wait(screen, predicate, message, timeout)
   local deadline = vim.uv.hrtime() + (timeout or 15000) * 1e6
   while true do
     assert(not screen.error, tostring(screen.error))
-    if predicate() then
+    local ok, held = pcall(predicate)
+    if not ok then
+      -- the editor did not answer (a prompt waiting for a key, a hang): show what it shows
+      error(tostring(held) .. "\n" .. M.snapshot(screen), 2)
+    end
+    if held then
       screen:flush()
       return
     end
