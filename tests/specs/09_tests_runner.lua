@@ -654,7 +654,10 @@ lib.test("tests run: Run failed keeps the other tests of the file as they were (
   vim.wait(300)
   screen:exec("require('modules.phpunit.runner').run_failed()")
   wait_runs(screen, dir, 2)
-  vim.wait(800)
+  h.wait(screen, function() -- the rerun has finished and its result is in
+    local c = counts(screen)
+    return c.running == 0 and c.passed + c.failed == 8
+  end, "the rerun did not finish", 20000)
   local c = counts(screen)
   lib.eq({ 7, 1 }, { c.passed, c.failed }, "ATest's testOne passed before and was not run again: it must not become failed")
   screen:close()

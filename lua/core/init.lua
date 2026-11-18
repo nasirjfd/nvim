@@ -10,6 +10,7 @@ require("core.guess-indent").setup()
 require("core.external-changes")
 require("core.sidebars")
 require("core.herdr-ref")
+require("core.snacks-input-guard")
 require("core.cmdline-file")
 -- require("core.persian").setup() -- off: it broke typing in pickers
 require("core.file-cache").setup()

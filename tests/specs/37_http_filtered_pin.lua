@@ -77,9 +77,12 @@ lib.test("HTTP filtered pin on the last file only pins a request from that file"
       local p=require('modules.http_requests').panes()[1]
       local n=0
       for i=1,p.list:count() do if p.list:get(i).kind=='request' then n=n+1 end end
-      return n==2 and not p:is_active() and not p.list.paused
+      -- the typed text has reached the filter (Snacks applies it after a short debounce): a result of
+      -- an earlier prefix of the text must not count as settled, its late find would reset the cursor
+      return n==2 and p.input.filter.pattern=='login' and not p:is_active() and not p.list.paused
     ]])
   end, "search did not settle")
+  vim.wait(150) -- the debounced find of the last key has run
   screen:input("<Esc>")
   h.wait(screen, function()
     return screen:exec([[

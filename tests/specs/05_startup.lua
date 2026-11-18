@@ -110,8 +110,17 @@ lib.test("a file gets a scrollbar handle showing the current viewport", function
   local screen = h.nvim(dir)
   screen:exec("vim.cmd('edit long.txt')")
   h.wait(screen, function()
-    return screen:exec([[local ns = vim.api.nvim_get_namespaces().Scrollbar
-      return ns ~= nil and #vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}) > 0]])
+    -- the scrollbar is a floating window (filetype scrollbar) drawn next to the file's window
+    return screen:exec([[
+      local main = vim.api.nvim_get_current_win()
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        local cfg = vim.api.nvim_win_get_config(win)
+        if cfg.relative == 'win' and cfg.win == main and vim.bo[vim.api.nvim_win_get_buf(win)].filetype == 'scrollbar' then
+          return true
+        end
+      end
+      return false
+    ]])
   end, "scrollbar handle did not render for a long file")
   screen:close()
 end)

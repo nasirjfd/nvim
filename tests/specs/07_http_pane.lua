@@ -82,7 +82,9 @@ local function where(screen)
   return screen:exec("return { vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'), vim.api.nvim_win_get_cursor(0)[1] }")
 end
 
-lib.test("http pane: wheel keeps the selected request even when it leaves the viewport", function()
+lib.test("http pane: the wheel scrolls the list and the selection stays on a visible row, keys continue from it", function()
+  -- Picker cursors are selections (see core/wheel-cursor.lua): the selected request follows the
+  -- viewport instead of staying off screen, so the highlighted row, current() and the preview agree.
   local dir = project()
   local lines = {}
   for i = 1, 100 do
@@ -92,25 +94,25 @@ lib.test("http pane: wheel keeps the selected request even when it leaves the vi
   local screen = open_pane(dir)
   screen:exec([[
     local p = require('modules.http_requests').panes()[1]
-    for i, item in ipairs(p:items()) do
-      if item.kind == 'request' then p.list:move(i, true); break end
-    end
-    _G.wheel_key = p:current().key
     _G.wheel_top = p.list.top
   ]])
   for _ = 1, 35 do
     screen:request("nvim_input_mouse", { "wheel", "down", "", 0, 10, 5 })
   end
   vim.wait(200)
-  lib.ok(screen:exec([[
+  lib.eq(true, screen:exec([[
     local p = require('modules.http_requests').panes()[1]
-    return p.list.top > _G.wheel_top and p:current().key == _G.wheel_key
-  ]]), "wheel moved the selection or failed to scroll")
+    local height = vim.api.nvim_win_get_height(p.list.win.win)
+    local on_screen = p.list.cursor >= p.list.top and p.list.cursor < p.list.top + height
+    return (p.list.top > _G.wheel_top and on_screen and p:current() == p.list:get(p.list.cursor))
+      or vim.inspect({ top = p.list.top, was = _G.wheel_top, cursor = p.list.cursor, height = height })
+  ]]), "the wheel must scroll the list and leave the selection on a visible row")
+  screen:exec("_G.after_wheel = require('modules.http_requests').panes()[1].list.cursor")
   screen:input("j")
-  lib.ok(screen:exec([[
+  lib.eq(true, screen:exec([[
     local p = require('modules.http_requests').panes()[1]
-    return p.list:get(p.list.cursor - 1).key == _G.wheel_key
-  ]]), "keyboard did not resume at the original request")
+    return p.list.cursor == _G.after_wheel + 1 or vim.inspect({ cursor = p.list.cursor, was = _G.after_wheel })
+  ]]), "keyboard did not continue from the selected row")
   screen:close()
 end)
 
