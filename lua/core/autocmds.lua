@@ -103,24 +103,7 @@ api.nvim_create_autocmd({ "FocusGained", "BufEnter" }, { -- CursorHold
 
 -- Autosave modified file buffers when leaving insert mode, switching buffers or losing focus.
 -- Toggle with <leader>uA. Not on TextChanged, so format-on-save never runs while typing.
-vim.g.autosave = true
-api.nvim_create_autocmd({ "InsertLeave", "BufLeave", "FocusLost" }, {
-  group = api.nvim_create_augroup("Autosave", { clear = true }),
-  callback = function(ev)
-    local buf = ev.buf
-    if
-      vim.g.autosave
-      and vim.bo[buf].buftype == ""
-      and vim.bo[buf].modifiable
-      and vim.bo[buf].modified
-      and vim.api.nvim_buf_get_name(buf) ~= ""
-    then
-      vim.api.nvim_buf_call(buf, function()
-        vim.cmd("silent! update")
-      end)
-    end
-  end,
-})
+require("core.autosave").setup()
 
 -- In every picker list (files, grep, LSP references, …) the folder of a file is drawn subtle, in
 -- the comment grey, so the file name stands out; so are grep's line:column numbers. Hidden and

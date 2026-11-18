@@ -75,6 +75,13 @@ local function flush()
 
   notify_servers(paths)
 
+  -- The editor's recursive watcher also feeds Git panes, including hidden ones.
+  -- Do not load the Git plugin just because a file changed.
+  local refresh = package.loaded["codediff.ui.refresh"]
+  if refresh and refresh.files_changed then
+    refresh.files_changed(paths)
+  end
+
   -- other files changed under the current buffer's linters (e.g. phpstan): lint it again
   local lint = package.loaded["lint"]
   if lint and vim.bo.buftype == "" and vim.api.nvim_buf_get_name(0) ~= "" then
@@ -91,8 +98,11 @@ local function on_change(err, filename)
     return
   end
   pending[path] = true
-  timer:stop()
-  timer:start(DEBOUNCE_MS, 0, vim.schedule_wrap(flush))
+  -- Bound the latency from the first event; continuous writes must not keep
+  -- postponing refresh forever while we wait for the filesystem to go quiet.
+  if not timer:is_active() then
+    timer:start(DEBOUNCE_MS, 0, vim.schedule_wrap(flush))
+  end
 end
 
 local function watch(dir)

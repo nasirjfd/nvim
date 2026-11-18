@@ -197,6 +197,7 @@ map("x", "<D-/>", comment_selection, { desc = "Comment Selection" })
 -- its rows and positions and its file watcher keeps it current (the tab line is off, so a tab out of
 -- view is invisible). `q` in the pane closes it for good.
 local function focus_git()
+  vim.api.nvim_exec_autocmds("User", { pattern = "CodeDiffSCMPreOpen", modeline = false })
   local lifecycle = package.loaded["codediff.ui.lifecycle"]
   if not lifecycle then
     vim.cmd("CodeDiff scm")
@@ -230,6 +231,7 @@ local function focus_git()
       if view and view.winid and vim.api.nvim_win_is_valid(view.winid) then
         vim.api.nvim_set_current_win(view.winid)
       end
+      require("codediff.ui.refresh").request(tab, { full = true })
       return
     end
   end
