@@ -8,7 +8,7 @@ lib.test("cmd+f12 and cmd+shift+f12 search symbols with the selection in any mod
   screen:exec([[
     vim.cmd("edit a.lua")
     _G.calls = {}
-    Snacks.picker.lsp_symbols = function(o) table.insert(_G.calls, { "doc", o and o.pattern }) end
+    Snacks.picker.treesitter = function(o) table.insert(_G.calls, { "doc", o and o.pattern }) end
     Snacks.picker.lsp_workspace_symbols = function(o) table.insert(_G.calls, { "ws", o and o.search }) end
   ]])
   local function press(keys)
