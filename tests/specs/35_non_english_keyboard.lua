@@ -39,7 +39,7 @@ lib.test(
     local cfg=vim.api.nvim_win_get_config(%d)
     return cfg.relative=='editor' and cfg.row==0 and not cfg.focusable
        and cfg.col==math.floor((vim.o.columns-cfg.width-2)/2)
-       and vim.wo[%d].winhighlight=='Normal:DiagnosticError,FloatBorder:DiagnosticError'
+       and vim.wo[%d].winhighlight=='Normal:ErrorMsg,FloatBorder:ErrorMsg'
    ]]):format(win, win)),
       "alert is not red and top-center"
     )
