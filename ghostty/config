@@ -67,3 +67,7 @@ window-padding-color = extend
 
 # cmd+shift+f: grep (with the selection) in Neovim (see lua/plugins/snacks.lua)
 keybind = super+shift+f=csi:102;10u
+
+# cmd+f12 / cmd+shift+f12: symbols of the file / of the project in Neovim (see lua/core/symbol-search.lua)
+keybind = super+f12=csi:24;9~
+keybind = super+shift+f12=csi:24;10~
