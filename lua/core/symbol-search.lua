@@ -19,6 +19,9 @@ function M.open(workspace)
   local opts = text and (workspace and { search = text } or { pattern = text }) or nil
   if workspace then
     Snacks.picker.lsp_workspace_symbols(opts)
+  elseif pcall(vim.treesitter.get_parser, 0) then
+    -- Instant and independent of the language server (which may still be starting or indexing)
+    Snacks.picker.treesitter(opts)
   else
     Snacks.picker.lsp_symbols(opts)
   end
