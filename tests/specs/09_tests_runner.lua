@@ -107,10 +107,16 @@ local function lines(path)
   return vim.fn.filereadable(path) == 1 and vim.fn.readfile(path) or {}
 end
 
+-- passed / failed / skipped / total from neotest's state consumer; running from neotest's client itself, as
+-- the pane sees it: the state consumer follows the client through events and, on a busy machine, could still
+-- count a run that the client had finished
 local function counts(screen)
   return screen:exec([[
     local ids = require("neotest").state.adapter_ids()
-    return ids[1] and require("neotest").state.status_counts(ids[1]) or {}
+    local c = ids[1] and require("neotest").state.status_counts(ids[1]) or {}
+    local ok, running = pcall(function() return require("modules.phpunit.pane").running_ids() end)
+    c.running = ok and #running or c.running
+    return c
   ]])
 end
 
@@ -138,7 +144,11 @@ local function wait_runs(screen, dir, n, what)
     return #lines(dir .. "/args.log") >= n and none_running(dir) and counts(screen).running == 0
   end, function()
     return (what or ("phpunit did not run " .. n .. " times"))
-      .. (" (started %d, finished %d, neotest running %s)"):format(#lines(dir .. "/args.log"), #lines(dir .. "/done.log"), tostring(counts(screen).running))
+      .. (" (started %d, finished %d, running %s)"):format(
+        #lines(dir .. "/args.log"),
+        #lines(dir .. "/done.log"),
+        tostring(counts(screen).running)
+      )
   end, 20000)
 end
 
