@@ -1,5 +1,6 @@
 -- Workspace symbols come from the LSP, which does not honor picker file-visibility toggles.
 -- Intersect its results with the same fd/rg listing used by Find Files, including local .ignore rules.
+local Async = require("snacks.picker.util.async")
 local M = {}
 local cache = {}
 local FRESH_MS = 60000
@@ -8,8 +9,12 @@ local FRESH_MS = 60000
 local answers = {}
 local ANSWER_MS = 60000
 
+-- Entries are never thrown away on a change: they are marked stale (epoch) and still shown at once,
+-- while a fresh copy is fetched behind them (stale-while-revalidate).
+local epoch = 0
+
 function M.invalidate()
-  cache, answers = {}, {}
+  epoch = epoch + 1
 end
 
 vim.api.nvim_create_autocmd({ "BufWritePost", "FileChangedShellPost" }, {
@@ -76,13 +81,22 @@ local function symbols(opts, ctx, cwd)
   local akey = table.concat({ cwd, query, vim.inspect(filter), #clients }, "\0")
   return function(cb)
     local hit = answers[akey]
-    if hit and vim.uv.now() - hit.time <= ANSWER_MS then
+    local fresh = hit and hit.epoch == epoch and vim.uv.now() - hit.time <= ANSWER_MS
+    if hit then
       for _, item in ipairs(hit.items) do
         cb(vim.deepcopy(item))
       end
-      return
+      if fresh then
+        return
+      end
     end
-    local collected, pending = {}, #clients
+    local collected, pending, my_epoch = {}, #clients, epoch
+    local function emit_item(item)
+      if not hit then
+        cb(item)
+      end
+    end
+    local function fetch()
     for _, client in ipairs(clients) do
       lsp.request(client, "workspace/symbol", function()
         return { query = query }
@@ -95,17 +109,37 @@ local function symbols(opts, ctx, cwd)
         })
         for _, item in ipairs(items) do
           collected[#collected + 1] = vim.deepcopy(item)
-          cb(item)
+          emit_item(item)
         end
         pending = pending - 1
         if pending == 0 then
           if vim.tbl_count(answers) >= 50 then
             answers = {}
           end
-          answers[akey] = { items = collected, time = vim.uv.now() }
+          local changed = hit and #hit.items ~= #collected
+          answers[akey] = { items = collected, time = vim.uv.now(), epoch = my_epoch }
+          if changed and not ctx.picker.closed then
+            vim.schedule(function()
+              if not ctx.picker.closed then
+                ctx.picker:find()
+              end
+            end)
+          end
         end
       end)
     end
+    end
+    if not hit then
+      return fetch()
+    end
+    -- Stale answer already shown: refresh only if the user paused on this query (typing makes a
+    -- new query per key; asking the server for every prefix would only load it).
+    vim.defer_fn(function()
+      local picker = ctx.picker
+      if not picker.closed and picker:filter().search == query then
+        fetch()
+      end
+    end, 250)
   end
 end
 
@@ -125,7 +159,8 @@ function M.finder(opts, ctx)
   }
   return function(cb)
     local entry = cache[key]
-    if not entry or vim.uv.now() - entry.time > FRESH_MS then
+    local stale = entry and (entry.epoch ~= epoch or vim.uv.now() - entry.time > FRESH_MS)
+    local scan = function()
       local allowed = {}
       local files = require("snacks.picker.source.files").files(file_opts, file_ctx)
       local function add(item)
@@ -140,11 +175,14 @@ function M.finder(opts, ctx)
           add(item)
         end
       end
-      entry = { files = allowed, time = vim.uv.now() }
-      if vim.tbl_count(cache) >= 4 then
+      if vim.tbl_count(cache) >= 4 and not cache[key] then
         cache = {}
       end
+      entry = { files = allowed, time = vim.uv.now(), epoch = epoch }
       cache[key] = entry
+    end
+    if not entry then
+      scan()
     end
     local function emit(item)
       if item.file and entry.files[absolute(item.file, item.cwd or cwd)] then
@@ -157,6 +195,14 @@ function M.finder(opts, ctx)
       for _, item in ipairs(find_symbols) do
         emit(item)
       end
+    end
+    if stale and not entry.rescanning then
+      -- The shown results used the old file list; rescan in the background for the next search.
+      entry.rescanning = true
+      Async.new(function()
+        Async.yield()
+        scan()
+      end)
     end
   end
 end
