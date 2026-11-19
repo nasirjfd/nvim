@@ -27,6 +27,8 @@ keybind = super+ctrl+equal=equalize_splits
 keybind = super+l=csi:108;9u
 keybind = super+shift+c=csi:99;10u
 keybind = super+slash=csi:47;9u
+keybind = super+j=csi:106;9u
+keybind = super+k=csi:107;9u
 keybind = super+z=csi:122;9u
 keybind = super+shift+z=csi:122;10u
 keybind = super+alt+z=csi:122;11u

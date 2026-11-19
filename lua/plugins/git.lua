@@ -157,8 +157,12 @@ return {
               return gs[direction .. "_hunk"]()
             end
           end
-          map("n", "<F7>", hunk_key("next"), "Next Hunk")
-          map("n", "<F19>", hunk_key("prev"), "Prev Hunk")
+          for _, lhs in ipairs({ "<F7>", "<D-j>" }) do
+            map("n", lhs, hunk_key("next"), "Next Hunk")
+          end
+          for _, lhs in ipairs({ "<F19>", "<D-k>" }) do
+            map("n", lhs, hunk_key("prev"), "Prev Hunk")
+          end
         end,
       })
     end,
@@ -274,8 +278,8 @@ return {
       keymaps = {
         view = {
           quit = { "q", "<leader>dc" },
-          next_hunk = { "]c", "<F7>" },
-          prev_hunk = { "[c", "<F19>" },
+          next_hunk = { "]c", "<F7>", "<D-j>" },
+          prev_hunk = { "[c", "<F19>", "<D-k>" },
         },
       },
     },
@@ -333,7 +337,7 @@ return {
             silent = true,
           })
           -- <F7> / <F19> in the file list jumps back to the diff pane
-          for _, lhs in ipairs({ "<F7>", "<F19>" }) do
+          for _, lhs in ipairs({ "<F7>", "<F19>", "<D-j>", "<D-k>" }) do
             vim.keymap.set("n", lhs, "<cmd>wincmd p<cr>", { buffer = args.buf })
           end
           preview_on_move(args.buf, (args.match:gsub("^codediff%-", "")))
