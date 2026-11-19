@@ -22,7 +22,7 @@
   "mason.nvim": { "branch": "main", "commit": "2a6940af80375532e5e9e7c1f2fc6319a1b7a69d" },
   "mini.icons": { "branch": "main", "commit": "fc90b3925a2a68282be06e28cfe0cbb366c75dad" },
   "mini.nvim": { "branch": "main", "commit": "e199196f5ed6b085743da6a808e6c8510698cdce" },
-  "multi-repo-code-diff": { "branch": "main", "commit": "9b981128a35ad088e1da39ae49f881761465c0cd" },
+  "multi-repo-code-diff": { "branch": "main", "commit": "126251411ff152b643d7fb9b8db7c2e0a63dccb4" },
   "multicursor.nvim": { "branch": "1.0", "commit": "c574bfc1f7e63dfea3e64b8453c9f7c660127238" },
   "neotest": { "branch": "master", "commit": "27bf921498043f7ecd821d6db68d05de244bbd02" },
   "neotest-phpunit": { "branch": "main", "commit": "40e53c4294726a16f34f1a383a94c570553c6d46" },
