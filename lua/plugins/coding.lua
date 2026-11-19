@@ -149,7 +149,27 @@ return {
   -- ════════════════════════════════════════════════════════════════════════════
   {
     "numToStr/Comment.nvim",
-    opts = {},
+    opts = {
+      -- .http files: "#" for the request lines, "//" inside a JSON body
+      pre_hook = function(ctx)
+        if vim.bo.filetype ~= "http" and vim.bo.filetype ~= "rest" then
+          return
+        end
+        local row = ctx.range and ctx.range.srow or vim.fn.line(".")
+        local ok, parser = pcall(vim.treesitter.get_parser, 0)
+        if not ok or not parser then
+          return
+        end
+        pcall(parser.parse, parser, true)
+        local lang_ok, tree = pcall(parser.language_for_range, parser, { row - 1, 0, row - 1, 1 })
+        local line = vim.api.nvim_buf_get_lines(0, row - 1, row, false)[1] or ""
+        local col = math.max(#line:match("^%s*"), 0)
+        if lang_ok then
+          lang_ok, tree = pcall(parser.language_for_range, parser, { row - 1, col, row - 1, col + 1 })
+        end
+        return lang_ok and tree and tree:lang() == "json" and "// %s" or "# %s"
+      end,
+    },
     lazy = false,
   },
   { "joosepalviste/nvim-ts-context-commentstring", lazy = true },
