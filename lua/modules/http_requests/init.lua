@@ -654,8 +654,14 @@ local actions = {
   end,
   http_run = function(picker, item)
     item = item or picker:current()
+    -- The request runs from its own line (its file's <CR>), then the cursor goes back to the pane, on
+    -- the same row
+    local list_win = picker.list and picker.list.win and picker.list.win.win
     if item and item.kind == "request" and goto_line(picker, item.file, item.req.line) then
       run_here()
+      if list_win and vim.api.nvim_win_is_valid(list_win) then
+        vim.api.nvim_set_current_win(list_win)
+      end
     end
   end,
   http_new = function(picker, item)

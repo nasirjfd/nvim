@@ -297,7 +297,7 @@ lib.test("http pane: clicking a request goes to it in its file", function()
   screen:close()
 end)
 
-lib.test("http pane: Ctrl+Enter runs the request and goes to it; Enter only goes", function()
+lib.test("http pane: Ctrl+Enter and r run the request and stay in the pane; Enter only goes", function()
   local screen = open_pane(project())
   -- move onto the 'make-user' row with the keyboard, then Enter
   local function current()
@@ -323,6 +323,17 @@ lib.test("http pane: Ctrl+Enter runs the request and goes to it; Enter only goes
   end, "Ctrl+Enter did not run the request")
   local ran = screen:exec("return _G.runs[1]")
   lib.eq({ "users.http", 7 }, { vim.fn.fnamemodify(ran[1], ":t"), ran[2] }, "it must run with the cursor on the request")
+  -- the cursor stays in the pane, on the request it ran
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype") == "snacks_picker_list"
+  end, "Ctrl+Enter took the cursor out of the pane")
+  lib.matches("make%-user", current(), "the pane's cursor moved off the request")
+  screen:input("r")
+  h.wait(screen, function()
+    return screen:exec("return #_G.runs") == 2
+  end, "r did not run the request")
+  lib.eq("snacks_picker_list", screen:exec("return vim.bo.filetype"), "r took the cursor out of the pane")
+  lib.matches("make%-user", current(), "r moved the pane's cursor")
   screen:close()
 end)
 
