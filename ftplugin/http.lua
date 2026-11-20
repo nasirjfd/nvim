@@ -58,6 +58,11 @@ k("]r", "jump_next", "Next request")
 k("[r", "jump_prev", "Previous request")
 k("<leader>ke", "set_selected_env", "Select environment")
 k("\\e", "set_selected_env", "Select environment")
+-- Name the <leader>k group in which-key for this buffer (else it shows "+2 keymaps")
+local wk_ok, wk = pcall(require, "which-key")
+if wk_ok then
+  wk.add({ { "<leader>k", group = "HTTP Request", buffer = 0 } })
+end
 vim.keymap.set("n", "<leader>kc", function()
   require("modules.http_requests.clone").open()
 end, { buffer = true, silent = true, desc = "HTTP: clone request here" })

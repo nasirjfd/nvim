@@ -130,3 +130,19 @@ lib.test(
     screen:close()
   end
 )
+
+lib.test("which-key names the <leader>k group of an HTTP file", function()
+  local dir = h.tmpdir()
+  h.write(dir .. "/request.http", { "### Request", "GET https://example.com" })
+  local screen = editor(dir, h.tmpdir())
+  screen:exec("vim.cmd('edit request.http')")
+  h.wait(screen, function()
+    return screen:exec("return package.loaded['which-key'] ~= nil")
+  end, "which-key did not load")
+  screen:input("<Space>")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "HTTP Request") ~= nil
+  end, "which-key did not show the HTTP Request group")
+  screen:input("<Esc>")
+  screen:close()
+end)
