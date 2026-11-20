@@ -64,18 +64,50 @@ local TS_MEMBERS = {
   function_definition = true,
 }
 
+-- Other languages: node types named like a class or a function declaration (class_definition,
+-- function_item, method_declaration, ...). true = callable (what is inside it is not a member).
+local function generic_member(type)
+  if not (type:find("_declaration$") or type:find("_definition$") or type:find("_item$")) then
+    return nil
+  end
+  if type:find("function") or type:find("method") or type:find("constructor") then
+    return true
+  end
+  if type:find("class") or type:find("interface") or type:find("trait") or type:find("struct") then
+    return false
+  end
+  return nil
+end
+
+-- The buffer's parser: the one highlighting it (a diff's revision buffer has a language but no
+-- filetype), else one from its filetype.
+local function buffer_parser(bufnr)
+  local active = vim.treesitter.highlighter.active[bufnr]
+  if active and active.tree then
+    return active.tree
+  end
+  if vim.bo[bufnr].filetype == "" then
+    return nil
+  end
+  local ok, parser = pcall(vim.treesitter.get_parser, bufnr, nil, { error = false })
+  return ok and parser or nil
+end
+
 local function members_from_treesitter(bufnr)
-  if vim.bo[bufnr].filetype ~= "php" then
+  local parser = buffer_parser(bufnr)
+  if not parser then
     return nil
   end
-  local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
-  if not ok or not parser then
-    return nil
-  end
+  local php = parser:lang() == "php"
   local lines = {}
   local function walk(node, inside_callable)
     local type = node:type()
-    local callable = TS_MEMBERS[type]
+    local callable
+    if php then
+      callable = TS_MEMBERS[type]
+    else
+      callable = generic_member(type)
+    end
     if callable ~= nil and not inside_callable then
       local name = node:field("name")[1]
       if name then
@@ -281,12 +313,6 @@ local function setup_keymaps(bufnr)
   map("n", "]m", function()
     goto_member(bufnr, 1)
   end, "Next Class/Method")
-  map("n", "U", function()
-    goto_member(bufnr, -1)
-  end, "Prev Class/Method")
-  map("n", "S", function()
-    goto_member(bufnr, 1)
-  end, "Next Class/Method")
 
   -- <leader>c = Code
   map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, "Code Action")
@@ -321,6 +347,25 @@ local function setup_keymaps(bufnr)
     )
   end, "Toggle Inlay Hints")
 end
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Shift+U / Shift+S: previous / next class or method in every buffer, from the language server or
+-- treesitter (a diff's read-only revision has no server). Where neither knows the members they are
+-- Vim's own U / S, except in a read-only buffer, where those only fail with E21.
+local function member_key(direction, builtin)
+  return function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local lsp = #vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/documentSymbol" }) > 0
+    local syntax = members_from_treesitter(bufnr)
+    if lsp or (syntax and #syntax > 0) then
+      goto_member(bufnr, direction)
+    elseif vim.bo[bufnr].modifiable then
+      vim.api.nvim_feedkeys((vim.v.count > 0 and vim.v.count or "") .. builtin, "n", false)
+    end
+  end
+end
+vim.keymap.set("n", "U", member_key(-1, "U"), { desc = "Prev Class/Method", silent = true })
+vim.keymap.set("n", "S", member_key(1, "S"), { desc = "Next Class/Method", silent = true })
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- LspAttach Handler
