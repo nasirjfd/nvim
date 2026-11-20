@@ -1093,6 +1093,11 @@ lib.test("tests progress: a parallel run counts its files, each done file is its
   for i = 2, #seen do
     lib.ok(seen[i] >= seen[i - 1], "it never goes back: " .. table.concat(seen, ","))
   end
+  -- neotest's output panel (off) opened its terminal from two results events at once and stopped the
+  -- editor at a Press ENTER prompt
+  local messages = screen:exec("return vim.fn.execute('messages')")
+  lib.ok(not messages:find("Terminal already connected", 1, true), "a terminal error: " .. messages)
+  lib.ok(not messages:find("term channel", 1, true), "a terminal channel error: " .. messages)
   screen:close()
 end)
 

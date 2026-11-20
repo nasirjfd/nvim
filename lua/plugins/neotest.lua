@@ -61,6 +61,10 @@ return {
           end,
         },
         output = { open_on_run = false },
+        -- Unused (output opens in the float: <leader>to, o in the pane), and racy: with a parallel run two
+        -- results events open its terminal at once, "Terminal already connected to buffer" stops the
+        -- editor at a Press ENTER prompt.
+        output_panel = { enabled = false },
         quickfix = { enabled = false },
       })
     end,
