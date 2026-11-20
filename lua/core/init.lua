@@ -12,7 +12,7 @@ require("core.sidebars")
 require("core.herdr-ref")
 require("core.snacks-input-guard")
 require("core.cmdline-file")
--- require("core.persian").setup() -- off: it broke typing in pickers
+require("core.rtl").setup() -- right-to-left text drawn in visual order (GNU FriBidi), display only
 require("core.file-cache").setup()
 require("core.selection-highlight").setup()
 require("core.json-modal")

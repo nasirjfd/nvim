@@ -28,12 +28,14 @@ function M.input(prompt, on_confirm)
   if type(input) ~= "table" or not input.buf or not api.nvim_buf_is_valid(input.buf) then
     return
   end
+  -- Keep the number: Snacks clears input.buf when the input closes, and a TextChanged can still come.
+  local buf = input.buf
   local function suffix()
-    if not api.nvim_buf_is_valid(input.buf) then
+    if not api.nvim_buf_is_valid(buf) then
       return
     end
-    local text = api.nvim_buf_get_lines(input.buf, 0, 1, false)[1] or ""
-    api.nvim_buf_set_extmark(input.buf, ns, 0, #text, {
+    local text = api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
+    api.nvim_buf_set_extmark(buf, ns, 0, #text, {
       id = 1,
       virt_text = { { ".http", "Comment" } },
       virt_text_pos = "inline",
@@ -42,7 +44,7 @@ function M.input(prompt, on_confirm)
   end
   suffix()
   api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
-    buffer = input.buf,
+    buffer = buf,
     callback = suffix,
   })
 end

@@ -16,6 +16,7 @@ brew install ripgrep   # Fast grep (used by picker)
 brew install fd        # Fast find (used by picker)
 brew install node      # Required for some LSPs and tools
 brew install npm       # Required for markdown-preview
+brew install fribidi   # Right-to-left text (Persian, Arabic, Hebrew) drawn in visual order
 ```
 
 ### 2. Fonts (Required)
