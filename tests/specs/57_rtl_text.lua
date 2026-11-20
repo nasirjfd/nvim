@@ -130,3 +130,20 @@ lib.test("rtl: typing, search and pickers behave exactly as without it", functio
   lib.ok(not messages:find("rtl") and not messages:find("Error"), "errors were shown: " .. messages)
   screen:close()
 end)
+
+lib.test("rtl: Persian values in Kulala's response window read right to left", function()
+  local screen = h.nvim(h.tmpdir())
+  -- Kulala's response buffer (kulala://ui) is a nofile buffer: it opts in when it is shown
+  screen:exec([[
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_name(buf, "kulala://ui")
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "{", '  "message_fa": "می‌خواهم",', "}" })
+    vim.cmd("vsplit")
+    vim.api.nvim_win_set_buf(0, buf)
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  ]])
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "ﻢﻫﺍﻮﺧﯽﻣ") ~= nil
+  end, "the Persian value is not drawn right to left in Kulala's response")
+  screen:close()
+end)

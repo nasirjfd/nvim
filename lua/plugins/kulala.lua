@@ -16,6 +16,8 @@ return {
         group = vim.api.nvim_create_augroup("KulalaNoFold", { clear = true }),
         callback = function(args)
           if vim.api.nvim_buf_get_name(args.buf):match("^kulala://ui") then
+            -- Persian (or any right-to-left) values are drawn in reading order (lua/core/rtl.lua)
+            vim.b[args.buf].rtl_text = true
             for _, win in ipairs(vim.fn.win_findbuf(args.buf)) do
               vim.wo[win].foldenable = false
             end
