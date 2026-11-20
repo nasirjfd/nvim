@@ -1,59 +1,78 @@
+# Font
+font-family = JetBrains Mono
+font-size = 12
+adjust-cell-height = 15%
+theme = JetBrains Islands Dark
+
 
 # Create splits
-keybind = super+d=new_split:right
-keybind = super+shift+d=new_split:down
+# keybind = super+d=new_split:right
+# keybind = super+shift+d=new_split:down
 
 # Navigate splits
-keybind = super+alt+h=goto_split:left
-keybind = super+alt+l=goto_split:right
-keybind = super+alt+k=goto_split:up
-keybind = super+alt+j=goto_split:down
+# keybind = super+alt+h=goto_split:left
+# keybind = super+alt+l=goto_split:right
+# keybind = super+alt+k=goto_split:up
+# keybind = super+alt+j=goto_split:down
 
 # Resize splits
-keybind = super+ctrl+shift+h=resize_split:left,20
-keybind = super+ctrl+shift+l=resize_split:right,20
-keybind = super+ctrl+shift+k=resize_split:up,20
-keybind = super+ctrl+shift+j=resize_split:down,20
+# keybind = super+ctrl+shift+h=resize_split:left,20
+# keybind = super+ctrl+shift+l=resize_split:right,20
+# keybind = super+ctrl+shift+k=resize_split:up,20
+# keybind = super+ctrl+shift+j=resize_split:down,20
 
 # Zoom / hide other splits
-keybind = super+shift+enter=toggle_split_zoom
+# keybind = super+shift+enter=toggle_split_zoom
 
 # Equalize all split sizes
 keybind = super+ctrl+equal=equalize_splits
 
+keybind = super+l=csi:108;9u
+
+# cmd+shift+e focuses the explorer in Neovim (see lua/core/gui-keymaps.lua)
+keybind = super+shift+e=csi:101;10u
+
 # Keys for Neovim that Ghostty would otherwise keep or turn into text. Each sends the kitty
 # keyboard encoding of the key (CSI <codepoint>;<1 + shift 1, alt 2, ctrl 4, super 8>u), which
-# Neovim reads as the real <D-…>/<M-…> key. Made-up codes like csi:99~ are dropped by Neovim 0.12.
-keybind = super+l=csi:108;9u
+# Neovim reads as the real <D-…>/<M-…> key. Made-up codes like csi:97~ are dropped by Neovim 0.12.
+# cmd+r cmd+r renames the symbol in Neovim (see lua/core/find-bar.lua)
+keybind = super+r=csi:114;9u
+# cmd+s saves, cmd+shift+c copies the file path, cmd+j / cmd+k next / previous hunk
+keybind = super+s=csi:115;9u
 keybind = super+shift+c=csi:99;10u
-keybind = super+slash=csi:47;9u
 keybind = super+j=csi:106;9u
 keybind = super+k=csi:107;9u
+# option+shift+f formats, option+k / option+j expand / shrink the selection
+keybind = alt+shift+f=csi:102;4u
+keybind = alt+j=csi:106;3u
+keybind = alt+k=csi:107;3u
+
+# cmd+z / cmd+shift+z undo / redo in Neovim (kitty keyboard encoding: Neovim reads <D-z> / <D-S-z>,
+# see lua/core/gui-keymaps.lua). A plain ctrl+z would suspend Neovim.
+# cmd+/ comments lines in Neovim (<D-/>, see lua/core/gui-keymaps.lua)
+keybind = super+slash=csi:47;9u
+# Cmd+C copies Ghostty's own selection when there is one (the shell, Shift+drag); otherwise the key
+# goes to the app, where Neovim gets <D-c> (copies the selection, or a file in the explorer)
+keybind = performable:super+c=copy_to_clipboard
 keybind = super+z=csi:122;9u
 keybind = super+shift+z=csi:122;10u
 keybind = super+alt+z=csi:122;11u
+# Cmd+Option+V introduces a variable from the selection in Neovim.
+keybind = super+alt+v=csi:118;11u
 # ctrl+enter runs the request under the cursor of the HTTP Requests pane (modules/http_requests)
 keybind = ctrl+enter=csi:13;5u
 # cmd+shift+h opens the HTTP Requests pane (modules/http_requests)
 keybind = super+shift+h=csi:104;10u
 # cmd+shift+t opens the tests pane (neotest, lua/plugins/neotest.lua)
 keybind = super+shift+t=csi:116;10u
-# cmd+f opens the find bar in Neovim, same as / (Ghostty's own search would swallow it; see lua/core/find-bar.lua)
-keybind = super+f=csi:102;9u
-# Ghostty's own search moves to cmd+alt+f, so cmd+f is free for Neovim
-keybind = super+alt+f=start_search
-keybind = super+s=csi:115;9u
-keybind = super+r=csi:114;9u
-keybind = super+shift+e=csi:101;10u
-keybind = alt+shift+f=csi:102;4u
-keybind = alt+j=csi:106;3u
-keybind = alt+k=csi:107;3u
-# Cmd+C copies Ghostty's own selection when there is one (the shell, Shift+drag); otherwise the
-# key goes to the app, where Neovim gets <D-c> and copies its visual selection.
-keybind = performable:super+c=copy_to_clipboard
+
+# shift+option+left/right selects by word (sent as ctrl+shift+arrow)
+keybind = shift+alt+left=csi:1;6D
+keybind = shift+alt+right=csi:1;6C
 
 # gtab managed include
-config-file = ?"/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
+config-file = "/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
+config-file = "/Users/nasirjd/.config/ghostty/herdr-passthrough.conf"
 
 # Option+Backspace deletes the previous word everywhere (shell, Neovim insert/command line, pickers):
 # sent as Ctrl+W directly, so it never arrives as a split <Esc> + <BS> that closes pickers
@@ -66,9 +85,18 @@ font-codepoint-map = U+0600-U+06FF=Yekan Bakh
 font-codepoint-map = U+FB50-U+FDFF=Yekan Bakh
 font-codepoint-map = U+FE70-U+FEFF=Yekan Bakh
 
-# Fullscreen leaves a sub-cell strip at the bottom: paint it with the edge cells color instead of the theme background
+# Keep Neovim's single bottom row compact in windowed and fullscreen modes.
+# Snap windowed resizing to whole cells; fullscreen's unavoidable fractional-cell
+# remainder is shared equally, rather than looking like an extra blank bottom row.
+window-padding-y = 0
+window-padding-balance = equal
+window-step-resize = true
 window-padding-color = extend
 
+# cmd+f opens the find bar in Neovim, same as / (Ghostty's own search would swallow it; see lua/core/find-bar.lua)
+keybind = super+f=csi:102;9u
+# Ghostty's own search moves to cmd+alt+f, so cmd+f is free for Neovim
+keybind = super+alt+f=start_search
 # cmd+shift+f: grep (with the selection) in Neovim (see lua/plugins/snacks.lua)
 keybind = super+shift+f=csi:102;10u
 
