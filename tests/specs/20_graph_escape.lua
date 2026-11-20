@@ -2,7 +2,7 @@ local lib = require("lib")
 local h = require("support")
 
 for _, pane in ipairs({ "panel", "original", "modified" }) do
-  lib.test("Escape returns from a commit diff " .. pane .. " to its graph details", function()
+  lib.test("Escape returns from a commit diff " .. pane .. " to its graph details (a diff side through its file list)", function()
     local dir = h.repo({ ["a.txt"] = { "one" }, ["b.txt"] = { "two" } })
     h.write(dir .. "/a.txt", { "changed one" })
     h.write(dir .. "/b.txt", { "changed two" })
@@ -38,6 +38,27 @@ for _, pane in ipairs({ "panel", "original", "modified" }) do
   ]],
       { pane }
     )
+    local function where()
+      return vim.inspect(screen:exec([[
+      local map = vim.fn.maparg('<Esc>', 'n', false, true)
+      return { ft = vim.bo.filetype, map = map.desc or map.rhs,
+        tab = vim.api.nvim_get_current_tabpage(), graph = _G.graph_tab }
+    ]]))
+    end
+    if pane ~= "panel" then
+      -- from a diff side Esc goes to the commit's file list first, like the Source Control diff
+      screen:exec("_G.diff_tab = vim.api.nvim_get_current_tabpage()")
+      screen:input("<Esc>")
+      h.wait(screen, function()
+        return screen:exec([[
+        local s = require('codediff.ui.lifecycle').get_session(_G.diff_tab)
+        return vim.api.nvim_get_current_tabpage() == _G.diff_tab
+          and vim.api.nvim_get_current_win() == s.panel.view.winid
+      ]])
+      end, function()
+        return "Escape in a diff side did not go to the file list: " .. where()
+      end)
+    end
     screen:input("<Esc>")
     h.wait(screen, function()
       return screen:exec([[
@@ -46,11 +67,7 @@ for _, pane in ipairs({ "panel", "original", "modified" }) do
         and vim.api.nvim_get_current_win() == g.details.winid
     ]])
     end, function()
-      return "Escape did not return to commit details: "
-        .. vim.inspect(screen:exec([[
-      return { ft = vim.bo.filetype, map = vim.fn.maparg('<Esc>', 'n', false, true),
-        tab = vim.api.nvim_get_current_tabpage(), graph = _G.graph_tab }
-    ]]))
+      return "Escape did not return to commit details: " .. where()
     end)
     screen:close()
   end)
