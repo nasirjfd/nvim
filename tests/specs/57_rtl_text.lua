@@ -30,9 +30,8 @@ lib.test("rtl: FriBidi orders and joins the letters, English lines are left alon
   ]])
   lib.ok(r[1], "GNU FriBidi is not installed: brew install fribidi")
   lib.eq({ col = 0, text = "ﻡﻼﺳ" }, r[2])
-  -- the ZWNJ (drawn <200c> by Neovim) disappears; the rest of the line closes the gap
-  lib.eq(3, r[3].col)
-  lib.matches("^ﻢﻫﺍﻮﺧﯽﻣ test", r[3].text)
+  -- a ZWNJ inside a word: joined forms stop at it, the rest of the line is not touched
+  lib.eq({ col = 3, text = "ﻢﻫﺍﻮﺧﯽﻣ" }, r[3])
   -- numbers keep their order inside right-to-left text
   lib.eq({ col = 5, text = "۱۲۳ ﻻ" }, r[4])
   lib.ok(r[5], "an English line got an overlay")

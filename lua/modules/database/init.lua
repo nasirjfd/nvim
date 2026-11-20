@@ -87,6 +87,8 @@ local function map_result(buf)
   if not vim.api.nvim_buf_get_name(buf):find("dbee%-result") then
     return
   end
+  -- Persian (or any right-to-left) values are drawn in reading order (lua/core/rtl.lua)
+  vim.b[buf].rtl_text = true
   for _, lhs in ipairs({ "e", "<CR>", "<2-LeftMouse>" }) do
     vim.keymap.set("n", lhs, M.edit_row, { buffer = buf, desc = "Edit this row", nowait = true })
   end

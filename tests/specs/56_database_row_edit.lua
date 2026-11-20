@@ -95,7 +95,7 @@ local function open_result(query, row)
   sqlite(
     db,
     "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, note TEXT);"
-      .. "INSERT INTO users VALUES (1, 'ada', 'first'), (2, 'bob', NULL), (3, 'cy', 'x');"
+      .. "INSERT INTO users VALUES (1, 'ada', 'first'), (2, 'bob', NULL), (3, 'cy', 'x'), (4, 'می‌خواهم', 'y');"
       .. "CREATE TABLE logs (msg TEXT);"
       .. "INSERT INTO logs VALUES ('hi');"
   )
@@ -257,3 +257,22 @@ lib.test("database: rows without a usable primary key are not editable", functio
   lib.ok(not form_lines(screen), "a form opened for a row without its primary key")
   screen:close()
 end)
+
+lib.test(
+  "database: Persian values in the result pane read right to left, columns stay aligned",
+  function()
+    local screen = open_result("SELECT * FROM users ORDER BY id", 1)
+    -- the value of row 4 (with a ZWNJ) is drawn in reading order: joined letters, right to left
+    h.wait(screen, function()
+      return h.find_on_screen(screen, "ﻢﻫﺍﻮﺧﯽﻣ") ~= nil
+    end, "the Persian value is not drawn right to left in the result pane")
+    -- the column after it starts where it starts on the other rows
+    local row4 = h.find_on_screen(screen, "ﻢﻫﺍﻮﺧﯽﻣ")
+    local row3 = h.find_on_screen(screen, "│ cy ")
+    local x_col = row3 and h.find_on_row(screen, row3, "│ x")
+    local y_col = h.find_on_row(screen, row4, "│ y")
+    lib.ok(x_col and y_col, "rows 3 and 4 do not show their note\n" .. h.snapshot(screen))
+    lib.eq(x_col, y_col, "the column after the Persian value moved")
+    screen:close()
+  end
+)

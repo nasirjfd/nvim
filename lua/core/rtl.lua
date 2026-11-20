@@ -6,8 +6,8 @@
 -- What it never does, so English editing stays exactly as it is:
 --   * change the buffer, an option or the cursor (no conceallevel, no guicursor, no keymaps);
 --   * draw on the cursor line of a window (the real text is edited there), on a line without RTL
---     letters, in a window with 'rightleft', or in any buffer that is not an ordinary file
---     (pickers, prompts, input boxes, terminals: buftype ~= "").
+--     letters, in a window with 'rightleft', or in a special buffer that did not opt in (pickers,
+--     prompts, input boxes, terminals; see `allowed`).
 -- Decorations are ephemeral (made at redraw time), nothing is stored in the buffer.
 -- :Rtl toggles it. Without FriBidi it does nothing and says once how to install it.
 local M = {}
@@ -152,30 +152,21 @@ function M.render(line, tabstop)
   local base = ffi.new("FriBidiParType[1]", PAR_LTR)
   local result = false
   if lib.fribidi_log2vis(input, n, base, output, nil, nil, nil) ~= 0 then
-    local first, last, hidden
+    local first, last
     for k = 1, n do
       local v = tonumber(output[k - 1])
       if v ~= cps[k] or invisible(cps[k]) then
         first = first or k
         last = k
       end
-      if invisible(cps[k]) then
-        hidden = true
-      end
     end
     if first then
-      -- Invisible characters take cells in the real line but none in the overlay: draw the rest of the
-      -- line too, so the text after them closes the gap instead of leaving holes.
-      if hidden then
-        last = n
-      end
       local start_byte = offs[first]
       local end_byte = (offs[last + 1] or (#line + 1)) - 1
       local col0 = vim.fn.strdisplaywidth(line:sub(1, start_byte - 1))
       local width = vim.fn.strdisplaywidth(line:sub(1, end_byte)) - col0
       local parts, col = {}, col0
-      for k = first, last do
-        local v = tonumber(output[k - 1])
+      local function put(v)
         if v == 9 then
           local spaces = tabstop - (col % tabstop)
           parts[#parts + 1] = string.rep(" ", spaces)
@@ -186,12 +177,37 @@ function M.render(line, tabstop)
           col = col + vim.fn.strdisplaywidth(ch)
         end
       end
-      local text = table.concat(parts)
-      local pad = width - (col - col0)
-      if pad > 0 then
-        text = text .. string.rep(" ", pad)
+      for k = first, last do
+        put(tonumber(output[k - 1]))
       end
-      result = { col = start_byte - 1, text = text }
+      -- Invisible characters (ZWNJ) take cells in the real line but none in the overlay. The text after
+      -- them moves left to close the gap, up to the first run of spaces that can absorb it (a table
+      -- cell's padding: the next column stays where it is), or to the end of the line.
+      local missing = width - (col - col0)
+      if missing > 0 then
+        local spaces = 0
+        for k = last + 1, n do
+          if cps[k] == 32 then
+            spaces = spaces + 1
+            if spaces == missing then
+              missing = 0
+              break
+            end
+          else
+            for _ = 1, spaces do
+              put(32)
+            end
+            spaces = 0
+            put(cps[k])
+          end
+        end
+        -- Absorbed: the overlay ends before those spaces (the real ones show there). Otherwise it ran to
+        -- the end of the line: blank the cells the moved text left.
+        if missing > 0 then
+          parts[#parts + 1] = string.rep(" ", spaces + missing)
+        end
+      end
+      result = { col = start_byte - 1, text = table.concat(parts) }
     end
   end
   if cache_size > 4000 then
@@ -219,10 +235,18 @@ end
 
 local skip_row = {} -- window -> its cursor row (drawn raw), set in on_win
 
+-- Ordinary files and write-through buffers (the row edit form). Other special buffers only when they
+-- opt in with `vim.b.rtl_text = true` (dbee's result pane): pickers, prompts, input boxes and
+-- terminals are never drawn on.
+local function allowed(buf)
+  local bt = vim.bo[buf].buftype
+  return bt == "" or bt == "acwrite" or vim.b[buf].rtl_text == true
+end
+
 function M.setup()
   vim.api.nvim_set_decoration_provider(ns, {
     on_win = function(_, win, buf)
-      if not enabled or vim.bo[buf].buftype ~= "" or vim.wo[win].rightleft then
+      if not enabled or not allowed(buf) or vim.wo[win].rightleft then
         return false
       end
       skip_row[win] = vim.api.nvim_win_get_cursor(win)[1] - 1
@@ -256,7 +280,7 @@ function M.setup()
   vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "BufWinEnter" }, {
     group = vim.api.nvim_create_augroup("rtl_text", { clear = true }),
     callback = function(ev)
-      if not enabled or vim.bo[ev.buf].buftype ~= "" then
+      if not enabled or not allowed(ev.buf) then
         return
       end
       local win = vim.api.nvim_get_current_win()
