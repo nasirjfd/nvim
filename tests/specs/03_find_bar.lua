@@ -240,8 +240,10 @@ lib.test(
     end, "Enter did not go to the match")
     -- a changed text also goes
     screen:exec("require('core.find-bar').close()")
+    -- closed, and out of insert mode: close() stops insert mode only when the editor gets back to its
+    -- loop, and leaving it after the cursor was put on line 100 moved the cursor again
     h.wait(screen, function()
-      return bar_text(screen) == false
+      return bar_text(screen) == false and screen:exec("return vim.api.nvim_get_mode().mode") == "n"
     end, "the bar did not close")
     screen:exec("vim.api.nvim_win_set_cursor(0, { 100, 0 })")
     screen:input("/")

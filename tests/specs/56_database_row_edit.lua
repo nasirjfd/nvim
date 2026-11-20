@@ -179,17 +179,13 @@ lib.test("database: e on a result row edits it in a form and applies the UPDATE"
     "the UPDATE finds the row by its primary key"
   )
   screen:input("<CR>")
-  h.wait(screen, function()
-    return sqlite(db, "SELECT name || '|' || note FROM users WHERE id = 2") == "bobby|line1\nline2"
-  end, function()
-    return "the row was not updated: "
-      .. sqlite(db, "SELECT name || '|' || note FROM users WHERE id = 2")
-  end)
-  lib.eq("ada|first", sqlite(db, "SELECT name || '|' || note FROM users WHERE id = 1"))
-  -- the form closed and the result pane shows the new value again
+  -- the form closes and the result pane shows the new value again: the UPDATE is done. (Reading the
+  -- database while it runs would hold a lock it needs.)
   h.wait(screen, function()
     return not form_lines(screen) and h.find_on_screen(screen, "bobby")
   end, "the result was not reloaded")
+  lib.eq("bobby|line1\nline2", sqlite(db, "SELECT name || '|' || note FROM users WHERE id = 2"), "the row")
+  lib.eq("ada|first", sqlite(db, "SELECT name || '|' || note FROM users WHERE id = 1"))
   screen:close()
 end)
 
