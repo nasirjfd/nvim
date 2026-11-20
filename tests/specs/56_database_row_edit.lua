@@ -76,7 +76,8 @@ lib.test("database: connections of a Supernova mysql.yml, commented blocks inclu
 end)
 
 local function sqlite(db, statement)
-  local out = vim.system({ "sqlite3", db, statement }, { text = true }):wait()
+  -- the editor may be writing the same database at that moment: wait for its lock, do not fail on it
+  local out = vim.system({ "sqlite3", "-cmd", ".timeout 5000", db, statement }, { text = true }):wait()
   assert(out.code == 0, out.stderr)
   return vim.trim(out.stdout)
 end

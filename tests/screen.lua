@@ -174,18 +174,32 @@ function Screen:flush()
 end
 
 -- Wait for naturally delivered UI events; unlike flush(), this does not redraw.
+-- Polled from a plain loop, never from inside vim.wait: a predicate that asks the embedded editor runs a
+-- vim.wait of its own, and a nested vim.wait ignores the outer one's interval and timeout (a busy loop of
+-- requests that never gives up).
+local function poll(self, predicate, timeout)
+  local deadline = vim.uv.hrtime() + timeout * 1e6
+  while true do
+    if self.error ~= nil or predicate() then
+      return true
+    end
+    if vim.uv.hrtime() > deadline then
+      return false
+    end
+    vim.wait(10)
+  end
+end
+
 function Screen:await(predicate, message, timeout)
   assert(
-    vim.wait(timeout or 10000, function()
-      return self.error ~= nil or predicate()
-    end, 10),
+    poll(self, predicate, timeout or 10000),
     (message or "Embedded Neovim did not become ready") .. "\n" .. self.stderr
   )
   assert(not self.error, tostring(self.error))
 end
 
 function Screen:wait_for(predicate, message)
-  assert(vim.wait(10000, predicate, 10), (message or "Embedded Neovim did not become ready") .. "\n" .. self.stderr)
+  assert(poll(self, predicate, 10000), (message or "Embedded Neovim did not become ready") .. "\n" .. self.stderr)
   self:flush()
 end
 

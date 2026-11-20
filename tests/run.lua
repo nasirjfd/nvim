@@ -182,7 +182,9 @@ end
 -- ── parallel: workers, each a set of spec files of about the same total duration ────────────────
 local durations = read_durations()
 local cpus = #(vim.uv.cpu_info() or {}) > 0 and #vim.uv.cpu_info() or 4
-local jobs = math.max(1, math.min(opts.jobs or math.max(2, cpus - 2), #files))
+-- the workers mostly wait on their editors (measured: about 4 of 10 cores busy), so a few more
+-- than the cores; past that, timing-sensitive specs start to fail
+local jobs = math.max(1, math.min(opts.jobs or math.max(2, cpus + 2), #files))
 local sorted = vim.deepcopy(files)
 local function cost(file)
   return durations[vim.fn.fnamemodify(file, ":t")] or 5000
@@ -196,10 +198,11 @@ local total = 0
 for _, file in ipairs(sorted) do
   total = total + cost(file)
 end
-local share = total / jobs
+-- (half a worker's share: smaller pieces let the queue below even out the workers' ends)
+local share = total / jobs / 2
 local parts = {}
 for _, file in ipairs(sorted) do
-  local n = math.max(1, math.min(8, math.ceil(cost(file) / share)))
+  local n = math.max(1, math.min(12, math.ceil(cost(file) / share)))
   if n == 1 or opts.filter then
     parts[#parts + 1] = { name = file, cost = cost(file) }
   else
@@ -211,24 +214,21 @@ end
 table.sort(parts, function(a, b)
   return a.cost > b.cost
 end)
-local bins = {}
-for i = 1, jobs do
-  bins[i] = { total = 0, files = {} }
-end
-for _, part in ipairs(parts) do
-  table.sort(bins, function(a, b)
-    return a.total < b.total
-  end)
-  table.insert(bins[1].files, part.name)
-  bins[1].total = bins[1].total + part.cost
-end
 
 local started = vim.uv.hrtime()
 local passed, failed, running = 0, 0, 0
 local measured = {}
 local failures = {}
-for _, bin in ipairs(bins) do
-  if #bin.files > 0 then
+-- A queue, longest piece first: whenever a worker finishes it takes the next piece, so no worker idles
+-- while another still has a list to get through (a fixed split goes wrong as soon as durations change).
+local next_part = 1
+local function spawn()
+  if next_part > #parts then
+    return
+  end
+  local part = parts[next_part].name
+  next_part = next_part + 1
+  do
     running = running + 1
     local args = {
       vim.v.progpath,
@@ -242,7 +242,7 @@ for _, bin in ipairs(bins) do
       root .. "/tests/run.lua",
       "--worker",
       "--files",
-      table.concat(bin.files, ","),
+      part,
     }
     if opts.filter then
       args[#args + 1] = opts.filter
@@ -285,12 +285,16 @@ for _, bin in ipairs(bins) do
           end
         end
         running = running - 1
+        spawn()
       end)
     end)
   end
 end
+for _ = 1, jobs do
+  spawn()
+end
 vim.wait(30 * 60 * 1000, function()
-  return running == 0
+  return running == 0 and next_part > #parts
 end, 50)
 
 -- remember how long each file took, for balancing the next run (a full run only: a filter or a subset

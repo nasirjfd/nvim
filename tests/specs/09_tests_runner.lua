@@ -311,13 +311,13 @@ end
 lib.test("tests pane: counts and checkbox on top, then the parent folder, the file and every test", function()
   local dir = project()
   local screen = start(dir)
+  -- the pane counts the tests as it finds them: wait for all of them, not only the first file
   h.wait(screen, function()
-    return pane_row(screen, "ATest.php") ~= nil
-  end, "the test files are not in the pane")
+    return pane_row(screen, "ATest.php") ~= nil and pane_row(screen, "8 tests") ~= nil
+  end, "the test files and their count are not in the pane")
   lib.ok(pane_row(screen, "Parallel"), "the Parallel checkbox")
   lib.ok(pane_row(screen, "Run all"), "Run all")
   lib.ok(pane_row(screen, "Run failed"), "Run failed")
-  lib.ok(pane_row(screen, "8 tests"), "the count")
   lib.ok(pane_row(screen, "tests") and pane_row(screen, "app"), "the parent folder with its project")
   lib.ok(not pane_row(screen, "testOne"), "tests are folded under their file at first")
   h.click(screen, pane_row(screen, "ATest.php"), 8)
