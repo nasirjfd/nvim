@@ -55,6 +55,13 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 - neotest reads tests in a child Neovim with the runtimepath of setup time, so `neotest-phpunit` is required before `setup` in the plugin spec (else its `utils` module is not found there). neotest only starts looking for tests when something asks for them (`client:get_adapters()` in `attach`).
 - Tests: `tests/specs/08_tests_pane.lua` (plan, junit, a run through a fake container, the pane in the layout), `09_tests_runner.lua` (all/file/nearest/failed/last/parallel/stop, the pane rows). A fake phpunit stands in for Docker.
 
+### Database (nvim-dbee, `<leader>D`, shell alias `db` = `nvim +Dbee`)
+
+- `lua/plugins/database.lua` loads nvim-dbee (its Go backend is downloaded by the build step, which waits for it). `lua/modules/database/`: `init.lua` (dbee setup with the saved connections + the project's, `configure` for `.nvim.lua`, keys of the result pane, `<leader>D` in visual mode runs the selection), `mysql_yml.lua` (connections from a Supernova `config/<env>/mysql.yml`, commented blocks included; credentials are read at startup, never copied here: this repo is public), `sql.lua` (pure: the one table a SELECT reads, value encoding of the form, the UPDATE, column metadata for MySQL/SQLite), `backend.lua` (run a statement without touching the result pane, read rows of a call as JSON), `form.lua` (the row edit form).
+- `e` / Enter / double-click on a result row opens a float with one line per column (the name is inline virtual text, the line is the value; `NULL` is NULL, `\NULL` the text, `\n` a newline). `<C-s>`/`:w`/Enter shows the UPDATE (by primary key, `LIMIT 1` in MySQL), Enter applies it and reruns the query. Primary key, generated and binary columns are read only; queries with a join, union, grouping or without the primary key column are refused.
+- Supernova: `supernova-env-dev/vendor/.nvim.lua` adds `mysql_local` (docker, `127.0.0.1:MYSQL_PORT` of `.env`), `mysql_demo`, `mysql_test` from supernova-digiexpress's `config/local/mysql.yml`.
+- Tests: `tests/specs/56_database_row_edit.lua` (a real SQLite database through dbee).
+
 ### LSP (native 0.11 API, not nvim-lspconfig setup calls)
 
 - Per-server configs live in top-level `lsp/<name>.lua` and are activated by the `vim.lsp.enable({...})` list in `lua/plugins/lsp.lua`. The filename must exactly match the enabled name (e.g. `laravel_lsp` → `lsp/laravel_lsp.lua`); a mismatch fails silently.

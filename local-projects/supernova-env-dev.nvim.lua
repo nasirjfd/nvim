@@ -1,5 +1,9 @@
 local root = vim.fn.expand("~/Can/Develop/php/supernova-env-dev/vendor")
 
+-- Start the PHP workspace LSP before a PHP buffer is opened, so workspace
+-- symbols are available from the project picker immediately after startup.
+vim.g.project_lsp_filetypes = { "php" }
+
 -- Never format this project on save (cmd+s, :w, autosave): formatting runs only when asked
 -- (<leader>cf, shift+option+f, cmd+option+l).
 vim.g.disable_format_on_save = true
@@ -87,4 +91,30 @@ require("modules.phpunit").configure({
   -- clones digiexpress_1 into them); redis has 16 dbs, so 15 is the most.
   parallel_env = { TEST_THREAD_ID = "${slot}" },
   max_workers = 10, -- the worker container has 10 CPUs: 8-10 is as fast as 32 (6.3 s for everything)
+})
+
+-- Databases (<leader>D, or `db` in a shell = nvim +Dbee): the three mysql blocks of supernova-digiexpress's
+-- config/local/mysql.yml (the active one and the commented ones). Host, user and password are read from that
+-- file when Neovim starts, so they are never copied into the nvim config repo. The local block's host is the
+-- docker service `mysql`: from this machine it is the published port MYSQL_PORT of supernova-env-dev/.env.
+local function env_value(file, key)
+  for line in io.lines(file) do
+    local value = line:match("^%s*" .. key .. "%s*=%s*(%S+)")
+    if value then
+      return value
+    end
+  end
+end
+local env_file = vim.fn.fnamemodify(root, ":h") .. "/.env"
+local mysql_port = vim.uv.fs_stat(env_file) and env_value(env_file, "MYSQL_PORT") or "3307"
+require("modules.database").configure({
+  name = "supernova",
+  connections = require("modules.database.mysql_yml").connections(
+    root .. "/digikala/supernova-digiexpress/config/local/mysql.yml",
+    {
+      mysql = { name = "mysql_local", host = "127.0.0.1", port = mysql_port },
+      ["172.30.6.150"] = { name = "mysql_demo" },
+      ["172.30.5.41"] = { name = "mysql_test" },
+    }
+  ),
 })
