@@ -185,11 +185,234 @@ local function php_plan(buf, range)
     statement_end = ec,
     scope = vim.treesitter.get_node_text(scope, buf),
     standalone = statement:type() == "expression_statement" and child == node,
+    node = node,
   }
 end
 
 local function exists(scope, name)
   return scope:find("%$" .. name .. "%f[^%w_]") ~= nil
+end
+
+-- ── Name suggestion (like JetBrains) ─────────────────────────────────────────────────────────────
+-- From where the value goes first (the parameter it is passed to, a named argument, an array key, a
+-- property it is assigned to), else from the value itself (getContent() -> content,
+-- new ApiLogDocument() -> apiLogDocument, $_SERVER['REQUEST_TIME'] -> requestTime).
+
+local function camel(word)
+  if not word or word == "" then
+    return nil
+  end
+  if word:find("_") or word:upper() == word then
+    -- SNAKE_CASE, snake_case, UPPER -> lowerCamel
+    local out = word:lower():gsub("_+(%w)", string.upper):gsub("^_+", "")
+    return out
+  end
+  return (word:gsub("^%u+", function(caps)
+    -- ApiLog -> apiLog, URLPath -> urlPath
+    if #caps == 1 or #caps == #word then
+      return caps:lower()
+    end
+    return caps:sub(1, -2):lower() .. caps:sub(-1)
+  end))
+end
+
+local RESERVED_NAMES -- set below, after RESERVED
+local function valid(name)
+  return name and name:match("^[%a_][%w_]*$") and not RESERVED_NAMES[name] and name or nil
+end
+
+local function text_of(node, buf)
+  return node and vim.treesitter.get_node_text(node, buf) or nil
+end
+
+local function last_named(node, types)
+  local found
+  for child in node:iter_children() do
+    if child:named() and (not types or types[child:type()]) then
+      found = child
+    end
+  end
+  return found
+end
+
+-- The parameter name the language server shows as an inlay hint at the argument's start.
+local function parameter_hint(buf, row, col)
+  for _, client in ipairs(vim.lsp.get_clients({ bufnr = buf, method = "textDocument/inlayHint" })) do
+    local params = {
+      textDocument = vim.lsp.util.make_text_document_params(buf),
+      range = { start = { line = row, character = 0 }, ["end"] = { line = row + 1, character = 0 } },
+    }
+    local response = client:request_sync("textDocument/inlayHint", params, 800, buf)
+    for _, hint in ipairs(response and response.result or {}) do
+      local label = hint.label
+      if type(label) == "table" then
+        label = table.concat(vim.tbl_map(function(part)
+          return part.value
+        end, label))
+      end
+      -- Positions are UTF-16; the hint sits at the argument's first character.
+      local ok, byte = pcall(vim.lsp.util._get_line_byte_from_position, buf, hint.position, client.offset_encoding)
+      if hint.position.line == row and (ok and byte or hint.position.character) == col then
+        local name = vim.trim(label):gsub(":$", ""):gsub("^%$", ""):gsub("^%.%.%.", "")
+        if valid(name) then
+          return name
+        end
+      end
+    end
+  end
+end
+
+local function from_context(node, buf)
+  local parent = node:parent()
+  if not parent then
+    return nil
+  end
+  local kind = parent:type()
+  if kind == "argument" then
+    local name = parent:field("name")[1]
+    if name then
+      return text_of(name, buf)
+    end
+    local row, col = parent:range()
+    return parameter_hint(buf, row, col)
+  elseif kind == "array_element_initializer" then
+    local key = parent:named_child(0)
+    if key and key ~= node and parent:named_child_count() == 2 then
+      local word = text_of(key, buf):match("^['\"]([%w_]+)['\"]$")
+      return camel(word)
+    end
+  elseif kind == "assignment_expression" then
+    local left = parent:field("left")[1]
+    if left and left ~= node and (left:type() == "member_access_expression" or left:type() == "scoped_property_access_expression") then
+      local name = left:field("name")[1] or last_named(left)
+      return text_of(name, buf) and text_of(name, buf):gsub("^%$", "")
+    end
+  end
+end
+
+local function from_value(node, buf)
+  local kind = node:type()
+  if kind == "parenthesized_expression" or kind == "cast_expression" or kind == "clone_expression" then
+    local inner = last_named(node)
+    return inner and from_value(inner, buf)
+  elseif kind == "member_call_expression" or kind == "scoped_call_expression" or kind == "nullsafe_member_call_expression" then
+    local name = text_of(node:field("name")[1], buf)
+    if not name then
+      return nil
+    end
+    local stripped = name:match("^get(%u.*)$")
+    return camel(stripped or name)
+  elseif kind == "function_call_expression" then
+    local fn = text_of(node:field("function")[1], buf)
+    return fn and camel(fn:match("([%w_]+)$"))
+  elseif kind == "object_creation_expression" then
+    local class = last_named(node, { name = true, qualified_name = true })
+    local text = class and text_of(class, buf)
+    return text and camel(text:match("([%w_]+)$"))
+  elseif kind == "member_access_expression" or kind == "nullsafe_member_access_expression" then
+    return text_of(node:field("name")[1], buf)
+  elseif kind == "scoped_property_access_expression" then
+    local name = text_of(node:field("name")[1], buf)
+    return name and name:gsub("^%$", "")
+  elseif kind == "class_constant_access_expression" then
+    local name = text_of(last_named(node), buf)
+    return camel(name)
+  elseif kind == "subscript_expression" then
+    local index = last_named(node)
+    local word = index and text_of(index, buf):match("^['\"]([%w_]+)['\"]$")
+    return camel(word)
+  end
+end
+
+function M.suggest(buf, plan)
+  local name = valid(from_context(plan.node, buf)) or valid(from_value(plan.node, buf))
+  if not name then
+    return nil
+  end
+  local unique, n = name, 1
+  while exists(plan.scope, unique) do
+    n = n + 1
+    unique = name .. n
+  end
+  return unique
+end
+
+-- The suggestion is shown selected: the first typed character replaces it, Backspace clears it,
+-- moving the cursor keeps it (like a selected text field).
+-- The suggestion is shown selected, like a selected text field: the first key decides. A
+-- character or a paste replaces it, Backspace / Ctrl+W / Ctrl+U clear it, anything else (Enter,
+-- arrows, Home/End) keeps it as text. Handled in vim.on_key, before the key runs, so keys typed
+-- faster than the screen updates (a paste and Enter at once) are still in order.
+local CLEAR = { [vim.keycode("<BS>")] = true, [vim.keycode("<C-w>")] = true, [vim.keycode("<C-u>")] = true }
+local function select_default(default)
+  local ns = api.nvim_create_namespace("introduce-variable-default")
+  -- The prompt window opens a moment after vim.ui.input returns.
+  vim.schedule(function()
+    local buf = api.nvim_get_current_buf()
+    if vim.bo[buf].filetype ~= "snacks_input" or api.nvim_buf_get_lines(buf, 0, 1, false)[1] ~= default then
+      return
+    end
+    api.nvim_buf_set_extmark(buf, ns, 0, 0, { end_col = #default, hl_group = "Visual" })
+    local listener, paste
+    local active = true -- turned off at the first key: done() itself runs after the key
+    local function done()
+      active = false
+      vim.on_key(nil, listener)
+      if paste and vim.paste == paste.wrapper then
+        vim.paste = paste.original
+      end
+      paste = nil
+      if api.nvim_buf_is_valid(buf) then
+        api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+      end
+    end
+    listener = vim.on_key(function(key, typed)
+      if not active then
+        return
+      end
+      typed = typed ~= "" and typed or key
+      if not api.nvim_buf_is_valid(buf) or api.nvim_get_current_buf() ~= buf then
+        active = false
+        return vim.schedule(done)
+      end
+      if vim.fn.mode() ~= "i" then
+        return
+      end
+      local clear = CLEAR[typed]
+      local char = not clear and #typed >= 1 and typed:byte(1) >= 32 and typed:byte(1) ~= 0x80
+      if
+        (clear or char)
+        and api.nvim_buf_get_lines(buf, 0, 1, false)[1] == default
+        and api.nvim_win_get_cursor(0)[2] == #default
+      then
+        active = false
+        api.nvim_buf_set_lines(buf, 0, -1, false, { "" })
+        api.nvim_win_set_cursor(0, { 1, 0 })
+        vim.schedule(done)
+        return clear and "" or nil -- the clearing key itself is spent
+      end
+      active = false
+      vim.schedule(done)
+    end, api.nvim_create_namespace("introduce-variable-key"))
+    -- A terminal paste (Cmd+V) does not pass through on_key: it replaces the suggestion as well.
+    paste = { original = vim.paste }
+    paste.wrapper = function(lines, phase)
+      local original = paste and paste.original or vim.paste
+      if
+        active
+        and api.nvim_get_current_buf() == buf
+        and api.nvim_buf_get_lines(buf, 0, 1, false)[1] == default
+        and (phase == -1 or phase == 1)
+      then
+        api.nvim_buf_set_lines(buf, 0, -1, false, { "" })
+        api.nvim_win_set_cursor(0, { 1, 0 })
+      end
+      done()
+      return original(lines, phase)
+    end
+    vim.paste = paste.wrapper
+    api.nvim_create_autocmd("BufLeave", { buffer = buf, once = true, callback = done })
+  end)
 end
 
 local RESERVED = {
@@ -204,6 +427,8 @@ local RESERVED = {
   _REQUEST = true,
   _ENV = true,
 }
+
+RESERVED_NAMES = RESERVED
 
 local function apply(buf, plan, name)
   local r = plan.range
@@ -256,18 +481,21 @@ function M.extract()
   local tick = api.nvim_buf_get_changedtick(buf)
   local win = api.nvim_get_current_win()
   vim.cmd("normal! \27")
-  -- The name starts empty: it is always typed. Enter on an empty name says so and asks again; Esc
-  -- (nil) cancels.
+  -- The name starts with a suggestion (selected) or empty. Enter on an empty name says so and asks
+  -- again (empty); Esc (nil) cancels.
   local named
-  local function ask()
-    vim.ui.input({ prompt = "Variable name: " }, function(name)
+  local suggestion = M.suggest(buf, plan)
+  local function ask(default)
+    vim.ui.input({ prompt = "Variable name: ", default = default }, function(name)
       if not name then
         return
       end
       name = vim.trim(name):gsub("^%$", "")
       if name == "" then
         vim.notify("Enter a variable name", vim.log.levels.ERROR, { title = "Introduce Variable" })
-        return vim.schedule(ask)
+        return vim.schedule(function()
+          ask()
+        end)
       end
       return named(name)
     end)
@@ -290,7 +518,10 @@ function M.extract()
     end
     apply(buf, plan, name)
   end
-  ask()
+  ask(suggestion)
+  if suggestion then
+    select_default(suggestion)
+  end
 end
 
 return M

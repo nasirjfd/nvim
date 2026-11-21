@@ -223,9 +223,9 @@ lib.test("introduce variable: the real name prompt applies the extraction after 
   screen:close()
 end)
 
-lib.test("introduce variable: the name starts empty and an empty Enter is an error", function()
-  local source = { "<?php", "function demo() {", "    return calculate();", "}" }
-  local screen = editor(source, "calculate()", "unused")
+lib.test("introduce variable: without a suggestion the name starts empty, an empty Enter is an error", function()
+  local source = { "<?php", "function demo() {", "    return 1 + 2;", "}" }
+  local screen = editor(source, "1 + 2", "unused")
   screen:exec("vim.ui.input = _G.original_variable_input")
   local function prompt_open()
     return screen:exec("return vim.bo.filetype == 'snacks_input' and vim.fn.mode() == 'i'")
@@ -241,7 +241,7 @@ lib.test("introduce variable: the name starts empty and an empty Enter is an err
   screen:input("amount<CR>")
   h.wait(screen, function()
     return vim.deep_equal(
-      { "<?php", "function demo() {", "    $amount = calculate();", "    return $amount;", "}" },
+      { "<?php", "function demo() {", "    $amount = 1 + 2;", "    return $amount;", "}" },
       lines(screen)
     )
   end, "the typed name was not used")
@@ -299,3 +299,113 @@ lib.test(
     screen:close()
   end
 )
+
+-- The suggested name: from where the value goes (named argument, array key, property), else from
+-- the value itself; numbered when the scope already has it; none for a plain value.
+for _, case in ipairs({
+  { "    $x = $request->getContent();", "$request->getContent()", "content" },
+  { "    return new ApiLogDocument();", "new ApiLogDocument()", "apiLogDocument" },
+  { "    return new \\App\\Mongo\\ApiLogDocument();", "new \\App\\Mongo\\ApiLogDocument()", "apiLogDocument" },
+  { "    $x = $_SERVER['REQUEST_TIME_FLOAT'] * 1000;", "$_SERVER['REQUEST_TIME_FLOAT']", "requestTimeFloat" },
+  { "    log(direction: ApiCallDirection::Incoming);", "ApiCallDirection::Incoming", "direction" },
+  { "    return ['user_id' => compute()];", "compute()", "userId" },
+  { "    $this->total = $a + $b;", "$a + $b", "total" },
+  { "    return $this->serviceText();", "$this->serviceText()", "serviceText" },
+  { "    return microtime(true);", "microtime(true)", "microtime" },
+  { "    return $order->customer;", "$order->customer", "customer" },
+  { "    return ApiCallDirection::INCOMING_CALL;", "ApiCallDirection::INCOMING_CALL", "incomingCall" },
+  { "    return $request->getContent() . $content;", "$request->getContent()", "content2" },
+  { "    return 1 + 2;", "1 + 2", vim.NIL },
+}) do
+  lib.test("introduce variable: suggests " .. tostring(case[3]) .. " for " .. case[2], function()
+    local source = { "<?php", "function demo($request, $order) {", case[1], "}" }
+    local screen = editor(source, case[2], nil)
+    extract(screen)
+    h.wait(screen, function()
+      return screen:exec("return #_G.variable_prompts") == 1
+    end, "the name prompt did not open")
+    lib.eq(case[3] ~= vim.NIL and case[3] or nil, screen:exec("return _G.variable_prompts[1].default"))
+    screen:close()
+  end)
+end
+
+lib.test("introduce variable: an argument is named after its parameter (the inlay hint)", function()
+  local source = { "<?php", "function demo() {", "    $x = new Extractor(['/api/a']);", "}" }
+  local screen = editor(source, "['/api/a']", nil)
+  screen:exec([[
+    _G.hint_requests = 0
+    vim.lsp.start({
+      name = 'hint-test', root_dir = vim.fn.getcwd(),
+      cmd = function(dispatchers)
+        local closing, id = false, 0
+        return {
+          request = function(method, params, callback)
+            id = id + 1
+            local result
+            if method == 'initialize' then
+              result = { capabilities = { inlayHintProvider = true } }
+            elseif method == 'textDocument/inlayHint' then
+              _G.hint_requests = _G.hint_requests + 1
+              result = {
+                { position = { line = 2, character = 23 }, label = 'pathPrefixesWithoutShipmentRef:', kind = 2 },
+                { position = { line = 2, character = 4 }, label = 'other:', kind = 2 },
+              }
+            end
+            vim.schedule(function() callback(nil, result) end)
+            return true, id
+          end,
+          notify = function() return true end,
+          is_closing = function() return closing end,
+          terminate = function() closing = true; dispatchers.on_exit(0, 0) end,
+        }
+      end,
+    })
+  ]])
+  h.wait(screen, function()
+    return screen:exec("return #vim.lsp.get_clients({ bufnr = 0, name = 'hint-test' }) == 1 and vim.lsp.get_clients({ bufnr = 0, name = 'hint-test' })[1].initialized == true")
+  end, "the language server did not attach")
+  extract(screen)
+  h.wait(screen, function()
+    return screen:exec("return #_G.variable_prompts") == 1
+  end, "the name prompt did not open")
+  lib.eq("pathPrefixesWithoutShipmentRef", screen:exec("return _G.variable_prompts[1].default"))
+  screen:close()
+end)
+
+lib.test("introduce variable: the suggestion is selected, Enter takes it, typing replaces it", function()
+  for _, case in ipairs({
+    { "<CR>", "content" },
+    { "body<CR>", "body" },
+    { "<BS>x<CR>", "x" },
+    { "<End>Type<CR>", "contentType" },
+    { "paste", "pasted" },
+  }) do
+    local source = { "<?php", "function demo($request) {", "    return $request->getContent();", "}" }
+    local screen = editor(source, "$request->getContent()", "unused")
+    screen:exec("vim.ui.input = _G.original_variable_input")
+    screen:input("<D-M-v>")
+    h.wait(screen, function()
+      return screen:exec([[
+        return vim.bo.filetype == 'snacks_input' and vim.fn.mode() == 'i'
+          and #vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_create_namespace('introduce-variable-default'), 0, -1, {}) == 1
+      ]])
+    end, "the suggested name is not shown selected")
+    lib.eq({ "content" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))
+    if case[1] == "paste" then
+      screen:exec("vim.paste({ 'pasted' }, -1)")
+      screen:input("<CR>")
+    else
+      screen:input(case[1])
+    end
+    h.wait(screen, function()
+      return vim.deep_equal({
+        "<?php",
+        "function demo($request) {",
+        "    $" .. case[2] .. " = $request->getContent();",
+        "    return $" .. case[2] .. ";",
+        "}",
+      }, lines(screen))
+    end, "keys " .. case[1] .. " did not name the variable $" .. case[2])
+    screen:close()
+  end
+end)
