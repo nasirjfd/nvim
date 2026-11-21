@@ -112,3 +112,58 @@ for _, side in ipairs({ "left", "right" }) do
     screen:close()
   end)
 end
+
+-- nvim-scrollbar draws a clickable one-column float over the last column of every pane, and a click on
+-- it scrolls the file to that point. The left column's buttons are right-aligned: they must stop before
+-- it, or a click on the right edge of → jumped somewhere in the file instead of taking the side.
+lib.test("left merge buttons stay clear of the scrollbar: every cell of → takes the side without scrolling", function()
+  local dir, base = conflict_repo(20)
+  local screen = h.nvim(dir, 220, 30)
+  screen:exec("vim.cmd('edit merge.txt'); vim.cmd('CodeDiff -- merge.txt')")
+  local session = "require('codediff.ui.lifecycle').get_session(vim.api.nvim_get_current_tabpage())"
+  h.wait(screen, function()
+    return screen:exec("local s = " .. session .. [[
+      return s and s.merge and s.conflict_blocks and #s.conflict_blocks == 2
+        and s.refresh and not s.refresh.loading and not s.refresh.running
+    ]])
+  end, "merge view did not open")
+  local left = screen:exec("local s = " .. session .. [[
+    local p = vim.api.nvim_win_get_position(s.original_win)
+    return { col = p[2] + 1, width = vim.api.nvim_win_get_width(s.original_win), win = s.original_win }
+  ]])
+  local last_col = left.col + left.width - 1
+  -- the scrollbar float is there, on the left column's last column
+  h.wait(screen, function()
+    return screen:exec([[
+      local win, col = ...
+      for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        local c = vim.api.nvim_win_get_config(w)
+        if c.relative ~= '' and vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'scrollbar'
+          and vim.api.nvim_win_get_position(w)[2] + 1 == col then
+          return true
+        end
+      end
+      return false
+    ]], { left.win, last_col })
+  end, "no scrollbar float on the left column's last column")
+  local row
+  h.wait(screen, function()
+    row = h.find_on_screen(screen, "ours-one")
+    return row ~= nil and h.find_on_row(screen, row, "→") ~= nil
+  end, "the left arrow is not visible")
+  local col = h.find_on_row(screen, row, "→")
+  -- " → " is the button: all three cells left of the scrollbar column
+  lib.ok(col + 1 < last_col, ("the → button reaches the scrollbar column (%d, %d)"):format(col, last_col))
+  local top = function()
+    return screen:exec("local s = " .. session .. " return vim.api.nvim_win_call(s.original_win, vim.fn.winsaveview).topline")
+  end
+  local before = top()
+  h.click(screen, row, col + 1)
+  local expected = vim.deepcopy(base)
+  expected[20] = "ours-one"
+  h.wait(screen, function()
+    return vim.deep_equal(expected, screen:exec("local s = " .. session .. " return vim.api.nvim_buf_get_lines(s.result_bufnr, 0, -1, false)"))
+  end, "a click on the right edge of → did not take the side")
+  lib.eq(before, top(), "the click scrolled the left column")
+  screen:close()
+end)
