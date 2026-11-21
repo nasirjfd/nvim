@@ -51,8 +51,9 @@ lib.test("Git K expands only the selected file row over code with the same highl
   ]]), "overlay changed the pane size, focus, or selection")
   lib.ok(screen:exec([[
     local buf = vim.api.nvim_win_get_buf(_G.path_overlay_panel.path_overlay.win)
-    return vim.api.nvim_buf_get_lines(buf, 0, -1, false)[1]:find(..., 1, true) ~= nil
-  ]], { dir .. "/src/long-directory/" }), "the expanded row omitted the full directory")
+    local text = vim.api.nvim_buf_get_lines(buf, 0, -1, false)[1]
+    return text:find(" src/long-directory/", 1, true) ~= nil and not text:find(select(2, ...), 1, true)
+  ]], { "", dir }), "the expanded row does not show the directory from the repository root")
   screen:input("K")
   h.wait(screen, function()
     return screen:exec("return _G.path_overlay_panel.path_overlay == nil")
