@@ -77,7 +77,13 @@ local function render()
   end
   local width = vim.fn.strwidth(text) + 1
   local row = vim.o.lines - vim.o.cmdheight
-  local key = text .. "|" .. width .. "|" .. row
+  -- A floating window belongs to the tab it was opened in: in another tab (a diff view) it would be
+  -- updated there and never seen here. Open it again in this tab.
+  if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) ~= tab then
+    pcall(vim.api.nvim_win_close, win, true)
+    win, shown = nil, nil
+  end
+  local key = text .. "|" .. width .. "|" .. row .. "|" .. tab
   if shown == key and win and vim.api.nvim_win_is_valid(win) then
     return
   end
