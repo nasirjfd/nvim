@@ -223,6 +223,32 @@ lib.test("introduce variable: the real name prompt applies the extraction after 
   screen:close()
 end)
 
+lib.test("introduce variable: the name starts empty and an empty Enter is an error", function()
+  local source = { "<?php", "function demo() {", "    return calculate();", "}" }
+  local screen = editor(source, "calculate()", "unused")
+  screen:exec("vim.ui.input = _G.original_variable_input")
+  local function prompt_open()
+    return screen:exec("return vim.bo.filetype == 'snacks_input' and vim.fn.mode() == 'i'")
+  end
+  screen:input("<D-M-v>")
+  h.wait(screen, prompt_open, "variable name prompt did not open")
+  lib.eq({ "" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"), "the name is not empty")
+  screen:input("<CR>")
+  h.wait(screen, function()
+    return screen:exec("return _G.variable_notes[1]") == "Enter a variable name"
+  end, "an empty name did not show an error")
+  h.wait(screen, prompt_open, "the prompt did not come back after the empty name")
+  screen:input("amount<CR>")
+  h.wait(screen, function()
+    return vim.deep_equal(
+      { "<?php", "function demo() {", "    $amount = calculate();", "    return $amount;", "}" },
+      lines(screen)
+    )
+  end, "the typed name was not used")
+  lib.eq(1, screen:exec("return #_G.variable_notes"))
+  screen:close()
+end)
+
 lib.test(
   "introduce variable: other languages request only variable extraction code actions",
   function()

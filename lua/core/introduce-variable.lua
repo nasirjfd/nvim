@@ -255,17 +255,24 @@ function M.extract()
   end
   local tick = api.nvim_buf_get_changedtick(buf)
   local win = api.nvim_get_current_win()
-  local default, suffix = "value", 1
-  while exists(plan.scope, default) do
-    suffix = suffix + 1
-    default = "value" .. suffix
-  end
   vim.cmd("normal! \27")
-  vim.ui.input({ prompt = "Variable name: ", default = default }, function(name)
-    if not name or name == "" then
-      return
-    end
-    name = vim.trim(name):gsub("^%$", "")
+  -- The name starts empty: it is always typed. Enter on an empty name says so and asks again; Esc
+  -- (nil) cancels.
+  local named
+  local function ask()
+    vim.ui.input({ prompt = "Variable name: " }, function(name)
+      if not name then
+        return
+      end
+      name = vim.trim(name):gsub("^%$", "")
+      if name == "" then
+        vim.notify("Enter a variable name", vim.log.levels.ERROR, { title = "Introduce Variable" })
+        return vim.schedule(ask)
+      end
+      return named(name)
+    end)
+  end
+  function named(name)
     if not name:match("^[%a_][%w_]*$") or RESERVED[name] then
       return warn("Enter a new PHP variable name, with or without $")
     end
@@ -282,7 +289,8 @@ function M.extract()
       return warn("The buffer changed while naming the variable; select the expression again")
     end
     apply(buf, plan, name)
-  end)
+  end
+  ask()
 end
 
 return M
