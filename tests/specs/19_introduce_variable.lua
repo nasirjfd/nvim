@@ -275,12 +275,12 @@ lib.test("introduce variable: one Esc closes the name prompt and changes nothing
 end)
 
 lib.test(
-  "introduce variable: other languages request only variable extraction code actions",
+  "introduce variable: a language without a table requests only variable extraction code actions",
   function()
     local source = { "<?php", "function demo() {", "    return calculate();", "}" }
     local screen = editor(source, "calculate()", "unused")
     screen:exec([[
-    vim.bo.filetype = 'lua'
+    vim.bo.filetype = 'rust'
     vim.lsp.buf.code_action = function(opts)
       _G.extract_action = {
         kind = opts.context.only[1], apply = opts.apply,
