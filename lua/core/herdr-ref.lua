@@ -9,8 +9,17 @@ function M.graph_reference()
   if not graph then
     return nil
   end
+  -- The branch of the selected row (the one the graph names in its branch column) first.
+  local branch
+  local format = package.loaded["codediff.ui.graph.format"]
+  if format and graph.winid and vim.api.nvim_win_is_valid(graph.winid) then
+    local line = vim.api.nvim_win_get_cursor(graph.winid)[1]
+    branch = format.branch_names(graph.commits or {})[line]
+  end
   local branches = graph.filters and graph.filters.branch
-  local branch = branches and #branches > 0 and table.concat(branches, ", ") or nil
+  if not branch and branches and #branches > 0 then
+    branch = table.concat(branches, ", ")
+  end
   if not branch then
     local result = vim
       .system({ "git", "-C", graph.root, "rev-parse", "--abbrev-ref", "HEAD" }, { text = true })
