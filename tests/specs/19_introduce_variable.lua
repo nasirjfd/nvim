@@ -249,6 +249,31 @@ lib.test("introduce variable: the name starts empty and an empty Enter is an err
   screen:close()
 end)
 
+lib.test("introduce variable: one Esc closes the name prompt and changes nothing", function()
+  local source = { "<?php", "function demo() {", "    return calculate();", "}" }
+  local screen = editor(source, "calculate()", "unused")
+  screen:exec("vim.ui.input = _G.original_variable_input")
+  for _, typed in ipairs({ "", "amo" }) do
+    screen:input("<Esc>")
+    screen:exec([[
+      local first, last = vim.fn.getline(3):find('calculate()', 1, true)
+      vim.api.nvim_win_set_cursor(0, {3, first - 1}); vim.cmd('normal! v')
+      vim.api.nvim_win_set_cursor(0, {3, last - 1})
+    ]])
+    screen:input("<D-M-v>")
+    h.wait(screen, function()
+      return screen:exec("return vim.bo.filetype == 'snacks_input' and vim.fn.mode() == 'i'")
+    end, "variable name prompt did not open")
+    screen:input(typed .. "<Esc>")
+    h.wait(screen, function()
+      return screen:exec("return vim.bo.filetype ~= 'snacks_input' and vim.fn.mode() == 'n'")
+    end, "one Esc did not close the prompt at once (typed: '" .. typed .. "')", 400)
+    lib.eq(source, lines(screen))
+  end
+  lib.eq(0, screen:exec("return #_G.variable_notes"))
+  screen:close()
+end)
+
 lib.test(
   "introduce variable: other languages request only variable extraction code actions",
   function()

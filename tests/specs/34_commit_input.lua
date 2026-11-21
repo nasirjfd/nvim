@@ -111,15 +111,11 @@ lib.test(
       position(screen, col)
     end
     screen:input("<Esc>")
-    h.wait(screen, function()
-      return screen:exec("return vim.fn.mode() == 'n'")
-    end, "Escape did not leave Insert mode")
-    screen:input("<Esc>")
     local ok, err = pcall(h.wait, screen, function()
       return screen:exec(
-        "return vim.api.nvim_get_current_buf() ~= _G.commit_input_buf and #_G.commit_calls == 0"
+        "return vim.api.nvim_get_current_buf() ~= _G.commit_input_buf and #_G.commit_calls == 0 and vim.fn.mode() == 'n'"
       )
-    end, "Escape no longer cancels the prompt")
+    end, "one Escape did not cancel the prompt")
     lib.ok(ok, tostring(err) .. " stderr: " .. screen.stderr)
     screen:close()
   end

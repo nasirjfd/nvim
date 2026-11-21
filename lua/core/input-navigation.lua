@@ -18,8 +18,10 @@ function M.attach(buf, cancel)
       end, { buffer = buf, silent = true, desc = desc })
     end
   end
-  map({ "<M-Left>", "<M-b>", "<Esc>b" }, "<C-Left>", "b", "Previous Word")
-  map({ "<M-Right>", "<M-f>", "<Esc>f" }, "<C-Right>", "w", "Next Word")
+  -- No <Esc>b / <Esc>f mappings: with them Neovim held every Escape for 'timeoutlen' (1 s) waiting
+  -- for the b/f. The Insert-mode Escape below catches a split Option+arrow itself.
+  map({ "<M-Left>", "<M-b>" }, "<C-Left>", "b", "Previous Word")
+  map({ "<M-Right>", "<M-f>" }, "<C-Right>", "w", "Next Word")
   map({ "<D-Left>" }, "<Home>", "0", "Start of Line")
   map({ "<D-Right>" }, "<End>", "$", "End of Line")
   -- Keep the prompt's normal-mode cancellation ahead of the legacy prefixes.
@@ -32,9 +34,9 @@ function M.attach(buf, cancel)
     })
   end
 
-  -- Some terminal relays split Option+arrow into Escape followed by b/f.
-  -- An immediate Escape would leave Insert mode; the next one would cancel
-  -- the prompt. Give only that legacy sequence a short chance to complete.
+  -- Some terminal relays split Option+arrow into Escape followed by b/f: give only that legacy
+  -- sequence a short chance to complete. A lone Escape closes the prompt at once, like any dialog
+  -- (it used to only leave Insert mode, and a second one closed it).
   vim.keymap.set("i", "<Esc>", function()
     vim.wait(100, function()
       return vim.fn.getchar(1) ~= 0
@@ -45,7 +47,12 @@ function M.attach(buf, cancel)
     elseif next_key == string.byte("f") or next_key == "f" then
       move("<C-Right>", "w")
     else
-      vim.cmd.stopinsert()
+      if cancel then
+        vim.cmd.stopinsert()
+        cancel()
+      else
+        vim.cmd.stopinsert()
+      end
       if next_key then
         api.nvim_feedkeys(
           type(next_key) == "number" and vim.fn.nr2char(next_key) or next_key,
