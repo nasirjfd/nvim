@@ -165,6 +165,29 @@ map("n", "<F2>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
 map("n", "<S-F6>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
 map("n", "<F18>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
 
+-- cmd+r r (or cmd+r cmd+r) -> rename symbol. Cmd+R reads the next key itself instead of a two-key
+-- mapping: that one gave up after 'timeoutlen', and a late r then replaced the character under the
+-- cursor. Any other key after Cmd+R does what it always does. Without a language server that can
+-- rename here, a message says so (instead of nothing happening).
+local function rename_symbol()
+  if #vim.lsp.get_clients({ bufnr = 0, method = "textDocument/rename" }) == 0 then
+    vim.notify("No language server can rename here", vim.log.levels.WARN, { title = "Rename" })
+    return
+  end
+  vim.lsp.buf.rename()
+end
+map("n", "<D-r>", function()
+  local ok, key = pcall(vim.fn.getcharstr)
+  if not ok then
+    return
+  end
+  if key == "r" or key == vim.keycode("<D-r>") then
+    rename_symbol()
+  elseif key ~= vim.keycode("<Esc>") then
+    vim.api.nvim_feedkeys(key, "m", false)
+  end
+end, { desc = "Rename Symbol (Cmd+R R)" })
+
 -- cmd+g -> goto line
 map("n", "<D-g>", function()
   vim.ui.input({ prompt = "Go to line: " }, function(input)

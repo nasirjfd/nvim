@@ -13,16 +13,70 @@ lib.test("rename shortcuts invoke LSP rename in the original editor", function()
       assert(vim.api.nvim_get_current_buf() == _G.rename_buf, 'rename ran in the find bar')
       _G.rename_calls = _G.rename_calls + 1
     end
+    -- a language server that can rename (Cmd+R R checks for one)
+    vim.lsp.start({
+      name = 'rename-test', root_dir = vim.fn.getcwd(),
+      cmd = function(dispatchers)
+        local closing = false
+        return {
+          request = function(method, _, callback)
+            vim.schedule(function()
+              callback(nil, method == 'initialize' and { capabilities = { renameProvider = true } } or nil)
+            end)
+            return true, 1
+          end,
+          notify = function() return true end,
+          is_closing = function() return closing end,
+          terminate = function() closing = true; dispatchers.on_exit(0, 0) end,
+        }
+      end,
+    })
     -- Keymaps normally hold the LSP function directly; install again with the test spy.
     package.loaded['core.gui-keymaps'] = nil
     require('core.gui-keymaps')
   ]])
-  for i, key in ipairs({ "<F2>", "<S-F6>", "<F18>", "<D-h>h", "<D-h><D-h>" }) do
-    screen:input(key)
+  h.wait(screen, function()
+    return screen:exec("return #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/rename' }) == 1")
+  end, "the language server did not attach")
+  local calls = 0
+  for _, key in ipairs({ "<F2>", "<S-F6>", "<F18>", "<D-h>h", "<D-h><D-h>", "<D-r>r", "<D-r><D-r>", "slow" }) do
+    if key == "slow" then
+      -- r pressed well after timeoutlen still renames, and does not replace a character
+      screen:input("<D-r>")
+      vim.wait(1300)
+      screen:input("r")
+    else
+      screen:input(key)
+    end
+    calls = calls + 1
     h.wait(screen, function()
-      return screen:exec("return _G.rename_calls") == i
+      return screen:exec("return _G.rename_calls") == calls
     end, "rename shortcut failed: " .. key)
   end
+  lib.eq({ "symbol" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))
+  -- another key after Cmd+R does its own job: x deletes a character
+  screen:input("<D-r>x")
+  h.wait(screen, function()
+    return screen:exec("return vim.api.nvim_get_current_line()") == "ymbol"
+  end, "the key after Cmd+R was lost")
+  lib.eq(calls, screen:exec("return _G.rename_calls"))
+  screen:close()
+end)
+
+lib.test("Cmd+R R without a language server that renames says so", function()
+  local dir = h.tmpdir()
+  h.write(dir .. "/rename.txt", { "symbol" })
+  local screen = h.nvim(dir)
+  screen:exec([[
+    vim.cmd('edit rename.txt')
+    _G.rename_notes = {}
+    vim.notify = function(message) table.insert(_G.rename_notes, message) end
+  ]])
+  screen:input("<D-r>r")
+  h.wait(screen, function()
+    return screen:exec("return _G.rename_notes[1]") == "No language server can rename here"
+  end, "no message without a language server")
+  lib.eq({ "symbol" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))
   screen:close()
 end)
 

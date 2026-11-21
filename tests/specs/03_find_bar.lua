@@ -260,7 +260,7 @@ lib.test(
   end
 )
 
-lib.test("find bar: Cmd+H opens find and replace, Cmd+R does nothing", function()
+lib.test("find bar: Cmd+H opens find and replace, Cmd+R is rename only", function()
   local dir = h.tmpdir()
   h.write(dir .. "/a.txt", { "alpha beta" })
   local screen = h.nvim(dir)
@@ -275,6 +275,6 @@ lib.test("find bar: Cmd+H opens find and replace, Cmd+R does nothing", function(
       return false
     ]])
   end, "Cmd+H did not open the bar with its replace field")
-  lib.eq(0, screen:exec("return vim.fn.maparg('<D-r>', 'n') == '' and 0 or 1"), "Cmd+R is still mapped")
+  lib.eq("Rename Symbol (Cmd+R R)", screen:exec("return vim.fn.maparg('<D-r>', 'n', false, true).desc"), "Cmd+R is not rename")
   screen:close()
 end)
