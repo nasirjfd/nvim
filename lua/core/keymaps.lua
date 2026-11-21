@@ -98,7 +98,51 @@ vim.keymap.set("t", "<C-j>", "<cmd>wincmd j<cr>", { desc = "Go Down" })
 vim.keymap.set("t", "<C-k>", "<cmd>wincmd k<cr>", { desc = "Go Up" })
 vim.keymap.set("t", "<C-l>", "<cmd>wincmd l<cr>", { desc = "Go Right" })
 
+-- In the Git pane: the current branch of the project the cursor is in (its row, its branch line or
+-- one of its files). nil outside the pane; false (after a message) when there is no branch.
+local function git_pane_branch()
+  local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
+  local panel = ok and lifecycle.get_panel_view(vim.api.nvim_get_current_tabpage())
+  if not panel or not panel.tree or vim.api.nvim_get_current_buf() ~= panel.bufnr then
+    return nil
+  end
+  local node = panel.tree:get_node(vim.api.nvim_win_get_cursor(0)[1])
+  local root = node and node.data and node.data.git_root
+  while node do
+    local data = node.data or {}
+    if data.type == "repository" then
+      if data.detached or not data.branch or data.branch == "" then
+        vim.notify((data.name or "This project") .. " is not on a branch", vim.log.levels.WARN)
+        return false
+      end
+      return data.branch
+    end
+    root = root or data.git_root
+    node = node._parent_id and panel.tree:get_node(node._parent_id)
+  end
+  -- One repository: no project row, ask git
+  root = root or (panel.data and panel.data.git_root) or vim.fn.getcwd()
+  local branch = vim.trim(vim.fn.system({ "git", "-C", root, "branch", "--show-current" }))
+  if vim.v.shell_error ~= 0 or branch == "" then
+    vim.notify("This project is not on a branch", vim.log.levels.WARN)
+    return false
+  end
+  return branch
+end
+
 local function copy_reference(selection)
+  local branch = git_pane_branch()
+  if branch ~= nil then
+    if branch then
+      pcall(vim.fn.setreg, "+", branch)
+      pcall(vim.fn.setreg, '"', branch)
+      if vim.fn.has("mac") == 1 then
+        vim.fn.system({ "pbcopy" }, branch)
+      end
+      vim.notify("Branch name copied: " .. branch)
+    end
+    return
+  end
   local graph_reference = require("core.herdr-ref").graph_reference()
   local file = vim.fn.expand("%:p")
   if not graph_reference and (file == "" or vim.bo.buftype ~= "") then
