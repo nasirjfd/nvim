@@ -1,13 +1,13 @@
 -- JetBrains-style find / replace bar at the top right of the window, instead of Vim's search line.
 --
---   /  or Cmd+F   find                 Cmd+R   find and replace (Cmd+R twice: LSP rename)
+--   /  or Cmd+F   find                 Cmd+H   find and replace (Cmd+H twice: LSP rename)
 --
 -- Opening it on the previous search only highlights it where you are (the text may be about to be
 -- replaced); the jump comes with Enter or a change of the text.
 -- Typing searches as you go and jumps to the first match from the cursor (or, when that one is out of
 -- sight and there is a match on the screen, to the first match on the screen). The buttons on the
 -- right toggle Match case (Aa), Words (W) and Regex (.*); they can be clicked, or toggled with
--- Option+C / Option+W / Option+X like in JetBrains. The chevron on the left (or Cmd+R) shows the
+-- Option+C / Option+W / Option+X like in JetBrains. The chevron on the left (or Cmd+H) shows the
 -- replace field, with Replace and Replace All buttons (Option+P / Option+A).
 --
 -- In the bar: Enter / Down next match, Shift+Enter / Up previous, Tab switches between the find
@@ -25,7 +25,7 @@ local ui_ns = api.nvim_create_namespace("find_bar_ui")
 local opts = { case = false, word = false, regex = false }
 local last = { find = "", replace = "" }
 
-local state -- the open bar: { win, buf, target, tbuf, origin, replace, buttons, opened_at, by_r }
+local state -- the open bar: { win, buf, target, tbuf, origin, replace, buttons, opened_at, by_h }
 
 local function set_highlights()
   local function link(name, to)
@@ -586,21 +586,21 @@ local function keymaps(buf)
   map("<D-f>", function()
     show_replace(false)
   end)
-  map("<D-r>", function()
-    -- Cmd+R pressed twice: LSP rename, as Cmd+R Cmd+R did before the bar
-    if state.by_r and (vim.uv.now() - state.opened_at) < 800 then
+  map("<D-h>", function()
+    -- Cmd+H pressed twice: LSP rename
+    if state.by_h and (vim.uv.now() - state.opened_at) < 800 then
       M.close()
       vim.lsp.buf.rename()
       return
     end
     show_replace(true)
   end)
-  map("r", function()
-    if state.by_r and (vim.uv.now() - state.opened_at) < 800 then
+  map("h", function()
+    if state.by_h and (vim.uv.now() - state.opened_at) < 800 then
       M.close()
       vim.lsp.buf.rename()
     else
-      api.nvim_feedkeys("r", "in", false)
+      api.nvim_feedkeys("h", "in", false)
     end
   end, { "i", "s" })
   -- one line per field: Backspace at the start and Delete at the end don't join them
@@ -704,7 +704,7 @@ function M.open(o)
     replace = false,
     buttons = {},
     opened_at = vim.uv.now(),
-    by_r = o.replace or false,
+    by_h = o.replace or false,
   }
   keymaps(buf)
   local group = api.nvim_create_augroup("FindBar", { clear = true })
@@ -835,14 +835,14 @@ function M.setup()
   end
   vim.keymap.set("n", "/", find, { desc = "Find" })
   vim.keymap.set("n", "<D-f>", find, { desc = "Find" })
-  vim.keymap.set("n", "<D-r>", replace, { desc = "Replace (twice: rename symbol)" })
+  vim.keymap.set("n", "<D-h>", replace, { desc = "Replace (twice: rename symbol)" })
   vim.keymap.set("x", "/", function()
     M.open({ text = selection() })
   end, { desc = "Find selection" })
   vim.keymap.set("x", "<D-f>", function()
     M.open({ text = selection() })
   end, { desc = "Find selection" })
-  vim.keymap.set("x", "<D-r>", function()
+  vim.keymap.set("x", "<D-h>", function()
     M.open({ text = selection(), replace = true })
   end, { desc = "Replace selection" })
 end

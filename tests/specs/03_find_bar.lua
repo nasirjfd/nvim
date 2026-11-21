@@ -259,3 +259,22 @@ lib.test(
     screen:close()
   end
 )
+
+lib.test("find bar: Cmd+H opens find and replace, Cmd+R does nothing", function()
+  local dir = h.tmpdir()
+  h.write(dir .. "/a.txt", { "alpha beta" })
+  local screen = h.nvim(dir)
+  screen:exec("vim.cmd('edit a.txt')")
+  screen:input("<D-h>")
+  h.wait(screen, function()
+    return screen:exec([[
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        local buf = vim.api.nvim_win_get_buf(win)
+        if vim.bo[buf].filetype == "findbar" then return vim.api.nvim_buf_line_count(buf) == 2 end
+      end
+      return false
+    ]])
+  end, "Cmd+H did not open the bar with its replace field")
+  lib.eq(0, screen:exec("return vim.fn.maparg('<D-r>', 'n') == '' and 0 or 1"), "Cmd+R is still mapped")
+  screen:close()
+end)

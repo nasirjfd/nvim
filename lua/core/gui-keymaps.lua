@@ -159,8 +159,8 @@ map({ "n", "x", "i" }, "<D-S-F12>", function()
   require("core.symbol-search").open(true)
 end, { desc = "Workspace Symbols" })
 
--- cmd+r cmd+r -> rename symbol: the first cmd+r opens the replace bar, the second one in the bar
--- renames (core/find-bar.lua), so a single cmd+r doesn't wait for a second key
+-- cmd+h cmd+h -> rename symbol: the first cmd+h opens the replace bar, the second one in the bar
+-- renames (core/find-bar.lua), so a single cmd+h doesn't wait for a second key
 map("n", "<F2>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
 map("n", "<S-F6>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
 map("n", "<F18>", vim.lsp.buf.rename, { desc = "Rename Symbol" })
@@ -174,11 +174,6 @@ map("n", "<D-g>", function()
     end
   end)
 end, { desc = "Go to Line" })
-
--- cmd+h -> find & replace in buffer
-map("n", "<D-h>", function()
-  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(":%s/", true, false, true), "n", false)
-end, { desc = "Find & Replace" })
 
 -- cmd+/ -> comment line, then move down (like JetBrains)
 local function comment_line_down()

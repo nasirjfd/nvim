@@ -17,7 +17,7 @@ lib.test("rename shortcuts invoke LSP rename in the original editor", function()
     package.loaded['core.gui-keymaps'] = nil
     require('core.gui-keymaps')
   ]])
-  for i, key in ipairs({ "<F2>", "<S-F6>", "<F18>", "<D-r>r", "<D-r><D-r>" }) do
+  for i, key in ipairs({ "<F2>", "<S-F6>", "<F18>", "<D-h>h", "<D-h><D-h>" }) do
     screen:input(key)
     h.wait(screen, function()
       return screen:exec("return _G.rename_calls") == i

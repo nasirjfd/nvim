@@ -35,8 +35,9 @@ keybind = super+shift+e=csi:101;10u
 # Keys for Neovim that Ghostty would otherwise keep or turn into text. Each sends the kitty
 # keyboard encoding of the key (CSI <codepoint>;<1 + shift 1, alt 2, ctrl 4, super 8>u), which
 # Neovim reads as the real <D-…>/<M-…> key. Made-up codes like csi:97~ are dropped by Neovim 0.12.
-# cmd+r cmd+r renames the symbol in Neovim (see lua/core/find-bar.lua)
-keybind = super+r=csi:114;9u
+# cmd+h replaces, cmd+h cmd+h renames the symbol in Neovim (see lua/core/find-bar.lua); without
+# this macOS hides Ghostty
+keybind = super+h=csi:104;9u
 # cmd+s saves, cmd+shift+c copies the file path, cmd+j / cmd+k next / previous hunk
 keybind = super+s=csi:115;9u
 keybind = super+shift+c=csi:99;10u
