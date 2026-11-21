@@ -11,6 +11,10 @@ return {
                 win:execute("cancel")
               end
             end)
+            -- text the prompt opens with is shown selected: typing replaces it
+            if win:valid() and vim.api.nvim_get_current_buf() == win.buf then
+              require("core.input-select").attach(win.buf)
+            end
           end)
         end,
       },

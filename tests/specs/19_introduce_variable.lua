@@ -387,7 +387,7 @@ lib.test("introduce variable: the suggestion is selected, Enter takes it, typing
     h.wait(screen, function()
       return screen:exec([[
         return vim.bo.filetype == 'snacks_input' and vim.fn.mode() == 'i'
-          and #vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_create_namespace('introduce-variable-default'), 0, -1, {}) == 1
+          and #vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_create_namespace('input-default-selection'), 0, -1, {}) == 1
       ]])
     end, "the suggested name is not shown selected")
     lib.eq({ "content" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))

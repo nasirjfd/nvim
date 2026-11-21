@@ -1,7 +1,7 @@
 local lib = require("lib")
 local h = require("support")
 
-local function commit_prompt()
+local function commit_prompt(typed)
   local dir = h.repo({ ["a.txt"] = { "before" } })
   h.write(dir .. "/a.txt", { "after" })
   h.git(dir, "add", "a.txt")
@@ -50,7 +50,7 @@ local function commit_prompt()
     ]]))
   end)
   screen:exec("_G.commit_input_buf = vim.api.nvim_get_current_buf()")
-  screen:input("fix payment retry handling")
+  screen:input(typed or "fix payment retry handling")
   return screen
 end
 
@@ -120,3 +120,27 @@ lib.test(
     screen:close()
   end
 )
+
+-- c opens the commit message with the branch's last commit message ("base"), selected: typing
+-- replaces it, Enter commits it as it is, End keeps it to add to it.
+for _, case in ipairs({
+  { "", "<CR>", "base" },
+  { "", "new message<CR>", "new message" },
+  { "", "<End> fixup<CR>", "base fixup" },
+}) do
+  lib.test("commit message starts with the last commit message, selected: " .. case[2], function()
+    local screen = commit_prompt(case[1])
+    h.wait(screen, function()
+      return screen:exec([[
+        return vim.api.nvim_get_current_line() == 'base'
+          and #vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_create_namespace('input-default-selection'), 0, -1, {}) == 1
+      ]])
+    end, "the last commit message is not shown selected")
+    screen:input(case[2])
+    h.wait(screen, function()
+      local calls = screen:exec("return _G.commit_calls")
+      return calls[1] and calls[1][2] == case[3]
+    end, "the commit message was not " .. case[3])
+    screen:close()
+  end)
+end

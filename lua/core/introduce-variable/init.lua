@@ -308,84 +308,6 @@ function M.suggest(buf, plan, lang)
   return unique
 end
 
--- The suggestion is shown selected: the first typed character replaces it, Backspace clears it,
--- moving the cursor keeps it (like a selected text field).
--- The suggestion is shown selected, like a selected text field: the first key decides. A
--- character or a paste replaces it, Backspace / Ctrl+W / Ctrl+U clear it, anything else (Enter,
--- arrows, Home/End) keeps it as text. Handled in vim.on_key, before the key runs, so keys typed
--- faster than the screen updates (a paste and Enter at once) are still in order.
-local CLEAR = { [vim.keycode("<BS>")] = true, [vim.keycode("<C-w>")] = true, [vim.keycode("<C-u>")] = true }
-local function select_default(default)
-  local ns = api.nvim_create_namespace("introduce-variable-default")
-  -- The prompt window opens a moment after vim.ui.input returns.
-  vim.schedule(function()
-    local buf = api.nvim_get_current_buf()
-    if vim.bo[buf].filetype ~= "snacks_input" or api.nvim_buf_get_lines(buf, 0, 1, false)[1] ~= default then
-      return
-    end
-    api.nvim_buf_set_extmark(buf, ns, 0, 0, { end_col = #default, hl_group = "Visual" })
-    local listener, paste
-    local active = true -- turned off at the first key: done() itself runs after the key
-    local function done()
-      active = false
-      vim.on_key(nil, listener)
-      if paste and vim.paste == paste.wrapper then
-        vim.paste = paste.original
-      end
-      paste = nil
-      if api.nvim_buf_is_valid(buf) then
-        api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-      end
-    end
-    listener = vim.on_key(function(key, typed)
-      if not active then
-        return
-      end
-      typed = typed ~= "" and typed or key
-      if not api.nvim_buf_is_valid(buf) or api.nvim_get_current_buf() ~= buf then
-        active = false
-        return vim.schedule(done)
-      end
-      if vim.fn.mode() ~= "i" then
-        return
-      end
-      local clear = CLEAR[typed]
-      local char = not clear and #typed >= 1 and typed:byte(1) >= 32 and typed:byte(1) ~= 0x80
-      if
-        (clear or char)
-        and api.nvim_buf_get_lines(buf, 0, 1, false)[1] == default
-        and api.nvim_win_get_cursor(0)[2] == #default
-      then
-        active = false
-        api.nvim_buf_set_lines(buf, 0, -1, false, { "" })
-        api.nvim_win_set_cursor(0, { 1, 0 })
-        vim.schedule(done)
-        return clear and "" or nil -- the clearing key itself is spent
-      end
-      active = false
-      vim.schedule(done)
-    end, api.nvim_create_namespace("introduce-variable-key"))
-    -- A terminal paste (Cmd+V) does not pass through on_key: it replaces the suggestion as well.
-    paste = { original = vim.paste }
-    paste.wrapper = function(lines, phase)
-      local original = paste and paste.original or vim.paste
-      if
-        active
-        and api.nvim_get_current_buf() == buf
-        and api.nvim_buf_get_lines(buf, 0, 1, false)[1] == default
-        and (phase == -1 or phase == 1)
-      then
-        api.nvim_buf_set_lines(buf, 0, -1, false, { "" })
-        api.nvim_win_set_cursor(0, { 1, 0 })
-      end
-      done()
-      return original(lines, phase)
-    end
-    vim.paste = paste.wrapper
-    api.nvim_create_autocmd("BufLeave", { buffer = buf, once = true, callback = done })
-  end)
-end
-
 local function apply(buf, plan, lang, name)
   local r = plan.range
   local original = api.nvim_buf_get_lines(buf, plan.row, plan.last, false)
@@ -485,10 +407,8 @@ function M.extract()
     end
     apply(buf, plan, lang, name)
   end
+  -- shown selected (core/input-select.lua): typing replaces it
   ask(suggestion)
-  if suggestion then
-    select_default(suggestion)
-  end
 end
 
 return M
