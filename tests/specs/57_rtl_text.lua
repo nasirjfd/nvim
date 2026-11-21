@@ -147,3 +147,32 @@ lib.test("rtl: Persian values in Kulala's response window read right to left", f
   end, "the Persian value is not drawn right to left in Kulala's response")
   screen:close()
 end)
+
+lib.test("rtl: Persian text in both panes of a commit's diff reads right to left", function()
+  local dir = h.repo({ ["a.txt"] = { "x", "سلام world" } })
+  h.write(dir .. "/a.txt", { "y", "سلام world" })
+  h.git(dir, "commit", "-qam", "change")
+  local screen = h.nvim(dir)
+  screen:command("CodeDiff graph")
+  h.wait(screen, function()
+    return screen:exec([[
+      local g = require('codediff.ui.graph').get()
+      return g and not g.loading and #g.commits > 0
+    ]])
+  end, "graph did not load")
+  screen:exec([[
+    local graph = require('codediff.ui.graph')
+    local g = graph.get()
+    graph.open_file(g, g.commits[1], 'a.txt')
+  ]])
+  -- the old revision (nowrite buffer) and the working file both show it in visual order
+  h.wait(screen, function()
+    local count = 0
+    for row = 1, screen.height do
+      local _, n = h.row_text(screen, row):gsub("ﻡﻼﺳ world", "")
+      count = count + n
+    end
+    return count == 2
+  end, "the Persian line is not drawn right to left in both diff panes")
+  screen:close()
+end)

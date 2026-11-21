@@ -235,12 +235,13 @@ end
 
 local skip_row = {} -- window -> its cursor row (drawn raw), set in on_win
 
--- Ordinary files and write-through buffers (the row edit form). Other special buffers only when they
+-- Ordinary files, write-through buffers (the row edit form) and read-only file contents (nowrite: a
+-- past revision in a Git diff). Other special buffers only when they
 -- opt in with `vim.b.rtl_text = true` (dbee's result pane): pickers, prompts, input boxes and
 -- terminals are never drawn on.
 local function allowed(buf)
   local bt = vim.bo[buf].buftype
-  return bt == "" or bt == "acwrite" or vim.b[buf].rtl_text == true
+  return bt == "" or bt == "acwrite" or bt == "nowrite" or vim.b[buf].rtl_text == true
 end
 
 function M.setup()
