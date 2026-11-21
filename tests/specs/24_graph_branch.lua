@@ -47,10 +47,15 @@ end)
 
 lib.test("branch lists are wide and show who made each branch's last commit", function()
   local dir = h.repo({ ["a.txt"] = { "base" } })
-  h.git(dir, "checkout", "-qb", "feat/core-387-add-a-new-webhook-for-pickup-fail-webhook-retry")
+  h.git(dir, "checkout", "-qb", "a/core-387-add-a-new-webhook-for-pickup-fail-webhook-retry")
   h.git(dir, "-c", "user.name=Grace Hopper", "commit", "-q", "--allow-empty", "-m", "side")
   h.git(dir, "checkout", "-q", "-")
-  local screen = h.nvim(dir, 180, 45, { "a.txt" })
+  -- more branches than fit: the list's height must stay a whole number of rows (snacks computes
+  -- lines * 0.8 - 10 when the list does not say)
+  for i = 1, 60 do
+    h.git(dir, "branch", "b" .. i)
+  end
+  local screen = h.nvim(dir, 180, 47, { "a.txt" }) -- 47 * 0.8 - 10 is not a whole number
   screen:exec([[
     require("codediff.ui.explorer.actions").pick_branch(vim.fn.getcwd(), { prompt = "Squash which branch?", skip_current = true }, function() end)
   ]])
@@ -62,5 +67,25 @@ lib.test("branch lists are wide and show who made each branch's last commit", fu
     return vim.api.nvim_win_get_width(p.list.win.win)
   ]])
   lib.ok(width >= 140, "the branch list is not wide: " .. width)
+  local height = screen:exec([[
+    local p = Snacks.picker.get({ source = "select" })[1]
+    return vim.api.nvim_win_get_height(p.list.win.win)
+  ]])
+  lib.ok(height >= 25, "the branch list is not tall: " .. height)
+  lib.ok(not h.find_on_screen(screen, "not integral"), "snacks failed to size the list")
+  -- the graph's branch filter (a multi-select list) shows the same
+  screen:input("<Esc>")
+  screen:exec("vim.cmd('stopinsert') vim.cmd('CodeDiff graph')")
+  h.wait(screen, function()
+    return screen:exec([[
+      local g = require('codediff.ui.graph').get()
+      return g and not g.loading and #g.commits > 0
+    ]])
+  end, "graph did not load")
+  screen:exec("require('codediff.ui.graph').pick_branch(require('codediff.ui.graph').get())")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "just now · Grace Hopper") ~= nil
+  end, "the branch filter does not show the last commit's author")
+  lib.ok(not h.find_on_screen(screen, "not integral"), "snacks failed to size the branch filter")
   screen:close()
 end)
