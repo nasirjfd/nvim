@@ -44,3 +44,23 @@ lib.test("graph checkout offers the selected payment branch, not its CSAT descen
   lib.eq(tip, vim.trim(h.git(dir, "rev-parse", "HEAD")))
   screen:close()
 end)
+
+lib.test("branch lists are wide and show who made each branch's last commit", function()
+  local dir = h.repo({ ["a.txt"] = { "base" } })
+  h.git(dir, "checkout", "-qb", "feat/core-387-add-a-new-webhook-for-pickup-fail-webhook-retry")
+  h.git(dir, "-c", "user.name=Grace Hopper", "commit", "-q", "--allow-empty", "-m", "side")
+  h.git(dir, "checkout", "-q", "-")
+  local screen = h.nvim(dir, 180, 45, { "a.txt" })
+  screen:exec([[
+    require("codediff.ui.explorer.actions").pick_branch(vim.fn.getcwd(), { prompt = "Squash which branch?", skip_current = true }, function() end)
+  ]])
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "just now · Grace Hopper") ~= nil
+  end, "the branch row does not show its last commit's author")
+  local width = screen:exec([[
+    local p = Snacks.picker.get({ source = "select" })[1]
+    return vim.api.nvim_win_get_width(p.list.win.win)
+  ]])
+  lib.ok(width >= 140, "the branch list is not wide: " .. width)
+  screen:close()
+end)
