@@ -1251,7 +1251,8 @@ return {
         lsp_goto("definition", function()
           Snacks.picker.lsp_definitions()
         end, true, function()
-          Snacks.picker.lsp_references({ include_declaration = false })
+          -- usages asked for while the cursor rested on the name (or the list opens loading): core/usages.lua
+          require("core.usages").show()
         end)
       end,
       desc = "Definition",

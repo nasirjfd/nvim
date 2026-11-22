@@ -20,6 +20,7 @@ require("core.http-files")
 require("core.http-highlight").setup()
 require("modules.http_requests")
 require("core.modal-backdrop").setup()
+require("core.usages").setup() -- gd on a declaration: usages fetched ahead, shown at once
 require("core.diff-inlay-hints").setup() -- quiet gray hints in the Git diff views
 require("core.find-bar").setup()
 require("modules.phpunit.gutter").setup()
