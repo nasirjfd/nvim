@@ -9,22 +9,21 @@ local M = {}
 local api = vim.api
 local ns = api.nvim_create_namespace("git_branch_commit")
 
-local BRANCH_HINT = "feat/core-334-short-description"
-local MESSAGE_HINT = "feat(core-334): short description"
-
---- The commit message for a branch name (pure): `type/prefix-123-some-text` -> `type(prefix-123): some text`.
+--- The commit message for a branch name (pure), for every character typed so far:
+---   feat -> feat, feat/ -> feat(), feat/core-33 -> feat(core-33), feat/core-334- -> feat(core-334): ,
+---   feat/core-334-some-text -> feat(core-334): some text
 function M.message_for(branch)
-  branch = vim.trim(branch or "")
-  local kind, rest = branch:match("^([%w]+)/(.*)$")
+  branch = (branch or ""):gsub("^%s+", "")
+  local kind, rest = branch:match("^([^/]*)/(.*)$")
   if not kind then
-    return ""
+    return branch -- the type, being typed
   end
-  local scope, text = rest:match("^(%a[%w]*[-_]%d+)[-_ ]?(.*)$")
+  -- the ticket ends at the separator after its number; what follows is the text
+  local scope, text = rest:match("^(.-%d+)[-_ ](.*)$")
   if not scope then
-    scope, text = nil, rest
+    return kind .. "(" .. rest .. ")"
   end
-  text = vim.trim((text:gsub("[-_]+", " "):gsub("%s+", " ")))
-  return kind .. (scope and ("(" .. scope .. ")") or "") .. ": " .. text
+  return kind .. "(" .. scope .. "): " .. text:gsub("[-_]", " "):gsub("  +", " ")
 end
 
 --- The branch name git gets: spaces become dashes.
@@ -93,19 +92,6 @@ local function repository()
   return out.code == 0 and vim.trim(out.stdout) or nil
 end
 
-local function placeholder(buf, text)
-  api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-  if api.nvim_buf_get_lines(buf, 0, 1, false)[1] == "" then
-    api.nvim_buf_set_extmark(
-      buf,
-      ns,
-      0,
-      0,
-      { virt_text = { { text, "Comment" } }, virt_text_pos = "overlay" }
-    )
-  end
-end
-
 local state ---@type { branch_buf: integer, message_buf: integer, branch_win: integer, message_win: integer, keys_win: integer, root: string, edited: boolean }?
 
 --- The two boxes (for tests).
@@ -141,8 +127,8 @@ local function confirm()
     notify("Write the branch name first", vim.log.levels.WARN)
     return
   end
-  if message == "" or message:match(":%s*$") then
-    notify("The commit message is empty: add some text after the ticket", vim.log.levels.WARN)
+  if message == "" or (not state.edited and not message:match("%): %S")) then
+    notify("Write the text after the ticket: feat/core-334-some text", vim.log.levels.WARN)
     return
   end
   local root = state.root
@@ -234,24 +220,17 @@ function M.open()
     root = root,
     edited = false,
   }
-  placeholder(branch_buf, BRANCH_HINT)
-  placeholder(message_buf, MESSAGE_HINT)
 
   local updating = false
-  api.nvim_buf_attach(branch_buf, false, {
-    on_lines = function()
-      vim.schedule(function()
-        if not state or not api.nvim_buf_is_valid(branch_buf) then
-          return
-        end
-        placeholder(branch_buf, BRANCH_HINT)
-        if not state.edited then
-          updating = true
-          api.nvim_buf_set_lines(message_buf, 0, -1, false, { M.message_for(line(branch_buf)) })
-          updating = false
-          placeholder(message_buf, MESSAGE_HINT)
-        end
-      end)
+  -- every character typed in the branch box rewrites the message at once (before the screen is drawn)
+  api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+    buffer = branch_buf,
+    callback = function()
+      if state and not state.edited and api.nvim_buf_is_valid(message_buf) then
+        updating = true
+        api.nvim_buf_set_lines(message_buf, 0, -1, false, { M.message_for(line(branch_buf)) })
+        updating = false
+      end
     end,
   })
   api.nvim_buf_attach(message_buf, false, {
@@ -264,7 +243,6 @@ function M.open()
         if not state or not api.nvim_buf_is_valid(message_buf) then
           return
         end
-        placeholder(message_buf, MESSAGE_HINT)
         if line(message_buf) == "" then
           state.edited = false
         end

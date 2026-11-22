@@ -6,13 +6,28 @@ local h = require("support")
 package.path = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h:h") .. "/lua/?.lua;" .. package.path
 local bc = require("core.git-branch-commit")
 
-lib.test("git branch commit: the message is written from the branch name", function()
+lib.test("git branch commit: the message is written from the branch name, for every character typed", function()
   lib.eq("feat(core-334): some text", bc.message_for("feat/core-334-some text"))
   lib.eq("feat(core-334): some text", bc.message_for("feat/core-334-some-text"))
   lib.eq("fix(PAY-12): retry on timeout", bc.message_for("fix/PAY-12-retry_on_timeout"))
-  lib.eq("feat(core-334): ", bc.message_for("feat/core-334"), "while typing")
-  lib.eq("chore: bump deps", bc.message_for("chore/bump-deps"), "no ticket: no scope")
-  lib.eq("", bc.message_for("feat"), "no type yet")
+  lib.eq("feat(core-334): v2 fix", bc.message_for("feat/core-334-v2-fix"), "a number in the text stays text")
+  -- while typing: the format at every step
+  local steps = {
+    { "f", "f" },
+    { "feat", "feat" },
+    { "feat/", "feat()" },
+    { "feat/co", "feat(co)" },
+    { "feat/core-", "feat(core-)" },
+    { "feat/core-33", "feat(core-33)" },
+    { "feat/core-334", "feat(core-334)" },
+    { "feat/core-334-", "feat(core-334): " },
+    { "feat/core-334-so", "feat(core-334): so" },
+    { "feat/core-334-some-", "feat(core-334): some " },
+  }
+  for _, step in ipairs(steps) do
+    lib.eq(step[2], bc.message_for(step[1]), "after typing " .. step[1])
+  end
+  lib.eq("", bc.message_for(""))
   lib.eq("feat/core-334-some-text", bc.branch_name(" feat/core-334-some text "))
 end)
 
@@ -53,8 +68,6 @@ lib.test("git branch commit: ggc shows both boxes with placeholders, the message
   h.wait(screen, function()
     return h.find_on_screen(screen, "New branch") ~= nil
       and h.find_on_screen(screen, "Commit message") ~= nil
-      and h.find_on_screen(screen, "feat/core-334-short-description") ~= nil
-      and h.find_on_screen(screen, "feat(core-334): short description") ~= nil
       and h.find_on_screen(screen, "Enter create branch, stage all, commit") ~= nil
   end, "the boxes, their placeholders and the keys line are not on the screen")
   lib.eq(1, screen:exec([[
@@ -64,11 +77,26 @@ lib.test("git branch commit: ggc shows both boxes with placeholders, the message
     end
     return n
   ]]), "the screen behind the boxes is dimmed")
-  screen:input("feat/core-334-some text")
+  lib.eq({ {}, {} }, screen:exec([[
+    local s = require("core.git-branch-commit").state()
+    return { vim.api.nvim_buf_get_extmarks(s.branch_buf, -1, 0, -1, {}), vim.api.nvim_buf_get_extmarks(s.message_buf, -1, 0, -1, {}) }
+  ]]), "the boxes are empty: no placeholder text")
+  -- one key at a time, like a person types: the message is right after every one
+  local typed = ""
+  for _, key in ipairs(vim.split("feat/core-334-some text", "")) do
+    screen:input(key == " " and "<Space>" or key)
+    typed = typed .. key
+    local want = bc.message_for(typed)
+    h.wait(screen, function()
+      return screen:exec([[
+        local s = require("core.git-branch-commit").state()
+        return vim.api.nvim_buf_get_lines(s.message_buf, 0, -1, false)[1]
+      ]]) == want
+    end, "the message did not follow after typing " .. typed)
+  end
   h.wait(screen, function()
     return h.find_on_screen(screen, "feat(core-334): some text") ~= nil
-  end, "the commit message did not follow the branch name")
-  lib.ok(h.find_on_screen(screen, "feat/core-334-short-description") == nil, "the placeholder is gone once something is typed")
+  end, "the commit message is not on the screen")
   screen:input("<CR>")
   h.wait(screen, function()
     local log = vim.fn.system({ "git", "-C", dir, "log", "-1", "--format=%s" })
