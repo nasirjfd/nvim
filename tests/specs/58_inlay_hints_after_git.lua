@@ -28,7 +28,10 @@ local function editor()
               if method == 'initialize' then
                 result = { capabilities = { inlayHintProvider = true, textDocumentSync = 1 } }
               elseif method == 'textDocument/inlayHint' then
-                result = { { position = { line = 4, character = 5 }, label = 'HINTPARAM:', kind = 2 } }
+                result = {
+                  { position = { line = 4, character = 5 }, label = 'HINTPARAM:', kind = 2 },
+                  { position = { line = 11, character = 0 }, label = 'ADDEDHINT:', kind = 2 },
+                }
               end
               -- A real server (intelephense) attaches well after the diff has shown the file.
               vim.defer_fn(function() callback(nil, result) end, method == 'initialize' and 400 or 0)
@@ -124,5 +127,43 @@ lib.test("inlay hints stay on a file while a Git view shows it, in the diff and 
     return h.find_on_screen(screen, "HINTPARAM:") ~= nil
   end, "the inlay hint is not drawn in another tab while the Git view holds the file")
   lib.ok(screen:exec("return vim.lsp.inlay_hint.is_enabled({ bufnr = vim.fn.bufnr('a.php.txt') })"), "hints were turned off")
+  screen:close()
+end)
+
+lib.test("inlay hints in the Git diff are gray text on the line's own diff colour, not dark boxes", function()
+  local screen = editor()
+  show_in_git(screen)
+  local row, col
+  h.wait(screen, function()
+    for r = 1, 40 do
+      local c = h.find_on_row(screen, r, "ADDEDHINT:")
+      if c then
+        row, col = r, c
+        return true
+      end
+    end
+  end, "the hint on the changed line is not shown")
+  local eol = screen:highlight(row, col + 40) -- the rest of the changed line: its diff colour
+  lib.ok(eol.background ~= nil, "the changed line has a diff background")
+  local hint
+  h.wait(screen, function()
+    hint = screen:highlight(row, col)
+    return hint.background == eol.background
+  end, function()
+    return "the hint has a box of its own (" .. tostring(hint.background) .. ") instead of the line's diff colour " .. eol.background
+  end)
+  -- a hint on an unchanged line has the editor's background (no box either)
+  local r2, c2
+  for r = 1, 40 do
+    c2 = h.find_on_row(screen, r, "HINTPARAM:")
+    if c2 and c2 > 40 then -- the one in the diff's right side
+      r2 = r
+      break
+    end
+  end
+  if r2 then
+    lib.eq(screen:highlight(r2, c2 - 2).background, screen:highlight(r2, c2).background, "a hint on an unchanged line has no box")
+  end
+  lib.eq(screen:exec("return vim.api.nvim_get_hl(0, { name = 'LspInlayHint', link = false }).fg"), hint.foreground, "the hint is gray")
   screen:close()
 end)
