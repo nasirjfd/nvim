@@ -5,6 +5,12 @@ local M = { tests = {}, passed = 0, failed = 0, cleanups = {}, file_ms = {} }
 M.real_data = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/nvim"
 M.data_private = { snacks = true, undo = true, scratch = true, shada = true }
 
+-- the real cache directory; each test gets its own with everything linked in except "luac": Neovim's
+-- bytecode cache keeps one file per loaded Lua file path and never deletes any, and every test loads the
+-- plugins from its own temporary path, so a shared one grew by millions of files
+M.real_cache = (vim.env.XDG_CACHE_HOME or (vim.env.HOME .. "/.cache")) .. "/nvim"
+M.cache_private = { luac = true }
+
 -- run after every test, pass or fail (e.g. to close the embedded Neovim a failed test left behind)
 function M.on_cleanup(fn)
   M.cleanups[#M.cleanups + 1] = fn
@@ -70,6 +76,16 @@ function M.run(filter)
         end
       end
       vim.env.XDG_DATA_HOME = data
+      local cache = state .. "/cache"
+      vim.fn.mkdir(cache .. "/nvim", "p")
+      for _, name in
+        ipairs(vim.fn.isdirectory(M.real_cache) == 1 and vim.fn.readdir(M.real_cache) or {})
+      do
+        if not M.cache_private[name] then
+          vim.uv.fs_symlink(M.real_cache .. "/" .. name, cache .. "/nvim/" .. name)
+        end
+      end
+      vim.env.XDG_CACHE_HOME = cache
       local ok, err = xpcall(t.fn, debug.traceback)
       for _, cleanup in ipairs(M.cleanups) do
         pcall(cleanup)
