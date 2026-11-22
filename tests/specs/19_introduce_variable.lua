@@ -391,6 +391,13 @@ lib.test("introduce variable: the suggestion is selected, Enter takes it, typing
       ]])
     end, "the suggested name is not shown selected")
     lib.eq({ "content" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))
+    screen:exec([[
+      _G.keylog = {}
+      vim.on_key(function(key, typed)
+        table.insert(_G.keylog, { key = vim.fn.keytrans(typed ~= "" and typed or key), mode = vim.fn.mode(), ft = vim.bo.filetype,
+          line = vim.api.nvim_get_current_line(), t = vim.uv.hrtime() / 1e6 })
+      end)
+    ]])
     if case[1] == "paste" then
       screen:exec("vim.paste({ 'pasted' }, -1)")
       screen:input("<CR>")
@@ -405,7 +412,9 @@ lib.test("introduce variable: the suggestion is selected, Enter takes it, typing
         "    return $" .. case[2] .. ";",
         "}",
       }, lines(screen))
-    end, "keys " .. case[1] .. " did not name the variable $" .. case[2])
+    end, function()
+      return "keys " .. case[1] .. " did not name the variable $" .. case[2] .. " KEYLOG " .. vim.inspect(screen:exec("return _G.keylog"))
+    end)
     screen:close()
   end
 end)
