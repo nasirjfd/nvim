@@ -367,7 +367,7 @@ local function winbar(entry)
     or (#list > 0 and (#list .. " failed") or "Test")
   return "%#PhpFailSection# "
     .. where
-    .. " %#PhpFailDim#  Enter go to · d diff · r run again · y copy · o output · ]f [f next/prev · q close"
+    .. " %#PhpFailDim#  Enter go to · d diff · r run again · ]f [f next/prev · ? keys · q close"
 end
 
 local actions = {}
@@ -382,7 +382,9 @@ local function setup_buffer()
   vim.bo[buf].swapfile = false
   pcall(api.nvim_buf_set_name, buf, NAME)
   vim.bo[buf].filetype = "phpunit_failure"
+  M.mapped = {} -- every key of the view: the ? list must have them all (tested)
   local function map(lhs, fn, desc)
+    table.insert(M.mapped, lhs)
     vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, silent = true, desc = desc })
   end
   map("<CR>", actions.follow_link, "Go to the place on this line")
@@ -405,6 +407,7 @@ local function setup_buffer()
     M.next_failure(-1)
   end, "Previous failed test")
   map("q", M.close, "Close")
+  map("?", M.help, "Show the keys")
   return buf
 end
 
@@ -483,6 +486,38 @@ function M.close()
     pcall(api.nvim_win_close, state.win, true)
   end
   state.win = nil
+end
+
+--- The keys of the view, every one of them (?).
+M.KEYS = {
+  { "Enter / 2-click / gf", "go to the place on the line" },
+  { "Tab / Shift+Tab", "next / previous link" },
+  { "d", "expected and actual side by side" },
+  { "r", "run this test again" },
+  { "y", "copy the failure" },
+  { "o", "whole output of the run" },
+  { "]f / [f", "next / previous failure" },
+  { "q", "close" },
+  { "?", "these keys" },
+}
+
+function M.help()
+  local lines = { " Test failure keys", "" }
+  for _, k in ipairs(M.KEYS) do
+    lines[#lines + 1] = string.format(" %-22s %s", k[1], k[2])
+  end
+  local win = Snacks.win({
+    text = lines,
+    width = 60,
+    height = #lines,
+    border = "rounded",
+    backdrop = false,
+    wo = { wrap = false },
+    bo = { filetype = "pane_shortcuts_help", modifiable = false },
+    keys = { q = "close", ["<Esc>"] = "close", ["?"] = "close" },
+  })
+  require("core.modal-backdrop").dim_behind(win.win)
+  return win
 end
 
 --- What is shown now (for tests).
@@ -632,17 +667,13 @@ function M.next_failure(step)
   M.jump(target.file, target.line, in_view)
   M.render(target)
   local at = index_of(list, target)
-  vim.api.nvim_echo(
+  vim.api.nvim_echo({
+    { string.format("Failure %d/%d: ", at, #list), "PhpFailDim" },
     {
-      { string.format("Failure %d/%d: ", at, #list), "PhpFailDim" },
-      {
-        (target.parsed.lines[1] or target.short or ""):sub(1, math.max(10, vim.o.columns - 30)),
-        "PhpFailMessage",
-      },
+      (target.parsed.lines[1] or target.short or ""):sub(1, math.max(10, vim.o.columns - 30)),
+      "PhpFailMessage",
     },
-    false,
-    {}
-  )
+  }, false, {})
 end
 
 --- <leader>td: the failure on the cursor's line, else the one of the test the cursor is in, else of the code line an
@@ -735,7 +766,9 @@ local function render_origins(buf)
         sign_text = "󱐋",
         sign_hl_group = "DiagnosticSignError",
         virt_lines = {
-          { { "  ↳ " .. o.text .. " · thrown in " .. who .. "  (<leader>td)", "PhpFailOrigin" } },
+          {
+            { "  ↳ " .. o.text .. " · thrown in " .. who .. "  (<leader>td)", "PhpFailOrigin" },
+          },
         },
         priority = 1050,
       })

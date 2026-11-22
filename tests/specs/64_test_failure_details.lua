@@ -396,3 +396,57 @@ lib.test("test failure: the pane's d opens the view, moving in the pane changes 
   end, "the remembered failure lost its trace or output")
   again:close()
 end)
+
+local function backdrops(screen)
+  return screen:exec([[
+    local n = 0
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.wo[win].winhighlight:find("ModalBackdrop", 1, true) then n = n + 1 end
+    end
+    return n
+  ]])
+end
+
+lib.test("test failure: ? in the view and in the pane lists every key, over a dimmed screen", function()
+  local dir = project()
+  local screen = start(dir)
+  run_all(screen)
+  to_editor(screen, 6)
+  screen:input(" td")
+  h.wait(screen, function()
+    return screen:exec("return vim.bo.filetype") == "phpunit_failure"
+  end, "the view did not open")
+  screen:input("?")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Test failure keys") ~= nil
+  end, "? did not show the keys of the view")
+  -- every key the view maps is in the list
+  local keys = screen:exec([[
+    local listed = {}
+    for _, k in ipairs(require("modules.phpunit.details").KEYS) do listed[#listed + 1] = k[1] end
+    local text = table.concat(listed, " ")
+    local missing = {}
+    for _, key in ipairs(require("modules.phpunit.details").mapped) do
+      local lhs = key:gsub("<2%-LeftMouse>", "2-click"):gsub("<S%-Tab>", "Shift+Tab"):gsub("<CR>", "Enter"):gsub("<Tab>", "Tab")
+      if not text:find(lhs, 1, true) then missing[#missing + 1] = key end
+    end
+    return missing
+  ]])
+  lib.eq({}, keys, "keys of the view missing from its ? list")
+  for _, k in ipairs({ "expected and actual side by side", "next / previous failure", "copy the failure" }) do
+    lib.ok(h.find_on_screen(screen, k) ~= nil, "not on screen: " .. k)
+  end
+  lib.eq(1, backdrops(screen), "the screen behind the keys is dimmed")
+  screen:input("q")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Test failure keys") == nil and backdrops(screen) == 0
+  end, "q did not close the keys and their backdrop")
+  -- the pane's ? has the new key too
+  screen:exec("require('modules.phpunit.pane').panes()[1]:focus('list')")
+  screen:input("?")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Tests pane keys") ~= nil and h.find_on_screen(screen, "failure details") ~= nil
+  end, "the pane's ? does not list d (failure details)")
+  lib.eq(1, backdrops(screen), "the screen behind the pane's keys is dimmed")
+  screen:close()
+end)

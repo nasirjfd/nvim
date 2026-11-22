@@ -1128,10 +1128,11 @@ local actions = {
       " i               jump to code",
       " l / h           open / close",
       " e / E           expand / collapse all",
+      " /               search",
       " q               close",
       " ?               this help",
     }
-    Snacks.win({
+    local help = Snacks.win({
       text = lines,
       width = 40,
       height = #lines,
@@ -1141,6 +1142,7 @@ local actions = {
       bo = { filetype = "pane_shortcuts_help", modifiable = false },
       keys = { q = "close", ["<Esc>"] = "close", ["?"] = "close" },
     })
+    require("core.modal-backdrop").dim_behind(help.win)
   end,
   tests_press = kit.press,
   tests_click = function(picker)
