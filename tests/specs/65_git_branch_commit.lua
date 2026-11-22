@@ -31,6 +31,20 @@ lib.test("git branch commit: the message is written from the branch name, for ev
   lib.eq("feat/core-334-some-text", bc.branch_name(" feat/core-334-some text "))
 end)
 
+lib.test("git branch commit: the branch box is cleaned like C's new branch while typing", function()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, "p")
+  local screen = h.nvim(dir)
+  local function clean(text)
+    return screen:exec("return require('core.git-branch-commit').clean_branch(...)", { text })
+  end
+  lib.eq("feat/core-334-some-text", clean("feat/core-334-some text"))
+  lib.eq("feat/core-1-a-b", clean("feat/core-1-a  ~b"))
+  lib.eq("feat/x", clean("feat//x"))
+  lib.eq("feat/core-1", screen:exec("return require('core.git-branch-commit').branch_name('feat/core-1-')"))
+  screen:close()
+end)
+
 local function git_pane(dir)
   local screen = h.nvim(dir)
   screen:exec([[
@@ -97,6 +111,9 @@ lib.test("git branch commit: ggc shows both boxes with placeholders, the message
   h.wait(screen, function()
     return h.find_on_screen(screen, "feat(core-334): some text") ~= nil
   end, "the commit message is not on the screen")
+  lib.eq("feat/core-334-some-text", screen:exec([[
+    return vim.api.nvim_buf_get_lines(require("core.git-branch-commit").state().branch_buf, 0, -1, false)[1]
+  ]]), "the space in the branch box became a dash, like C's new branch")
   screen:input("<CR>")
   h.wait(screen, function()
     local log = vim.fn.system({ "git", "-C", dir, "log", "-1", "--format=%s" })

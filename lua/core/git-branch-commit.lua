@@ -26,8 +26,25 @@ function M.message_for(branch)
   return kind .. "(" .. scope .. "): " .. text:gsub("[-_]", " "):gsub("  +", " ")
 end
 
---- The branch name git gets: spaces become dashes.
+-- the branch-name rules of the Git pane's new branch (C): the same cleaning while typing
+local function branch_rules()
+  local ok, actions = pcall(require, "codediff.ui.explorer.actions")
+  return ok and actions.clean_branch_name and actions or nil
+end
+
+--- The branch box's text while it is typed or pasted, like C in the Git pane: only letters, digits and
+--- "- _ . /" stay, anything else (spaces) becomes "-".
+function M.clean_branch(text)
+  local rules = branch_rules()
+  return rules and rules.clean_branch_name(text or "") or (text or ""):gsub("%s+", "-")
+end
+
+--- The branch name git gets (no "-", "/" or "." left at either end).
 function M.branch_name(typed)
+  local rules = branch_rules()
+  if rules then
+    return rules.finish_branch_name(typed or "")
+  end
   return (vim.trim(typed or ""):gsub("%s+", "-"))
 end
 
@@ -222,10 +239,22 @@ function M.open()
   }
 
   local updating = false
-  -- every character typed in the branch box rewrites the message at once (before the screen is drawn)
+  -- every character typed in the branch box is cleaned like C's new branch (a space becomes "-") and
+  -- rewrites the message at once (before the screen is drawn)
   api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
     buffer = branch_buf,
     callback = function()
+      local typed = line(branch_buf)
+      local cleaned = M.clean_branch(typed)
+      if cleaned ~= typed then
+        local cursor = api.nvim_win_is_valid(branch_win) and api.nvim_win_get_cursor(branch_win)[2]
+          or #typed
+        local before = math.min(#M.clean_branch(typed:sub(1, cursor)), #cleaned)
+        api.nvim_buf_set_lines(branch_buf, 0, 1, false, { cleaned })
+        if api.nvim_win_is_valid(branch_win) then
+          pcall(api.nvim_win_set_cursor, branch_win, { 1, before })
+        end
+      end
       if state and not state.edited and api.nvim_buf_is_valid(message_buf) then
         updating = true
         api.nvim_buf_set_lines(message_buf, 0, -1, false, { M.message_for(line(branch_buf)) })
