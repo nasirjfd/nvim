@@ -268,6 +268,11 @@ return {
         confirm_discard_hunk = false,
         -- an added file is faintly green all over, a deleted one faintly red
         highlight_added_deleted_files = true,
+        -- Inlay hints stay as the LSP setup left them. Turning them off for a diff switches them off
+        -- for the whole buffer (the same file in every other window too), and putting the old value
+        -- back afterwards went wrong whenever the server attached while the diff was open: the file
+        -- then had no hints until a restart.
+        disable_inlay_hints = false,
       },
       -- Source Control pane: with no change selected, the right side shows the file you were in
       -- (like VS Code) instead of the shortcuts page (g? shows those)

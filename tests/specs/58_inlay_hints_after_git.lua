@@ -110,3 +110,19 @@ for name, leave in pairs(exits) do
     screen:close()
   end)
 end
+
+lib.test("inlay hints stay on a file while a Git view shows it, in the diff and in another tab", function()
+  local screen = editor()
+  show_in_git(screen)
+  -- the diff pane itself
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "HINTPARAM:") ~= nil
+  end, "the inlay hint is not drawn in the diff")
+  -- the same buffer in a normal window of another tab, while the Git view still holds it
+  screen:exec("vim.cmd('tabnew a.php.txt'); vim.api.nvim_win_set_cursor(0, {12, 0})")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "HINTPARAM:") ~= nil
+  end, "the inlay hint is not drawn in another tab while the Git view holds the file")
+  lib.ok(screen:exec("return vim.lsp.inlay_hint.is_enabled({ bufnr = vim.fn.bufnr('a.php.txt') })"), "hints were turned off")
+  screen:close()
+end)
