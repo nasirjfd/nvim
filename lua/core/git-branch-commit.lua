@@ -9,8 +9,8 @@ local M = {}
 local api = vim.api
 local ns = api.nvim_create_namespace("git_branch_commit")
 
-local BRANCH_HINT = "feat/core-334-short description   (type/prefix-number-text)"
-local MESSAGE_HINT = "feat(core-334): short description   (made from the branch name)"
+local BRANCH_HINT = "feat/core-334-short-description"
+local MESSAGE_HINT = "feat(core-334): short description"
 
 --- The commit message for a branch name (pure): `type/prefix-123-some-text` -> `type(prefix-123): some text`.
 function M.message_for(branch)
@@ -106,7 +106,7 @@ local function placeholder(buf, text)
   end
 end
 
-local state ---@type { branch_buf: integer, message_buf: integer, branch_win: integer, message_win: integer, root: string, edited: boolean }?
+local state ---@type { branch_buf: integer, message_buf: integer, branch_win: integer, message_win: integer, keys_win: integer, root: string, edited: boolean }?
 
 --- The two boxes (for tests).
 function M.state()
@@ -119,7 +119,7 @@ function M.close()
   end
   local s = state
   state = nil
-  for _, win in ipairs({ s.branch_win, s.message_win }) do
+  for _, win in ipairs({ s.branch_win, s.message_win, s.keys_win }) do
     if api.nvim_win_is_valid(win) then
       pcall(api.nvim_win_close, win, true)
     end
@@ -164,7 +164,7 @@ function M.open()
   local width = math.min(80, vim.o.columns - 6)
   local col = math.floor((vim.o.columns - width) / 2)
   local row = math.max(1, math.floor((vim.o.lines - 7) / 2) - 2)
-  local function box(r, title, footer)
+  local function box(r, title)
     local buf = api.nvim_create_buf(false, true)
     vim.bo[buf].bufhidden = "wipe"
     vim.bo[buf].filetype = "git_branch_commit"
@@ -179,8 +179,6 @@ function M.open()
       border = "rounded",
       title = title,
       title_pos = "left",
-      footer = footer,
-      footer_pos = footer and "right" or nil,
       zindex = 60,
     })
     vim.wo[win].wrap = false
@@ -190,19 +188,49 @@ function M.open()
   local repo = vim.fs.basename(root)
   local branch_buf, branch_win =
     box(row, { { " New branch ", "Title" }, { "in " .. repo .. " ", "Comment" } })
-  local message_buf, message_win = box(row + 3, { { " Commit message ", "Title" } }, {
-    { " Enter ", "Special" },
-    { "create branch, stage all, commit  ", "Comment" },
-    { "Tab ", "Special" },
-    { "switch  ", "Comment" },
-    { "Esc ", "Special" },
-    { "cancel ", "Comment" },
+  local message_buf, message_win = box(row + 3, { { " Commit message ", "Title" } })
+  -- the keys: a line of its own under the boxes, away from the text being written
+  local keys = {
+    { "Enter", "create branch, stage all, commit" },
+    { "Tab", "switch box" },
+    { "Esc", "cancel" },
+  }
+  local text, marks = "", {}
+  for i, k in ipairs(keys) do
+    if i > 1 then
+      text = text .. "   ·   "
+    end
+    marks[#marks + 1] = { #text, #text + #k[1], "Special" }
+    text = text .. k[1] .. " "
+    marks[#marks + 1] = { #text, #text + #k[2], "Comment" }
+    text = text .. k[2]
+  end
+  local pad = math.max(0, math.floor((width + 2 - vim.fn.strdisplaywidth(text)) / 2))
+  text = string.rep(" ", pad) .. text
+  local keys_buf = api.nvim_create_buf(false, true)
+  vim.bo[keys_buf].bufhidden = "wipe"
+  api.nvim_buf_set_lines(keys_buf, 0, -1, false, { text })
+  for _, m in ipairs(marks) do
+    api.nvim_buf_set_extmark(keys_buf, ns, 0, m[1] + pad, { end_col = m[2] + pad, hl_group = m[3] })
+  end
+  local keys_win = api.nvim_open_win(keys_buf, false, {
+    relative = "editor",
+    row = row + 6,
+    col = col,
+    width = width + 2,
+    height = 1,
+    style = "minimal",
+    border = "none",
+    focusable = false,
+    zindex = 60,
   })
+  vim.wo[keys_win].winhighlight = "NormalFloat:Normal"
   state = {
     branch_buf = branch_buf,
     message_buf = message_buf,
     branch_win = branch_win,
     message_win = message_win,
+    keys_win = keys_win,
     root = root,
     edited = false,
   }
@@ -267,6 +295,8 @@ function M.open()
       { buffer = buf, once = true, callback = vim.schedule_wrap(M.close) }
     )
   end
+  -- the screen behind dims, like behind every dialog
+  require("core.modal-backdrop").dim_behind(branch_win)
   api.nvim_set_current_win(branch_win)
   vim.cmd("startinsert")
 end

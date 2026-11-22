@@ -53,14 +53,22 @@ lib.test("git branch commit: ggc shows both boxes with placeholders, the message
   h.wait(screen, function()
     return h.find_on_screen(screen, "New branch") ~= nil
       and h.find_on_screen(screen, "Commit message") ~= nil
-      and h.find_on_screen(screen, "feat/core-334-short description") ~= nil
+      and h.find_on_screen(screen, "feat/core-334-short-description") ~= nil
       and h.find_on_screen(screen, "feat(core-334): short description") ~= nil
-  end, "the boxes and their placeholders are not on the screen")
+      and h.find_on_screen(screen, "Enter create branch, stage all, commit") ~= nil
+  end, "the boxes, their placeholders and the keys line are not on the screen")
+  lib.eq(1, screen:exec([[
+    local n = 0
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.wo[win].winhighlight:find("ModalBackdrop", 1, true) then n = n + 1 end
+    end
+    return n
+  ]]), "the screen behind the boxes is dimmed")
   screen:input("feat/core-334-some text")
   h.wait(screen, function()
     return h.find_on_screen(screen, "feat(core-334): some text") ~= nil
   end, "the commit message did not follow the branch name")
-  lib.ok(h.find_on_screen(screen, "(type/prefix-number-text)") == nil, "the placeholder is gone once something is typed")
+  lib.ok(h.find_on_screen(screen, "feat/core-334-short-description") == nil, "the placeholder is gone once something is typed")
   screen:input("<CR>")
   h.wait(screen, function()
     local log = vim.fn.system({ "git", "-C", dir, "log", "-1", "--format=%s" })
@@ -69,6 +77,14 @@ lib.test("git branch commit: ggc shows both boxes with placeholders, the message
   lib.eq("feat/core-334-some-text", vim.trim(vim.fn.system({ "git", "-C", dir, "branch", "--show-current" })))
   lib.eq("", vim.trim(vim.fn.system({ "git", "-C", dir, "status", "--porcelain" })), "every change (also untracked) is committed")
   lib.eq(nil, screen:exec("return require('core.git-branch-commit').state()"), "the boxes are closed")
+  h.wait(screen, function()
+    return screen:exec([[
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        if vim.wo[win].winhighlight:find("ModalBackdrop", 1, true) then return false end
+      end
+      return true
+    ]])
+  end, "the backdrop must go with the boxes")
   screen:close()
 end)
 
@@ -91,5 +107,23 @@ lib.test("git branch commit: a message changed by hand stays; Esc cancels and no
     return screen:exec("return require('core.git-branch-commit').state()") == nil
   end, "Esc did not close the boxes")
   lib.eq("main", vim.trim(vim.fn.system({ "git", "-C", dir, "branch", "--show-current" })):gsub("master", "main"), "no branch was made")
+  screen:close()
+end)
+
+lib.test("git branch commit: the Git pane's ? page lists ggc and ggm", function()
+  local dir = h.repo({ ["a.txt"] = { "before" } })
+  h.write(dir .. "/a.txt", { "after" })
+  local screen = git_pane(dir)
+  local rows = screen:exec([[
+    local out = {}
+    for _, row in ipairs(require("codediff.ui.welcome").git_shortcuts() or {}) do out[#out + 1] = row.key .. "=" .. row.desc end
+    return out
+  ]])
+  lib.ok(vim.tbl_contains(rows, "ggc=New branch, stage all, commit"), "ggc missing: " .. vim.inspect(rows))
+  lib.ok(vim.tbl_contains(rows, "ggm=Open Merge Requests in Browser"), "ggm missing: " .. vim.inspect(rows))
+  screen:input("?")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "New branch, stage all, commit") ~= nil
+  end, "? in the Git pane does not show ggc")
   screen:close()
 end)

@@ -209,6 +209,14 @@ local function open(modal)
   backdrops[modal] = win
 end
 
+--- Dim the screen behind `win` though it is small (a one-line prompt): the backdrop goes when it closes.
+function M.dim_behind(win)
+  if api.nvim_win_is_valid(win) then
+    open(win)
+    sync_dim()
+  end
+end
+
 function M.setup()
   set_dim_highlights()
   api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_dim_highlights })
