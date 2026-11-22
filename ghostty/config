@@ -49,6 +49,9 @@ keybind = super+k=csi:107;9u
 keybind = alt+shift+f=csi:102;4u
 keybind = alt+j=csi:106;3u
 keybind = alt+k=csi:107;3u
+# option+l / option+h scroll the view right / left like zl / zh
+keybind = alt+l=csi:108;3u
+keybind = alt+h=csi:104;3u
 
 # cmd+z / cmd+shift+z undo / redo in Neovim (kitty keyboard encoding: Neovim reads <D-z> / <D-S-z>,
 # see lua/core/gui-keymaps.lua). A plain ctrl+z would suspend Neovim.

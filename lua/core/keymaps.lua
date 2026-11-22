@@ -310,6 +310,14 @@ local function resize_selection(parent)
   end
 end
 
+-- Option+l / Option+h scroll the view right / left like zl / zh: the cursor stays where it is (it
+-- only moves when it would leave the screen). Ghostty sends them as alt+l / alt+h
+-- (ghostty/config: alt+l=csi:108;3u, alt+h=csi:104;3u); Option alone would type ¬ / ˙.
+vim.keymap.set({ "n", "x" }, "<M-l>", "zl", { desc = "Scroll Right" })
+vim.keymap.set({ "n", "x" }, "<M-h>", "zh", { desc = "Scroll Left" })
+vim.keymap.set("i", "<M-l>", "<Cmd>normal! zl<CR>", { desc = "Scroll Right" })
+vim.keymap.set("i", "<M-h>", "<Cmd>normal! zh<CR>", { desc = "Scroll Left" })
+
 vim.keymap.set("n", "<M-k>", "v<M-k>", { remap = true, desc = "Expand Selection" })
 vim.keymap.set("x", "<M-k>", function()
   resize_selection(true)
