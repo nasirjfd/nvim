@@ -5,7 +5,7 @@ Files here are the source of truth. Run `./install.sh` on a new machine (needs `
 - `config.toml`: herdr config (keys, UI, theme)
 - `zen.sh`: zoom toggle that hides pane borders while zoomed (`prefix+z`, `cmd+shift+enter`)
 - `send-ref.sh`: sends `@file#Lx-y` to the pane labelled `claude` and focuses it (used by `<leader>al` / `cmd+l`, see `lua/core/herdr-ref.lua`)
-- `ghostty-passthrough.conf`: unbinds Ghostty chords so herdr receives them
+- `ghostty-passthrough.conf`: unbinds Ghostty chords so herdr receives them; cmd+alt+hjkl (pane focus) are sent as exact CSI-u bytes instead, because through Ghostty's key encoder a quick cmd+alt+h then cmd+alt+l typed a plain `l` into the pane
 - It also forwards Cmd+I and Cmd+. as distinct CSI-u keys: completion in insert mode
   and LSP code actions in normal/visual/insert mode. Ctrl+Enter still runs items in HTTP/tests panes.
   Reload Ghostty after changing the include (Cmd+Shift+,). Other terminals need equivalent
