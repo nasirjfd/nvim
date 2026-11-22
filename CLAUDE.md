@@ -101,6 +101,10 @@ The user's herdr (terminal workspace manager) setup is versioned in `herdr/` so 
 
 Pickers never load ignored or hidden files by default (`<leader>uI` toggles it). Where a parent repo ignores most of the folder (supernova's `vendor/*`), put a local `.ignore` in that folder with `!/pkg/` and `!/pkg/**` for each package to search: fd and rg read it before the parent's `.gitignore`, so only those packages are added (no `--no-ignore-parent`, which loaded everything: 63k files, grep 9x slower). The `.ignore` is synced in `local-projects/` (see its README). Spec: `tests/specs/10_parent_ignore.lua`.
 
+## What intelephense indexes
+
+`lua/core/intelephense-scope.lua`: a project rooted in a big `vendor/` (supernova) indexes only the packages the pickers show (fd, so `.ignore`/`.gitignore`, no hidden) plus everything they depend on (composer's `installed.json`: `require` recursively, plus the visible packages' own `require-dev`); every other package is in `intelephense.files.exclude` (supernova: 24k of 50k files, intelephense 1.5 GB -> 1.1 GB, same diagnostics). Cached in `stdpath("state")/intelephense-scope.json`, recomputed when `installed.json`, `.ignore` or the `.gitignore`s change. Used from `supernova-env-dev/vendor/.nvim.lua`. Spec: `tests/specs/68_intelephense_scope.lua`.
+
 ## Project-local `.nvim.lua` files are synced here
 
 Machine-local `.nvim.lua` files of projects (e.g. `supernova-env-dev/vendor/.nvim.lua`) are copied into `local-projects/` (see its README) so other machines get them.

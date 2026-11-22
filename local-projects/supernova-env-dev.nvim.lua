@@ -14,6 +14,11 @@ local downgraded_codes = {
 
 vim.lsp.config("intelephense", {
   root_dir = root,
+  -- Index only the packages the pickers show (.ignore / .gitignore) and what they depend on, not all of vendor:
+  -- half the files, intelephense 1.5 GB -> 1.1 GB (core/intelephense-scope.lua).
+  settings = {
+    intelephense = { files = { exclude = require("core.intelephense-scope").excludes(root) } },
+  },
   handlers = {
     ["textDocument/publishDiagnostics"] = function(err, result, ctx, config)
       for _, d in ipairs(result and result.diagnostics or {}) do
