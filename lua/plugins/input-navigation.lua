@@ -3,6 +3,25 @@ return {
   opts = {
     input = {
       win = {
+        keys = {
+          -- Enter as a plain mapping. Snacks' own is an expression mapping that confirms while its expression is
+          -- evaluated, and Neovim evaluates it already when it peeks at the next key while inserting the key typed
+          -- before Enter (keys typed fast, a busy editor): "body<CR>" answered "bod". A plain mapping runs only when
+          -- Enter itself is handled, after every key before it is in the prompt.
+          i_cr = {
+            "<cr>",
+            function(self)
+              if vim.fn.pumvisible() == 1 then
+                vim.api.nvim_feedkeys(vim.keycode("<C-y>"), "n", false) -- accept the completion item
+              else
+                self:execute("confirm")
+              end
+            end,
+            mode = { "i", "n" },
+            expr = false,
+            desc = "Confirm",
+          },
+        },
         on_win = function(win)
           -- Input windows suppress autocmds and install their own maps last.
           vim.schedule(function()
