@@ -33,6 +33,10 @@ return {
         desc = "Run tests in parallel on/off",
       },
       { "<leader>to", function() require("neotest").output.open({ enter = true }) end, desc = "Test output" },
+      { "<leader>td", function() require("modules.phpunit.details").show_at_cursor() end, desc = "Test failure details" },
+      { "<leader>tq", function() require("modules.phpunit.details").quickfix() end, desc = "Failed tests in the quickfix list" },
+      { "]f", function() require("modules.phpunit.details").next_failure(1) end, desc = "Next failed test" },
+      { "[f", function() require("modules.phpunit.details").next_failure(-1) end, desc = "Previous failed test" },
     },
     config = function()
       -- neotest reads the tests in a child Neovim that gets the runtimepath as it is now: the adapter's own

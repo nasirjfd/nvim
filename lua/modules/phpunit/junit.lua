@@ -30,12 +30,13 @@ local function text_of(element)
   return ""
 end
 
--- the first failure of a testcase: kind ("error"/"failure"/"warning"/"skipped") and its text
+-- the first failure of a testcase: kind ("error"/"failure"/"warning"/"skipped"), its text and the exception's class
 local function problem(case)
   for _, kind in ipairs({ "error", "failure", "warning" }) do
     local found = case[kind]
     if found ~= nil then
-      return kind, text_of(list(found)[1])
+      local first = list(found)[1]
+      return kind, text_of(first), type(first) == "table" and first._attr and first._attr.type or nil
     end
   end
   if case.skipped ~= nil then
@@ -67,7 +68,9 @@ end
 --- its result has `datasets` ({ label, status, short?, errors? } in the order of the log, label as PHPUnit
 --- names it: `#3` or `"name"`), its own status is failed when any data set failed.
 ---@param parsed table
----@return table<string, { status: string, short: string, errors?: table[], datasets?: table[] }>
+--- A failed result has `message` (the whole text: message, diff, trace), `exception` (its class) and `kind`; every
+--- result has `time` (seconds) and `stdout` (what the test printed) when the log has them.
+---@return table<string, { status: string, short: string, errors?: table[], datasets?: table[], message?: string, exception?: string, time?: number, stdout?: string }>
 function M.results(parsed)
   local cases = {}
   walk(parsed, nil, cases)
@@ -82,10 +85,17 @@ function M.results(parsed)
     local file = entry.file
     if file and method ~= "" then
       local id = file .. "::" .. method
-      local kind, message = problem(entry.case)
+      local kind, message, exception = problem(entry.case)
       local status = status_of_case(kind)
       local detail = { status = status, short = kind and (message:match("[^\n]*\n?[^\n]*") or message) or "passed" }
+      detail.time = tonumber(attr.time)
+      local out = entry.case["system-out"]
+      out = type(out) == "table" and text_of(list(out)[1]) or out
+      if type(out) == "string" and vim.trim(out) ~= "" then
+        detail.stdout = out
+      end
       if status == "failed" then
+        detail.message, detail.exception, detail.kind = message, exception, kind
         local errors = {}
         for line_file, line in message:gmatch("([^%s:]+%.php):(%d+)") do
           if line_file == file then
@@ -98,18 +108,42 @@ function M.results(parsed)
         detail.errors = errors
       end
       local result = results[id]
+      local function take(from)
+        result.status, result.short, result.errors = from.status, from.short, from.errors
+        result.message, result.exception, result.kind = from.message, from.exception, from.kind
+      end
       if not result then
-        result = { status = status, short = detail.short, errors = detail.errors }
+        result = {}
         results[id] = result
-      elseif status == "failed" and result.status ~= "failed" then
+        take(detail)
+        result.time, result.stdout = detail.time, detail.stdout
+      else
+        -- a method with data sets takes as long as all of them; its output is theirs
+        if detail.time then
+          result.time = (result.time or 0) + detail.time
+        end
+        if detail.stdout then
+          result.stdout = (result.stdout and (result.stdout .. "\n") or "") .. detail.stdout
+        end
+      end
+      if status == "failed" and result.status ~= "failed" then
         -- one failing data set fails the method; its message is the first failure
-        result.status, result.short, result.errors = "failed", detail.short, detail.errors
+        take(detail)
       elseif status == "passed" and result.status == "skipped" then
         result.status = "passed"
       end
       if label then
         result.datasets = result.datasets or {}
-        table.insert(result.datasets, { label = label, status = status, short = detail.short, errors = detail.errors })
+        table.insert(result.datasets, {
+          label = label,
+          status = status,
+          short = detail.short,
+          errors = detail.errors,
+          message = detail.message,
+          exception = detail.exception,
+          time = detail.time,
+          stdout = detail.stdout,
+        })
       end
     end
   end

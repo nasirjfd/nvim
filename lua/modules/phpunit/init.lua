@@ -174,6 +174,7 @@ local function keep_the_others(tree, results, output)
           now.status = "failed"
           if now.status ~= "failed" or not now.errors then
             now.short, now.errors = previous.short, previous.errors
+            now.message, now.exception = previous.message, previous.exception
           end
         elseif now.status ~= "skipped" then
           now.status = "passed"

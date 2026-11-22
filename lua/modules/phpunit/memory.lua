@@ -10,7 +10,8 @@ local uv = vim.uv
 
 local path = vim.env.NVIM_CONFIG_TESTS and (vim.fn.tempname() .. "-phpunit-results.json")
   or (vim.fn.stdpath("state") .. "/phpunit-results.json")
-local MAX_MESSAGE = 1500 -- characters kept of a failure message (the trace is not needed)
+local MAX_MESSAGE = 6000 -- characters kept of a failure message (its diff and trace, for the failure view)
+local MAX_OUTPUT = 2000 -- characters kept of what a failed test printed
 
 local data ---@type table<string, table<string, { status: string, short?: string, errors?: table[] }>>?
 
@@ -47,9 +48,10 @@ local function write()
   end
 end
 
-local function trim(text)
-  if type(text) == "string" and #text > MAX_MESSAGE then
-    return text:sub(1, MAX_MESSAGE)
+local function trim(text, max)
+  max = max or MAX_MESSAGE
+  if type(text) == "string" and #text > max then
+    return text:sub(1, max)
   end
   return text
 end
@@ -60,23 +62,27 @@ end
 
 --- What is kept of a result.
 local function keep(result)
-  local entry = { status = result.status }
+  local entry = { status = result.status, time = result.time }
   if result.status == "failed" then
     entry.short = trim(result.short)
+    entry.message, entry.exception = trim(result.message), result.exception
+    entry.stdout = trim(result.stdout, MAX_OUTPUT)
     entry.errors = {}
     for i, err in ipairs(result.errors or {}) do
       if i > 3 then
         break
       end
-      entry.errors[#entry.errors + 1] = { line = err.line, message = trim(err.message) }
+      entry.errors[#entry.errors + 1] = { line = err.line, message = trim(err.message, 1500) }
     end
   end
   if result.datasets then
     entry.datasets = {}
     for _, set in ipairs(result.datasets) do
-      local kept = { label = set.label, status = set.status }
+      local kept = { label = set.label, status = set.status, time = set.time }
       if set.status == "failed" then
         kept.short = trim(set.short) and trim(set.short):sub(1, 300)
+        kept.message, kept.exception = trim(set.message, 3000), set.exception
+        kept.errors = set.errors and { set.errors[1] and { line = set.errors[1].line, message = trim(set.errors[1].message, 300) } } or nil
       end
       entry.datasets[#entry.datasets + 1] = kept
     end

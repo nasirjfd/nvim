@@ -36,6 +36,7 @@ local function runner()
 end
 
 local timer
+local results_changed = false -- the failure view and the marks of thrown exceptions follow (details.lua)
 local function refresh_soon()
   timer = timer or assert(uv.new_timer())
   timer:stop()
@@ -45,6 +46,12 @@ local function refresh_soon()
     vim.schedule_wrap(function()
       for _, picker in ipairs(M.panes()) do
         kit.refresh(picker)
+      end
+      if results_changed then
+        results_changed = false
+        pcall(function()
+          require("modules.phpunit.details").on_results()
+        end)
       end
     end)
   )
@@ -96,6 +103,7 @@ function M.attach(client)
       return client._state:running(adapter_id)
     end)
     snap.running = ok and running or {}
+    results_changed = true
     refresh_soon()
     -- keep what the tests did for the next session
     if tree and not saving then
@@ -505,6 +513,7 @@ local function rows(_, ctx)
       file = test.path,
       line = test.line,
       status = running_now(test.id) and "running" or (result_of(test.id) or {}).status or "none",
+      time = (not running_now(test.id)) and (result_of(test.id) or {}).time or nil,
       sets = (not running_now(test.id)) and sets_of(test) and #sets_of(test) or nil,
     }, extra or {})
   end
@@ -525,6 +534,7 @@ local function rows(_, ctx)
       line = test.line,
       status = set.status,
       short = set.short,
+      time = set.time,
     }, extra or {})
   end
 
@@ -885,11 +895,38 @@ local function format(item, picker)
       ret[#ret + 1] = { "  " .. item.file_name, "PhpTestDim" }
     end
   end
+  -- how long it took (a slow one, a second or more, stands out)
+  if (item.kind == "test" or item.kind == "dataset") and item.time and item.status ~= "running" then
+    ret[#ret + 1] = {
+      "  " .. require("modules.phpunit.failure").duration(item.time),
+      item.time >= 1 and "PhpTestSkipped" or "PhpTestDim",
+    }
+  end
   return ret
 end
 
 -- ── actions ─────────────────────────────────────────────────────────────────────────────────────
 local refresh = kit.refresh
+
+-- the row's failed test in the failure view (details.lua)
+local function details_of(item)
+  if not item then
+    return nil
+  end
+  local details = require("modules.phpunit.details")
+  if item.kind == "test" or item.kind == "dataset" then
+    return details.entry(item.id, item.label)
+  elseif item.kind == "file" or item.kind == "dir" then
+    for _, id in ipairs(item.ids or {}) do
+      local entry = details.entry(id)
+      if entry then
+        return entry
+      end
+    end
+  elseif item.kind == "failed" then
+    return details.failures()[1]
+  end
+end
 
 local function toggle_fold(picker, item)
   if item.kind == "dir" or item.kind == "failed" then
@@ -1003,7 +1040,24 @@ local actions = {
     elseif foldable(item) then
       toggle_fold(picker, item)
     elseif item.kind == "test" or item.kind == "dataset" then
-      kit.goto_line(picker, item.file, item.line)
+      -- a failed test: where it failed, with its failure below the editor
+      local entry = item.status == "failed" and details_of(item)
+      if entry then
+        kit.goto_line(picker, item.file, entry.line)
+        require("modules.phpunit.details").render(entry, true)
+      else
+        kit.goto_line(picker, item.file, item.line)
+      end
+    end
+  end,
+  tests_details = function(picker, item)
+    item = item or picker:current()
+    local entry = details_of(item)
+    if entry then
+      kit.editing_window(picker)
+      require("modules.phpunit.details").open(entry)
+    else
+      vim.notify("No result for this row yet: run it first", vim.log.levels.INFO, { title = "Tests" })
     end
   end,
   tests_jump = function(picker, item)
@@ -1069,6 +1123,7 @@ local actions = {
       " p               parallel on/off",
       " v               flat list",
       " x               stop",
+      " d               failure details",
       " o               output",
       " i               jump to code",
       " l / h           open / close",
@@ -1149,6 +1204,16 @@ local function open()
     on_show = function(picker)
       kit.set_title(picker, TITLE)
     end,
+    -- while the failure view is open it shows the row the cursor is on
+    on_change = function(_, item)
+      local details = package.loaded["modules.phpunit.details"]
+      if details and details.is_open() and item and (item.kind == "test" or item.kind == "dataset") then
+        local entry = details_of(item)
+        if entry then
+          details.render(entry)
+        end
+      end
+    end,
     win = {
       list = {
         keys = vim.tbl_extend("error", kit.mouse_keys("tests_press", "tests_click"), {
@@ -1164,6 +1229,7 @@ local function open()
           ["v"] = "tests_view",
           ["x"] = "tests_stop",
           ["o"] = "tests_output",
+          ["d"] = "tests_details",
           ["e"] = "tests_expand_all",
           ["E"] = "tests_collapse_all",
           ["?"] = "tests_help",
