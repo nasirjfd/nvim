@@ -16,8 +16,10 @@ auto_switch = false
 
 [keys]
 prefix = "ctrl+,"
-split_vertical = "cmd+d"
-split_horizontal = "cmd+shift+d"
+# Original prefix bindings: Ctrl+, then v (vertical) or - (horizontal).
+# Cmd+D is reserved for the pane application, not for creating splits.
+split_vertical = "prefix+v"
+split_horizontal = "prefix+minus"
 focus_pane_left = "cmd+alt+h"
 focus_pane_down = "cmd+alt+j"
 focus_pane_up = "cmd+alt+k"
