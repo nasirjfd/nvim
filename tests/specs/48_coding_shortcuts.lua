@@ -57,6 +57,14 @@ local function editor()
       "return vim.fn.maparg('<D-.>', 'n', false, true).desc == 'Code Action / Quick Fix'"
     )
   end, "LSP shortcut did not attach")
+  -- blink finishes its setup a moment after startup (longer on a busy machine): typing before that is its own
+  -- test below
+  h.wait(screen, function()
+    return screen:exec([[
+      local t = package.loaded["blink.cmp.completion.trigger"]
+      return t ~= nil and #t.show_emitter.listeners > 0
+    ]])
+  end, "blink did not finish its setup")
   return screen
 end
 
@@ -76,13 +84,39 @@ lib.test(
         end
         h.wait(screen, function()
           return screen:exec("return require('blink.cmp').is_visible() and vim.fn.mode() == 'i'")
-        end, "LSP menu did not open after inserted " .. trigger)
+        end, function()
+          return "LSP menu did not open after inserted " .. trigger .. " DEBUG " .. vim.inspect(screen:exec([[
+            local t = require('blink.cmp.completion.trigger')
+            return { requests = _G.shortcut_completions, mode = vim.fn.mode(), ctx = t.context and { t.context.trigger, t.context.cursor, t.context.line } or 'none',
+              clients = #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/completion' }), enabled = require('blink.cmp.config').enabled(),
+              line = vim.api.nvim_get_current_line(), list = #require('blink.cmp.completion.list').items }
+          ]]))
+        end)
         screen:input("<Esc>")
       end
     end
     screen:close()
   end
 )
+
+lib.test("LSP completion: a trigger typed before blink finished its setup still opens the menu", function()
+  local screen = editor()
+  screen:exec("vim.api.nvim_buf_set_lines(0, 0, -1, false, {'object'})")
+  -- blink sets up its listeners only after an asynchronous check of its fuzzy library: as if it was not done yet
+  screen:exec([[
+    local t = require('blink.cmp.completion.trigger')
+    _G.saved_show_listeners = t.show_emitter.listeners
+    t.show_emitter.listeners = {}
+  ]])
+  screen:input("A->")
+  vim.wait(200) -- "not ready" for a moment: nothing can open
+  lib.eq(false, screen:exec("return require('blink.cmp').is_visible()"))
+  screen:exec("require('blink.cmp.completion.trigger').show_emitter.listeners = _G.saved_show_listeners")
+  h.wait(screen, function()
+    return screen:exec("return require('blink.cmp').is_visible() and vim.fn.mode() == 'i'")
+  end, "the menu did not open once blink was ready")
+  screen:close()
+end)
 
 for _, mode in ipairs({ "normal", "visual", "insert" }) do
   lib.test("Cmd+. requests and applies an LSP import quick fix in " .. mode .. " mode", function()
