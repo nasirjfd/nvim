@@ -105,8 +105,7 @@ return {
       bash = { "shellcheck" },
       zsh = { "shellcheck" },
       fish = { "fish" },
-      php = { "phpstan" },
-      blade = { "phpstan" },
+      -- PHP: intelephense's own diagnostics only (phpstan without a config ran at level 0 and found nothing more)
       ruby = { "rubocop" },
       eruby = { "erb_lint" },
       rust = { "clippy" },

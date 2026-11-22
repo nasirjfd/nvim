@@ -496,7 +496,6 @@ return {
         "jsonlint",
         "htmlhint",
         "stylelint",
-        "phpstan",
         "ruff",
         "mypy",
         "sqlfluff",

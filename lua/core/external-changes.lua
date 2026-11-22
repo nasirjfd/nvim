@@ -6,7 +6,7 @@
 --   * notifies language servers that expect the editor to watch files for them. intelephense
 --     never registers watchers (its VS Code extension watches **/*.php itself), so without this
 --     it keeps reporting e.g. "Undefined function" for code added on disk until Neovim restarts;
---   * re-runs nvim-lint (phpstan) on the current buffer, whose result depends on other files.
+--   * re-runs nvim-lint on the current buffer, whose result can depend on other files.
 -- ============================================================================
 local uv = vim.uv
 
@@ -83,7 +83,7 @@ local function flush()
     refresh.files_changed(paths)
   end
 
-  -- other files changed under the current buffer's linters (e.g. phpstan): lint it again
+  -- other files changed under the current buffer's linters: lint it again
   local lint = package.loaded["lint"]
   if lint and vim.bo.buftype == "" and vim.api.nvim_buf_get_name(0) ~= "" then
     lint.try_lint()

@@ -32,28 +32,6 @@ vim.lsp.config("intelephense", {
   },
 })
 
--- Use the project's phpstan: Mason's newer one crashes on the project's old nikic/php-parser (v4).
-local lint = require("lint")
-lint.linters.phpstan.cmd = root .. "/bin/phpstan"
-lint.linters.phpstan.args = {
-  "analyse",
-  "--error-format=json",
-  "--no-progress",
-  -- The default 128M crashes the worker on big files; nvim-lint then shows that as an error on line 1.
-  "--memory-limit=2G",
-  "--autoload-file=" .. root .. "/autoload.php",
-}
--- This phpstan prints a few stray "x" characters before its JSON even with --no-progress, which
--- makes nvim-lint's parser fail (shown as an error on line 1). Drop everything before the JSON.
-local parse_phpstan = lint.linters.phpstan.parser
-lint.linters.phpstan.parser = function(output, bufnr)
-  local json_start = output and output:find("{", 1, true)
-  if not json_start then
-    return {}
-  end
-  return parse_phpstan(output:sub(json_start), bufnr)
-end
-
 require("codediff").setup({
   scm = {
     only_listed = true,
