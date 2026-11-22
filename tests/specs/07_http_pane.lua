@@ -168,8 +168,14 @@ end
 local ICON = { new = "\u{F0415}", curl = "\u{F014D}", hidden = "\u{F0209}", hidden_on = "\u{F0208}" }
 
 local function click_tool(screen, name)
-  local row, col = h.find_on_screen(screen, ICON[name], 40)
-  lib.ok(row, "the " .. name .. " icon is not on the screen")
+  -- only once the pane is laid out: its title above the toolbar. A frame drawn before the title showed the toolbar
+  -- one row higher, and a click there landed on the title once it appeared.
+  local row, col
+  h.wait(screen, function()
+    local title = h.find_on_screen(screen, "HTTP Requests", 40)
+    row, col = h.find_on_screen(screen, ICON[name], 40)
+    return title ~= nil and row ~= nil and row > title
+  end, "the " .. name .. " icon is not on the screen under the pane's title")
   h.click(screen, row, col)
 end
 
