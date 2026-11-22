@@ -12,4 +12,4 @@ Files here are the source of truth. Run `./install.sh` on a new machine (needs `
   modified-key forwarding; plain Tab/Enter are deliberately not remapped. Existing Ctrl+Space
   (completion) and `<leader>ca` (code actions) remain available.
 
-- Ghostty's **Hide Others** menu item is also cmd+alt+h (= `focus_pane_left`) and swallowed the first press, so `install.sh` moves it with `defaults write com.mitchellh.ghostty NSUserKeyEquivalents`. Needs a Ghostty restart to take effect.
+- Ghostty's **Hide Others** menu item is also cmd+alt+h (= `focus_pane_left`) and swallowed the first press, so `install.sh` moves it (and **Hide Ghostty**, cmd+h, which is find and replace in Neovim) with `defaults write com.mitchellh.ghostty NSUserKeyEquivalents -dict-add`. Needs a Ghostty restart (quit and reopen) to take effect. Never write that key with `-dict`: it replaces the whole list, and Hide Others is back on cmd+alt+h. Check with `defaults read com.mitchellh.ghostty NSUserKeyEquivalents` (both entries listed).
