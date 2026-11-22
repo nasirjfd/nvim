@@ -341,6 +341,13 @@ return {
             desc = "Open Merge Requests in Browser",
             silent = true,
           })
+          vim.keymap.set("n", "ggc", function()
+            require("core.git-branch-commit").open()
+          end, {
+            buffer = args.buf,
+            desc = "New branch, stage all, commit",
+            silent = true,
+          })
           -- <F7> / <F19> in the file list jumps back to the diff pane
           for _, lhs in ipairs({ "<F7>", "<F19>", "<D-j>", "<D-k>" }) do
             vim.keymap.set("n", lhs, "<cmd>wincmd p<cr>", { buffer = args.buf })
