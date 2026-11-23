@@ -67,6 +67,21 @@ local function git_pane(dir)
       return false
     ]])
   end, "the changed file did not show in the Git pane")
+  -- Selecting a.txt loads its diff later, and that load moves through the diff windows. Landing after ggc (a busy
+  -- machine) it had a "Press ENTER" prompt eat the typed keys in a read-only diff window: E21 for every key.
+  -- So the diff is loaded and the Git pane has the cursor again before a test types anything.
+  h.wait(screen, function()
+    return screen:exec([[
+      local lifecycle = require('codediff.ui.lifecycle')
+      local tab = vim.api.nvim_get_current_tabpage()
+      local s, p = lifecycle.get_session(tab), lifecycle.get_panel_view(tab)
+      if not s or not s.stored_diff_result or #(s.stored_diff_result.changes or {}) == 0 then return false end
+      if s.refresh and (s.refresh.loading or s.refresh.running) then return false end
+      if not (s.modified_bufnr and vim.api.nvim_buf_get_name(s.modified_bufnr):find('a.txt', 1, true)) then return false end
+      vim.api.nvim_set_current_win(p.winid)
+      return true
+    ]])
+  end, "the diff of a.txt did not load")
   return screen
 end
 
@@ -137,12 +152,32 @@ lib.test("git branch commit: a message changed by hand stays; Esc cancels and no
   local dir = h.repo({ ["a.txt"] = { "before" } })
   h.write(dir .. "/a.txt", { "after" })
   local screen = git_pane(dir)
+  -- This test failed once under a full parallel run: everything typed landed in a read-only buffer (E21). Until
+  -- the cause is known, every focus / mode / buffer change after ggc is recorded and printed with a failure.
+  screen:exec([[
+    _G.focus_log = {}
+    vim.api.nvim_create_autocmd({ "WinEnter", "BufEnter", "ModeChanged" }, { callback = function(ev)
+      local where = vim.split(debug.traceback("", 2), "\n")
+      table.insert(_G.focus_log, ("%s win=%d ft=%s modifiable=%s mode=%s | %s"):format(ev.event, vim.api.nvim_get_current_win(),
+        vim.bo.filetype, tostring(vim.bo.modifiable), vim.fn.mode(), vim.trim(where[3] or "") .. " " .. vim.trim(where[4] or "")))
+    end })
+  ]])
+  local function wait_logged(predicate, message)
+    local ok, err = pcall(h.wait, screen, predicate, message)
+    if not ok then
+      error(tostring(err) .. "\n--- focus log ---\n" .. table.concat(screen:exec("return _G.focus_log"), "\n"), 0)
+    end
+  end
   screen:input("ggc")
-  h.wait(screen, function()
-    return screen:exec("return vim.bo.filetype") == "git_branch_commit"
-  end, "ggc did not open")
+  -- typing starts only once the branch box has the cursor in insert mode (ggc's startinsert has run)
+  wait_logged(function()
+    return screen:exec([[
+      local s = require("core.git-branch-commit").state()
+      return s ~= nil and vim.api.nvim_get_current_win() == s.branch_win and vim.fn.mode() == "i"
+    ]])
+  end, "ggc did not open the branch box in insert mode")
   screen:input("fix/pay-9-x<Tab><C-u>fix(pay-9): my own words<Tab>yz")
-  h.wait(screen, function()
+  wait_logged(function()
     return h.find_on_screen(screen, "fix/pay-9-xyz") ~= nil
   end, "typing in the branch box again")
   vim.wait(150) -- nothing else happens: the message must not be rewritten from the branch
