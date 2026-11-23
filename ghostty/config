@@ -76,8 +76,6 @@ keybind = super+shift+t=csi:116;10u
 keybind = shift+alt+left=csi:1;6D
 keybind = shift+alt+right=csi:1;6C
 
-# gtab managed include
-config-file = "/Users/nasirjd/.config/gtab/ghostty-shortcut.conf"
 config-file = "/Users/nasirjd/.config/ghostty/herdr-passthrough.conf"
 
 # Option+Backspace deletes the previous word everywhere (shell, Neovim insert/command line, pickers):
