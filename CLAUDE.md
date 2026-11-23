@@ -90,6 +90,8 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 
 ## Herdr setup lives in this repo
 
+gtab is retired; herdr replaces it. On a machine that still has gtab (installed, `~/.config/gtab`, or a gtab include in any Ghostty config), remove it: steps in `AGENTS.md`, "gtab is retired".
+
 The user's herdr (terminal workspace manager) setup is versioned in `herdr/` so it is identical on every machine: `config.toml`, `zen.sh`, `send-ref.sh`, `ghostty-passthrough.conf`, `install.sh`, `README.md`.
 
 - This repo is the source of truth. On a new machine, pull and run `herdr/install.sh` (copies into `~/.config/herdr`, wires the Ghostty include, reloads herdr).

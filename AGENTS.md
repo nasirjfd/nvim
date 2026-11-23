@@ -10,6 +10,14 @@
 - System dependency: GNU FriBidi (`brew install fribidi`; `libfribidi0` on Linux). `lua/core/rtl.lua` loads it through LuaJIT FFI to draw right-to-left text (Persian, Arabic, Hebrew) in visual order. On a new machine, or when `tests/specs/57_rtl_text.lua` fails with "GNU FriBidi is not installed", install it before anything else. Without it the module does nothing except a one-time message when RTL text is shown. The module is display-only (ephemeral overlays, never on the cursor line, only buffers with `buftype == ""`); never make it change the buffer, options (`conceallevel`, `guicursor`), keymaps or the cursor: an earlier version that did broke typing and search in English.
 - `init.lua` enables `exrc`; project-local `.nvim.lua` files may execute when opening a project. Treat them as executable configuration and inspect before enabling trust.
 
+## gtab is retired (removed 2026-11-23): clean it up on every machine
+
+herdr (`herdr/`) replaces gtab. The include `config-file = ".../.config/gtab/ghostty-shortcut.conf"` (with its `# gtab managed include` comment) was removed from `ghostty/config`; never add it back. On a machine where gtab is still around, when you start working there, tell the user and remove it:
+
+- Ghostty configs outside this repo (`~/.config/ghostty/config`, a `config.ghostty` that is not the symlink to `ghostty/config`, `~/Library/Application Support/com.mitchellh.ghostty/config`): delete any gtab include line. If gtab wrote it back into `ghostty/config`, delete it there too and commit.
+- gtab itself: find how it was installed (`command -v gtab`, `brew list | grep -i gtab`, `~/Library/LaunchAgents/*gtab*`) and uninstall it the same way, then remove `~/.config/gtab`. Ask the user first if anything there looks like their own data rather than gtab's generated files.
+- Reload Ghostty (Cmd+Shift+,) afterwards.
+
 ## Related projects and real-project testing
 
 - Reports of Git conflicts, missing changes, or broken merge UI in Supernova are requests to fix the Neovim/Git-pane tooling, not to resolve application conflicts. Never edit, stage, commit, merge, abort, reset, or otherwise change Supernova repositories for these tasks unless the user explicitly asks for that project operation. Use read-only inspection for real-project validation and isolated repositories for tests that need file changes or conflicts.
