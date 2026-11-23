@@ -117,6 +117,15 @@ if [[ -d $VENDOR ]]; then
     fix "$VENDOR/.nvim.lua differs from local-projects/supernova-env-dev.nvim.lua (newer side wins; copy, re-trust, commit + push)"
   same "$REPO/local-projects/supernova-env-dev.ignore" "$VENDOR/.ignore" && ok "supernova .ignore matches" ||
     fix "$VENDOR/.ignore differs from local-projects/supernova-env-dev.ignore"
+  # every repository of the Git pane (scm.repositories) must be searchable from vendor/: grep, file and symbol search
+  # and intelephense's index (core/intelephense-scope.lua) all go through the same ignore rules
+  searchable=" $(cd "$VENDOR" && rg --files </dev/null 2>/dev/null | cut -d/ -f1-2 | sort -u | tr '\n' ' ') "
+  unsearchable=()
+  for pkg in $(sed -n 's/^[[:space:]]*"\([A-Za-z0-9_.-]*\/[A-Za-z0-9_.-]*\)",$/\1/p' "$REPO/local-projects/supernova-env-dev.nvim.lua"); do
+    [[ -d $VENDOR/$pkg && $searchable != *" $pkg "* ]] && unsearchable+=($pkg)
+  done
+  (( ${#unsearchable} )) && fix "not searchable in supernova (grep, files, symbols, LSP references miss them): ${(j:, :)unsearchable}; add \"!/<package>/\" to local-projects/supernova-env-dev.ignore, copy it to $VENDOR/.ignore, commit + push" ||
+    ok "every Git pane repository of supernova is searchable"
   if command -v docker >/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx supernova-env-dev-mysql-1; then
     n=$(docker exec supernova-env-dev-mysql-1 sh -c 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-root}" -N -e "select count(distinct table_schema) from information_schema.tables where table_schema regexp \"^digiexpress(_log)?_[0-9]+$\""' 2>/dev/null)
     [[ $n == $((TEST_DBS * 2)) ]] && ok "test databases 1..$TEST_DBS" ||

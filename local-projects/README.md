@@ -15,7 +15,7 @@ This repo is the synced copy. Whenever a project's `.nvim.lua` changes, copy it 
 
 The parent repo ignores `vendor/*`, so the pickers (fd, rg) inside `vendor/` would not see the packages it does not
 allow-list (e.g. `vendor/digiexpress/drop-shipping-contract`). A local `.ignore` in the folder unignores just those
-(fd and rg read it before the parent's `.gitignore`; list the directory *and* its content: `!/pkg/` + `!/pkg/**`). Nothing
+(fd and rg read it before the parent's `.gitignore`; list each package's directory, `!/pkg/`; add `!/pkg/**` only for a small package, it also un-hides what the package itself ignores; every repository in the `.nvim.lua`'s `scm.repositories` must be listed, `machine/check.sh` checks it). Nothing
 else is loaded by default: about 8.7k files instead of 63k, so file search is ~5x and grep ~9x faster. `<leader>uI` still
 shows everything. Copy `supernova-env-dev.ignore` to `supernova-env-dev/vendor/.ignore`; add a package by adding its two lines.
 

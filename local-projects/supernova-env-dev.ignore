@@ -1,4 +1,13 @@
 # machine-local: search inside these packages although the parent .gitignore hides them
-# (vendor/digiexpress/*); fd and rg read this file before the parent's .gitignore.
+# (vendor/*, vendor/digiexpress/*, vendor/digikala/*); fd and rg read this file before the parent's .gitignore.
+# rg does not apply the parent's own "!vendor/..." exceptions when it runs inside vendor/: every package to search
+# (every repository of the Git pane, scm.repositories in supernova-env-dev.nvim.lua) must be listed here.
+# A package is listed as its folder only: "!/pkg/**" would also bring back what the package itself ignores
+# (its own vendor/, caches), thousands of extra files in every search.
+# machine/check.sh fails when one of them is not searchable.
 !/digiexpress/
 !/digiexpress/**
+!/digikala/supernova-digiexpress/
+!/digikala/supernova-hedwig/
+!/digikala/supernova-flex/
+!/digikala/supernova-digikala-shared/

@@ -105,7 +105,7 @@ The user's herdr (terminal workspace manager) setup is versioned in `herdr/` so 
 
 ## Search inside a folder the parent repo ignores
 
-Pickers never load ignored or hidden files by default (`<leader>uI` toggles it). Where a parent repo ignores most of the folder (supernova's `vendor/*`), put a local `.ignore` in that folder with `!/pkg/` and `!/pkg/**` for each package to search: fd and rg read it before the parent's `.gitignore`, so only those packages are added (no `--no-ignore-parent`, which loaded everything: 63k files, grep 9x slower). The `.ignore` is synced in `local-projects/` (see its README). Spec: `tests/specs/10_parent_ignore.lua`.
+Pickers never load ignored or hidden files by default (`<leader>uI` toggles it). Where a parent repo ignores most of the folder (supernova's `vendor/*`), put a local `.ignore` in that folder with `!/pkg/` for each package to search (`!/pkg/**` too only for a small package: it also un-hides what the package itself ignores, its own `vendor/` and caches): fd and rg read it before the parent's `.gitignore`, so only those packages are added. rg does not apply the parent's own `!vendor/...` exceptions when it runs inside `vendor/`, so every package must be listed there; `machine/check.sh` fails when a Git pane repository of supernova is not searchable (it was missing the four `digikala/supernova-*` packages: no grep results and no LSP references there, since intelephense indexes only what search sees) (no `--no-ignore-parent`, which loaded everything: 63k files, grep 9x slower). The `.ignore` is synced in `local-projects/` (see its README). Spec: `tests/specs/10_parent_ignore.lua`.
 
 ## What intelephense indexes
 
