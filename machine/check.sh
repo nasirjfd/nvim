@@ -36,6 +36,11 @@ repo_state() { # name dir
 print "== repositories"
 repo_state "nvim config" "$REPO"
 repo_state "multi-repo-code-diff source" "$PLUGIN_SRC"
+if [[ -f $PLUGIN_SRC/VERSION ]]; then # the plugin's own tests load its native diff library from the checkout
+  lib=$PLUGIN_SRC/libvscode_diff_$(<"$PLUGIN_SRC/VERSION").$([[ $(uname) == Darwin ]] && echo dylib || echo so)
+  [[ -f $lib ]] && ok "plugin source has ${lib:t}" ||
+    fix "${lib:t} missing in the plugin source (its tests fail): cp $LAZY/multi-repo-code-diff/${lib:t} $PLUGIN_SRC/ (or make build there)"
+fi
 [[ $(git -C "$REPO" config core.hooksPath) == .githooks ]] && ok "git hooks (.githooks)" ||
   fix "git hooks: git -C $REPO config core.hooksPath .githooks"
 
@@ -84,7 +89,11 @@ fi
 
 print "== herdr"
 herdr_ok=1
-for f in config.toml zen.sh send-ref.sh; do
+# zen.sh rewrites the four pane_* lines while a pane is zoomed: compare config.toml without them
+unzoomed() { grep -vE '^pane_(borders|outer_borders|gaps|scrollbars) = ' "$1" 2>/dev/null; }
+if [[ -f $HOME/.config/herdr/config.toml ]] && [[ "$(unzoomed "$REPO/herdr/config.toml")" == "$(unzoomed "$HOME/.config/herdr/config.toml")" ]]; then :
+else fix "~/.config/herdr/config.toml differs from herdr/config.toml"; herdr_ok=0; fi
+for f in zen.sh send-ref.sh; do
   same "$REPO/herdr/$f" "$HOME/.config/herdr/$f" || { fix "~/.config/herdr/$f differs from herdr/$f"; herdr_ok=0; }
 done
 same "$REPO/herdr/ghostty-passthrough.conf" "$HOME/.config/ghostty/herdr-passthrough.conf" ||
