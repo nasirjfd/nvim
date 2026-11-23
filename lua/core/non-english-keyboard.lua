@@ -1,5 +1,14 @@
 -- Non-English keyboard-position translation; ordinary editor text is unchanged.
 local M = {}
+-- Every alias's description ends with it. Shortcut lists (which-key, the keymaps picker) leave the aliases out:
+-- they only repeat an English shortcut on the Persian layout.
+M.SUFFIX = " (non-English keyboard)"
+
+--- Is this mapping (or its description) one of the Persian-layout aliases?
+function M.is_alias(mapping)
+  local desc = type(mapping) == "table" and mapping.desc or mapping
+  return type(desc) == "string" and desc:sub(-#M.SUFFIX) == M.SUFFIX
+end
 local api = vim.api
 local letters = {
   ["ض"] = "q",
@@ -246,7 +255,7 @@ function M.shortcuts(buf)
           remap = true,
           silent = mapping.silent == 1,
           nowait = mapping.nowait == 1,
-          desc = (mapping.desc or "Shortcut") .. " (non-English keyboard)",
+          desc = (mapping.desc or "Shortcut") .. M.SUFFIX,
         })
       end
     end

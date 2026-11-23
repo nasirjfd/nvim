@@ -399,6 +399,12 @@ return {
         list = { keys = { ["<C-q>"] = "close" } },
       },
       sources = {
+        -- English keys only: the Persian-layout copies of every shortcut (core/non-english-keyboard.lua) are left out
+        keymaps = {
+          transform = function(item)
+            return not require("core.non-english-keyboard").is_alias(item.item)
+          end,
+        },
         lsp_workspace_symbols = {
           hidden = false,
           ignored = false,

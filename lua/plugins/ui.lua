@@ -46,6 +46,10 @@ return {
     opts = {
       preset = "helix",
       delay = 250,
+      -- shortcut lists show English keys only: the Persian-layout copies (core/non-english-keyboard.lua) still work
+      filter = function(mapping)
+        return not require("core.non-english-keyboard").is_alias(mapping)
+      end,
       sort = { "alphanum", "local", "order", "group", "mod" },
       icons = {
         mappings = false,

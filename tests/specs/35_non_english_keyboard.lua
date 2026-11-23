@@ -334,3 +334,49 @@ lib.test(
     screen:close()
   end
 )
+
+lib.test("Shortcut lists show English keys only: no Persian-layout copies in which-key or the keymaps picker", function()
+  local dir = h.repo({ ["notes.txt"] = { "plain english text" } })
+  local screen = h.nvim(dir, 200, 70)
+  screen:exec("vim.cmd('edit notes.txt')")
+  h.wait(screen, function()
+    return screen:exec("return vim.fn.maparg('<leader>ث', 'n') ~= ''") -- the copies exist and still work
+  end, "the Persian-layout copy of <leader>e was not made")
+  local function persian_rows()
+    local rows = {}
+    for row = 1, 70 do
+      local text = h.row_text(screen, row) or ""
+      if text:find("non-English keyboard", 1, true) or text:find("[\216-\219][\128-\191]") or text:find("\239[\173-\187][\128-\191]") then
+        rows[#rows + 1] = text
+      end
+    end
+    return rows
+  end
+  screen:input("<Space>")
+  h.wait(screen, function()
+    return h.find_on_screen(screen, "Explorer") ~= nil and h.find_on_screen(screen, "+Git") ~= nil
+  end, "the which-key popup of <leader> did not open")
+  lib.eq({}, persian_rows(), "which-key lists Persian-layout shortcuts")
+  screen:input("<Esc>")
+  screen:exec("Snacks.picker.keymaps()")
+  local listed = nil
+  h.wait(screen, function()
+    listed = screen:exec([[
+      local picker = Snacks.picker.get({ source = "keymaps" })[1]
+      if not picker or picker:is_active() or #picker:items() == 0 then return nil end
+      local out = { english = 0, persian = {} }
+      for _, item in ipairs(picker:items()) do
+        if require("core.non-english-keyboard").is_alias(item.item) then
+          out.persian[#out.persian + 1] = item.item.lhs
+        elseif item.item.desc == "Explorer" then
+          out.english = out.english + 1
+        end
+      end
+      return out
+    ]])
+    return listed ~= nil
+  end, "the keymaps picker did not list anything")
+  lib.ok(listed.english > 0, "the keymaps picker lost the English shortcuts")
+  lib.eq({}, listed.persian, "the keymaps picker lists Persian-layout shortcuts")
+  screen:close()
+end)
