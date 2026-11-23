@@ -277,7 +277,9 @@ return {
       -- Source Control pane: with no change selected, the right side shows the file you were in
       -- (like VS Code) instead of the shortcuts page (g? shows those)
       -- Cursor visibility is owned by core.cursor-visibility, shared with the other sidebars.
-      scm = { empty_view = "buffer", hide_cursor = false },
+      -- reconcile_interval: the file watcher reports every change at once; the timed re-check is only a safety
+      -- net. Its default (2 s per repository) ran `git status` 4 times a second, nonstop, with 13 repositories.
+      scm = { empty_view = "buffer", hide_cursor = false, reconcile_interval = 30000 },
       -- Enter opens the selected file at its first change and focuses the diff.
       explorer = { focus_on_select = true },
       keymaps = {
