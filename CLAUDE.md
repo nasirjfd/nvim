@@ -10,6 +10,10 @@ Personal Neovim (0.11+) configuration, not an application — there is no build 
 - Commit only changes belonging to the task; do not include unrelated user work. Use a short, single-line commit message without agent attribution.
 - If validation, commit, or push fails, report the blocker rather than claiming completion. Explicit user instructions not to commit or push take precedence.
 
+## Machines stay in sync (rule)
+
+The user works from several machines; the repo is the only channel between them. At the start of every session: `git pull --ff-only`, then `machine/check.sh` (report-only) and fix every `FIX:` line until it prints `in sync`. Anything set up outside the repo (tools, casks, `~/.config` files, `defaults write`, project `.nvim.lua`, databases, minimum app versions) goes into the repo and gets a check in `machine/check.sh` in the same turn, then commit and push. Details: `AGENTS.md`, "Machines stay in sync".
+
 ## Commands
 
 - Related-repository and real-project testing rules are in `AGENTS.md` under **Related projects and real-project testing** and apply here too: Git-pane source is `~/Can/Develop/nvim/multi-repo-code-diff`, not Lazy's installed copy. Push fork changes, update the installed plugin through Lazy, verify/test it, then commit and push the config lockfile. In testing/performance requests, "the project" means `~/Can/Develop/php/supernova-env-dev/vendor`; test there as well when the user requests it or reports a problem there, not routinely for every change. Locate equivalent checkouts on other machines rather than assuming the same absolute paths.

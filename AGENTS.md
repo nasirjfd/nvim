@@ -10,6 +10,20 @@
 - System dependency: GNU FriBidi (`brew install fribidi`; `libfribidi0` on Linux). `lua/core/rtl.lua` loads it through LuaJIT FFI to draw right-to-left text (Persian, Arabic, Hebrew) in visual order. On a new machine, or when `tests/specs/57_rtl_text.lua` fails with "GNU FriBidi is not installed", install it before anything else. Without it the module does nothing except a one-time message when RTL text is shown. The module is display-only (ephemeral overlays, never on the cursor line, only buffers with `buftype == ""`); never make it change the buffer, options (`conceallevel`, `guicursor`), keymaps or the cursor: an earlier version that did broke typing and search in English.
 - `init.lua` enables `exrc`; project-local `.nvim.lua` files may execute when opening a project. Treat them as executable configuration and inspect before enabling trust.
 
+## Machines stay in sync (rule)
+
+The user works on this config from more than one machine; every machine must end up with the same setup. This repo is the only channel between them, so whatever one machine has, the repo must record.
+
+- **At the start of every session**, before other work: `git pull --ff-only` (stop and ask if it cannot fast-forward), then run `machine/check.sh`. It is report-only; fix every `FIX:` line it prints (each says how), tell the user what you changed, and re-run it until it prints `in sync`. Paths that differ per machine: `NVIM_PLUGIN_SRC`, `SUPERNOVA_VENDOR` (see the top of the script); if a checkout is not at the default path, find it, or ask the user.
+- **Whenever you set something up outside the repo** (install a tool, a Homebrew package or cask, change a file under `~/.config` or `~/Library`, `defaults write`, a project's `.nvim.lua`/`.ignore`, a database, a minimum app version, anything else another machine would also need), in the same turn:
+  1. put the file or the steps in the repo (the config itself, `herdr/`, `local-projects/`, `ghostty/`, or a section here),
+  2. add a check for it to `machine/check.sh` (expected state + a `FIX:` line saying how to get there),
+  3. commit and push.
+  Something only written in chat, or only done on one machine, is lost for the other one.
+- **Removing something** works the same way: remove it here, and leave a check (and a short section like "gtab is retired" below) so the other machine's agent removes it too.
+- **Plugins**: `lazy-lock.json` is the truth. Restore with `NVIM_CONFIG_TESTS=1 nvim --headless '+Lazy! restore' +qa`; without `NVIM_CONFIG_TESTS=1` the daily auto-sync starts in the same process, races the restore and can leave clones half checked out (it happened with kulala.nvim). The plugin source repo (`multi-repo-code-diff`) is pulled like this repo.
+- When the two machines disagree (the check reports a local file newer than the repo's copy), the newer side wins only after you have looked at the diff; if it is not clear which is newer, ask the user.
+
 ## gtab is retired (removed 2026-11-23): clean it up on every machine
 
 herdr (`herdr/`) replaces gtab. The include `config-file = ".../.config/gtab/ghostty-shortcut.conf"` (with its `# gtab managed include` comment) was removed from `ghostty/config`; never add it back. On a machine where gtab is still around, when you start working there, tell the user and remove it:
