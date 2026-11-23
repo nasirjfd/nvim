@@ -1293,6 +1293,19 @@ return {
       desc = "Type Definition",
     },
   },
+  config = function(_, opts)
+    require("snacks").setup(opts)
+    -- A file the image viewer cannot convert (a PDF without ImageMagick) gets the error text written into its
+    -- buffer, which Snacks leaves modified: every quit then asked to save the PDF. Nothing there can be saved.
+    local placement = require("snacks.image.placement")
+    local show_error = placement.error
+    placement.error = function(self, ...)
+      show_error(self, ...)
+      if self.buf and vim.api.nvim_buf_is_valid(self.buf) then
+        vim.bo[self.buf].modified = false
+      end
+    end
+  end,
   init = function()
     vim.api.nvim_create_autocmd("User", {
       pattern = "VeryLazy",

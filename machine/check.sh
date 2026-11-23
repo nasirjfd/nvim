@@ -45,8 +45,10 @@ fi
   fix "git hooks: git -C $REPO config core.hooksPath .githooks"
 
 print "== tools"
-for cmd in nvim git jq fd rg tree-sitter fribidi herdr stylua luacheck; do
-  command -v $cmd >/dev/null && ok "$cmd" || fix "$cmd missing: brew install ${cmd/#rg/ripgrep}"
+typeset -A pkg=(rg ripgrep magick imagemagick gs ghostscript)
+# magick + gs: Snacks' image viewer turns PDFs (and heic, video frames...) into images with them
+for cmd in nvim git jq fd rg tree-sitter fribidi herdr stylua luacheck magick gs; do
+  command -v $cmd >/dev/null && ok "$cmd" || fix "$cmd missing: brew install ${pkg[$cmd]:-$cmd}"
 done
 
 print "== plugins (installed = lazy-lock.json)"
