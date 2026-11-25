@@ -139,13 +139,32 @@ function M.show()
     pcall(api.nvim_win_set_cursor, 0, { item.lnum, item.col - 1 })
     vim.cmd("normal! zz")
   end
+  local name = M.declaration_name(buf, cursor[1] - 1, cursor[2])
+  local function no_usages()
+    local text = name and vim.treesitter.get_node_text(name, buf) or "This declaration"
+    vim.notify(text .. " has no usages", vim.log.levels.INFO, { title = "Usages" })
+  end
+  if entry.done and #entry.items == 0 then
+    return no_usages()
+  end
   if entry.done and #entry.items == 1 then
     return jump(entry.items[1])
   end
   local picker
   -- the list was shown while loading: Snacks opens a single result by itself only when it was not, so do it here
   M.when_done(entry, function(items)
-    if #items == 1 then
+    if #items == 0 then
+      -- instead of Snacks' "No results found for lsp_references" (show_empty keeps it quiet)
+      vim.schedule(function()
+        if picker and not picker.closed then
+          picker:close()
+          if api.nvim_win_is_valid(win) then
+            api.nvim_set_current_win(win)
+          end
+        end
+        no_usages()
+      end)
+    elseif #items == 1 then
       vim.schedule(function()
         if picker and not picker.closed then
           picker:close()
@@ -159,6 +178,7 @@ function M.show()
   end)
   picker = Snacks.picker.pick("lsp_references", {
     include_declaration = false,
+    show_empty = true,
     -- shown at once (a loading list) instead of after 5 s without results
     show_delay = entry.done and 0 or 120,
     finder = function(_, ctx)

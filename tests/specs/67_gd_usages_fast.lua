@@ -130,3 +130,46 @@ lib.test("usages: only a declaration's name is fetched ahead, never any other wo
   lib.eq(0, screen:exec("return _G.reference_requests"))
   screen:close()
 end)
+
+lib.test("gd on a declaration without usages says so (fetched ahead, or still loading), no Snacks message", function()
+  local screen = editor(0)
+  -- every message shown, from Snacks' notifier history (it replaces vim.notify itself)
+  local function messages()
+    return screen:exec([[
+      local out = {}
+      for _, n in ipairs(Snacks.notifier.get_history()) do out[#out + 1] = n.msg end
+      return out
+    ]])
+  end
+  local function count(text)
+    local n = 0
+    for _, msg in ipairs(messages()) do
+      n = n + (msg == text and 1 or 0)
+    end
+    return n
+  end
+  -- still loading: the list opens, then closes with the message
+  screen:exec("vim.api.nvim_win_set_cursor(0, { 3, 30 })")
+  screen:input("gd")
+  h.wait(screen, function()
+    return count("create has no usages") == 1
+  end, function()
+    return "no usages message: " .. vim.inspect(messages())
+  end, DELAY + 3000)
+  h.wait(screen, function()
+    return picker_count(screen) == -1
+  end, "the empty list stayed open")
+  lib.eq("Journey.php", screen:exec("return vim.fn.expand('%:t')"), "stays in the file")
+  -- fetched ahead: the message at once, no list
+  screen:input("gd")
+  h.wait(screen, function()
+    return count("create has no usages") == 2
+  end, function()
+    return "no usages message the second time: " .. vim.inspect(messages())
+  end)
+  lib.eq(-1, picker_count(screen), "a list opened for no usages")
+  for _, msg in ipairs(messages()) do
+    lib.ok(not msg:find("No results", 1, true), "Snacks' own message: " .. msg)
+  end
+  screen:close()
+end)
