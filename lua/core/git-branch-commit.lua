@@ -280,6 +280,7 @@ function M.open()
   })
 
   for _, buf in ipairs({ branch_buf, message_buf }) do
+    require("core.input-text-selection").attach(buf)
     local other = buf == branch_buf and message_win or branch_win
     local function map(modes, lhs, fn)
       vim.keymap.set(modes, lhs, fn, { buffer = buf, nowait = true, silent = true })

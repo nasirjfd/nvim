@@ -7,7 +7,9 @@ function M.attach(buf, cancel)
     return
   end
   vim.b[buf].mac_input_navigation = true
+  require("core.input-text-selection").attach(buf)
   local function move(insert, normal)
+    require("core.input-text-selection").clear(buf)
     local key = vim.fn.mode():sub(1, 1) == "i" and insert or normal
     api.nvim_feedkeys(vim.keycode(key), "in", false)
   end
