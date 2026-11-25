@@ -34,7 +34,14 @@ function M.format()
     end
     return
   end
-  require("conform").format({ async = true, range = range }, function(err)
+  -- Pint and other whole-file tools still process the entire buffer for a selection.
+  -- Prefer an already-running range formatter; apply its edits before the shortcut returns.
+  require("conform").format({
+    async = false,
+    timeout_ms = 1000,
+    range = range,
+    lsp_format = range and "prefer" or "fallback",
+  }, function(err)
     if err then
       vim.notify(err, vim.log.levels.WARN, { title = "Format" })
     end
