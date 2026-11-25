@@ -2,10 +2,7 @@
 -- file in a full window of another tab first, so the target opens there, whole, instead of replacing a
 -- pane of the diff.
 local function outside_diff()
-  local lifecycle = package.loaded["codediff.ui.lifecycle"]
-  if lifecycle and lifecycle.get_session(vim.api.nvim_get_current_tabpage()) then
-    require("codediff.ui.view.actions.panes").open_current_elsewhere()
-  end
+  require("core.git-jumps").leave_for_jump()
 end
 
 -- The explorer's "Explorer" title stays at the top while its search box is hidden: a plain centred

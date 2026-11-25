@@ -1,9 +1,12 @@
 -- Keep Git layouts out of the window-local jumplist. An F4 departure adds one
 -- layout-level return point without ever loading virtual diff buffers in an editor.
+-- A gd/gr/… departure (leave_for_jump) opens the file elsewhere and then jumps: Ctrl+O from
+-- where that jump landed goes straight back to the diff, not to the file the jump started from.
 local M = {}
 local api = vim.api
 local returns = {}
 local forward
+local leaving_for_jump = false
 
 local function in_git()
   local tab = api.nvim_get_current_tabpage()
@@ -21,7 +24,10 @@ local function jump(direction)
   local mark = returns[win]
   if direction == "back" and mark then
     local index = vim.fn.getjumplist()[2]
-    if api.nvim_get_current_buf() == mark.buf and index <= mark.index then
+    -- after a jump from the diff, the place it landed is one entry past the departure
+    local back_home = mark.jump and index <= mark.index + 1
+      or api.nvim_get_current_buf() == mark.buf and index <= mark.index
+    if back_home then
       returns[win] = nil
       if api.nvim_win_is_valid(mark.origin) then
         forward = { origin = mark.origin, editor = win }
@@ -63,6 +69,21 @@ function M.setup()
   end, { desc = "Jump forward (whole Git view)" })
 end
 
+--- In a diff pane: open the same file in an editor tab before a jump (gd, gr, …) so the jump
+--- lands there; Ctrl+O from where it lands returns to the diff in one step.
+function M.leave_for_jump()
+  local lifecycle = package.loaded["codediff.ui.lifecycle"]
+  if not (lifecycle and lifecycle.get_session(api.nvim_get_current_tabpage())) then
+    return
+  end
+  leaving_for_jump = true
+  local ok, err = pcall(require("codediff.ui.view.actions.panes").open_current_elsewhere)
+  leaving_for_jump = false
+  if not ok then
+    error(err)
+  end
+end
+
 function M.attach()
   local graph = require("codediff.ui.graph")
   if not graph._focus_commit_change then
@@ -98,6 +119,7 @@ function M.attach()
         origin = origin,
         buf = api.nvim_get_current_buf(),
         index = vim.fn.getjumplist()[2],
+        jump = leaving_for_jump,
       }
       forward = nil
     end
