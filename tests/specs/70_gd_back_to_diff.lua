@@ -52,6 +52,7 @@ local function open_commit_diff(screen)
       [[local g = require('codediff.ui.graph').get(vim.api.nvim_get_current_tabpage()); return g and g.details and next(g.details.files or {}) ~= nil]]
     )
   end, "graph not ready")
+  screen:exec("_G.graph_tab = vim.api.nvim_get_current_tabpage()")
   screen:input("<CR><CR>")
   h.wait(screen, function()
     return screen:exec([[
@@ -70,6 +71,51 @@ local function back_in_diff(screen)
   return screen:exec(
     "return vim.api.nvim_get_current_win() == _G.diff_win and vim.api.nvim_win_get_cursor(0)[1] == 7"
   )
+end
+
+for _, page in ipairs({ "graph", "scm" }) do
+  lib.test("Git " .. page .. " is part of backward and forward history", function()
+    local dir = h.repo({ ["a.txt"] = { "one" }, ["b.txt"] = { "two" } })
+    local screen = h.nvim(dir)
+    screen:exec([[
+    vim.cmd('edit a.txt')
+    vim.cmd('clearjumps')
+    vim.cmd('edit b.txt')
+    _G.history_editor = vim.api.nvim_get_current_win()
+  ]])
+    screen:exec("vim.cmd('CodeDiff " .. page .. "')")
+    h.wait(screen, function()
+      return screen:exec([[
+      local tab = vim.api.nvim_get_current_tabpage()
+      return require('codediff.ui.graph').get(tab) ~= nil
+        or require('codediff.ui.lifecycle').get_panel(tab) ~= nil
+    ]])
+    end, "Git page not ready")
+    screen:exec("_G.history_graph = vim.api.nvim_get_current_win()")
+    screen:input("<C-o>")
+    h.wait(screen, function()
+      return screen:exec(
+        "return vim.api.nvim_get_current_win() == _G.history_editor and vim.fn.expand('%:t') == 'b.txt'"
+      )
+    end, "Ctrl+O stopped at the Git graph")
+    screen:input("<C-o>")
+    h.wait(screen, function()
+      return screen:exec("return vim.fn.expand('%:t') == 'a.txt'")
+    end, "Ctrl+O did not continue through editor history")
+    screen:input("<C-i>")
+    h.wait(screen, function()
+      return screen:exec("return vim.fn.expand('%:t') == 'b.txt'")
+    end, "Ctrl+I did not restore the editor file")
+    screen:input("<C-i>")
+    h.wait(screen, function()
+      return screen:exec("return vim.api.nvim_get_current_win() == _G.history_graph")
+    end, "Ctrl+I did not restore the whole Git graph")
+    screen:input("<C-o><C-,>")
+    h.wait(screen, function()
+      return screen:exec("return vim.api.nvim_get_current_win() == _G.history_graph")
+    end, "Ctrl+, did not restore the Git graph")
+    screen:close()
+  end)
 end
 
 lib.test("Ctrl+O after gd in a Git diff goes straight back to the diff", function()
@@ -134,5 +180,29 @@ lib.test("Ctrl+O after gd in a Git diff goes straight back to the diff", functio
     return "Ctrl+O did not return to the diff: "
       .. vim.inspect(screen:exec("return { file = vim.fn.expand('%:t'), line = vim.fn.line('.') }"))
   end)
+  screen:input("<C-o>")
+  h.wait(screen, function()
+    return screen:exec("return vim.api.nvim_get_current_tabpage() == _G.graph_tab")
+  end, "Ctrl+O stopped at the diff instead of returning to the graph")
+  screen:input("<C-o>")
+  h.wait(screen, function()
+    return screen:exec(
+      "return vim.api.nvim_get_current_tabpage() ~= _G.diff_tab and vim.fn.expand('%:t') == 'a.txt' and vim.fn.line('.') == 1"
+    )
+  end, "Ctrl+O stopped at the diff instead of returning to the original editor position")
+  screen:input("<C-i>")
+  h.wait(screen, function()
+    return screen:exec("return vim.api.nvim_get_current_tabpage() == _G.graph_tab")
+  end, "Ctrl+I did not return to the graph")
+  screen:input("<C-i>")
+  h.wait(screen, function()
+    return back_in_diff(screen)
+  end, "Ctrl+I did not return to the diff")
+  screen:input("<C-i>")
+  h.wait(screen, function()
+    return screen:exec(
+      "return vim.api.nvim_get_current_tabpage() ~= _G.diff_tab and vim.fn.expand('%:t') == 'a.txt' and vim.fn.line('.') == 2"
+    )
+  end, "Ctrl+I did not continue from the diff to the definition")
   screen:close()
 end)
