@@ -64,65 +64,81 @@ local cases = {
   },
 }
 
-for _, case in ipairs(cases) do
-  lib.test("cmd+d duplicates exactly " .. case.name .. " and preserves registers", function()
-    local screen = editor(case.lines)
-    screen:exec("vim.cmd('normal! ' .. ...)", { case.keys })
-    if case.cursor then
-      screen:exec("vim.api.nvim_win_set_cursor(0, ...)", { case.cursor })
-    end
-    screen:input("<D-d>")
-    h.wait(screen, function()
-      return vim.deep_equal(
-        case.expected,
-        screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)")
-      )
-    end, function()
-      return "Cmd+D did not duplicate the exact selection: "
-        .. vim.inspect(screen:exec([[
+local shortcuts = {
+  { name = "cmd+d", key = "<D-d>" },
+  { name = "Ctrl+Shift+J", key = "<C-S-j>" },
+  { name = "Ctrl+Shift+K", key = "<C-S-k>" },
+}
+for _, shortcut in ipairs(shortcuts) do
+  for _, case in ipairs(cases) do
+    lib.test(
+      shortcut.name .. " duplicates exactly " .. case.name .. " and preserves registers",
+      function()
+        local screen = editor(case.lines)
+        screen:exec("vim.cmd('normal! ' .. ...)", { case.keys })
+        if case.cursor then
+          screen:exec("vim.api.nvim_win_set_cursor(0, ...)", { case.cursor })
+        end
+        screen:input(shortcut.key)
+        h.wait(screen, function()
+          return vim.deep_equal(
+            case.expected,
+            screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)")
+          )
+        end, function()
+          return shortcut.name
+            .. " did not duplicate the exact selection: "
+            .. vim.inspect(screen:exec([[
         return { lines=vim.api.nvim_buf_get_lines(0,0,-1,false),
           selected=vim.fn.getregion(vim.fn.getpos('v'),vim.fn.getpos('.'),{type=vim.fn.mode()}),
           selection=vim.o.selection, error=vim.v.errmsg }
       ]]))
-    end)
-    lib.eq(
-      case.selected,
-      screen:exec([[
+        end)
+        lib.eq(
+          case.selected,
+          screen:exec([[
       return vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = vim.fn.mode() })
     ]]),
-      "new copy was not selected"
-    )
-    lib.eq(
-      { "keep z", "keep zero", "keep unnamed" },
-      screen:exec([[
+          "new copy was not selected"
+        )
+        lib.eq(
+          { "keep z", "keep zero", "keep unnamed" },
+          screen:exec([[
       return {vim.fn.getreg('z'), vim.fn.getreg('0'), vim.fn.getreg('"')}
     ]]),
-      "duplication changed registers"
+          "duplication changed registers"
+        )
+        screen:close()
+      end
     )
-    screen:close()
-  end)
+  end
 end
 
-lib.test("cmd+d repeats duplication and one undo removes only the latest copy", function()
-  local screen = editor({ "abcdef" })
-  screen:exec("vim.cmd('normal! gg0v2l')")
-  screen:input("<D-d><D-d>")
-  h.wait(screen, function()
-    return screen:exec("return vim.api.nvim_get_current_line()") == "abcabcabcdef"
-  end, "repeated Cmd+D duplicated the wrong text")
-  screen:input("<Esc>")
-  h.wait(screen, function()
-    return screen:exec("return vim.fn.mode()") == "n"
-  end, "Escape did not leave the selection")
-  screen:input("u")
-  h.wait(screen, function()
-    return screen:exec("return vim.api.nvim_get_current_line()") == "abcabcdef"
-  end, function()
-    return "undo did not remove only the latest copy: "
-      .. screen:exec("return vim.api.nvim_get_current_line()")
-  end)
-  screen:close()
-end)
+for _, shortcut in ipairs(shortcuts) do
+  lib.test(
+    shortcut.name .. " repeats duplication and one undo removes only the latest copy",
+    function()
+      local screen = editor({ "abcdef" })
+      screen:exec("vim.cmd('normal! gg0v2l')")
+      screen:input(shortcut.key .. shortcut.key)
+      h.wait(screen, function()
+        return screen:exec("return vim.api.nvim_get_current_line()") == "abcabcabcdef"
+      end, "repeated " .. shortcut.name .. " duplicated the wrong text")
+      screen:input("<Esc>")
+      h.wait(screen, function()
+        return screen:exec("return vim.fn.mode()") == "n"
+      end, "Escape did not leave the selection")
+      screen:input("u")
+      h.wait(screen, function()
+        return screen:exec("return vim.api.nvim_get_current_line()") == "abcabcdef"
+      end, function()
+        return "undo did not remove only the latest copy: "
+          .. screen:exec("return vim.api.nvim_get_current_line()")
+      end)
+      screen:close()
+    end
+  )
+end
 
 lib.test("cmd+d with no selection duplicates the line in normal and insert mode", function()
   local screen = editor({ "abc", "def" })

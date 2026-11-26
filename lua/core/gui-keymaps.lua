@@ -142,6 +142,12 @@ end, { desc = "Duplicate Line" })
 map("x", "<D-d>", function()
   require("core.duplicate").selection()
 end, { desc = "Duplicate Selection" })
+-- IdeaVim's EditorDuplicateLines: both shifted Ctrl keys duplicate the visual selection.
+for _, key in ipairs({ "<C-S-j>", "<C-S-k>" }) do
+  map("x", key, function()
+    require("core.duplicate").selection()
+  end, { desc = "Duplicate Selection" })
+end
 
 -- cmd+' / shift+cmd+' -> toggle terminal / new terminal
 map({ "n", "t" }, "<D-'>", function()
