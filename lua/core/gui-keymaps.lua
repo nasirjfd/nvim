@@ -142,8 +142,8 @@ end, { desc = "Duplicate Line" })
 map("x", "<D-d>", function()
   require("core.duplicate").selection()
 end, { desc = "Duplicate Selection" })
--- IdeaVim's EditorDuplicateLines: both shifted Ctrl keys duplicate the visual selection.
-for _, key in ipairs({ "<C-S-j>", "<C-S-k>" }) do
+-- IdeaVim's EditorDuplicateLines, with Ctrl and macOS Cmd variants.
+for _, key in ipairs({ "<C-S-j>", "<C-S-k>", "<D-S-j>", "<D-S-k>" }) do
   map("x", key, function()
     require("core.duplicate").selection()
   end, { desc = "Duplicate Selection" })

@@ -48,6 +48,10 @@ keybind = super+k=csi:107;9u
 # Keep Ctrl+Shift+J/K distinct from Ctrl+J/K (duplicate selection vs move statement in Neovim).
 keybind = ctrl+shift+j=csi:106;6u
 keybind = ctrl+shift+k=csi:107;6u
+# Ghostty's default Cmd+Shift+J pastes a screen-file path; its leading "/" opens Neovim's Find.
+# Forward both Cmd variants to Neovim instead, like the Ctrl variants above.
+keybind = super+shift+j=csi:106;10u
+keybind = super+shift+k=csi:107;10u
 # option+shift+f formats, option+k / option+j expand / shrink the selection
 keybind = alt+shift+f=csi:102;4u
 keybind = alt+j=csi:106;3u

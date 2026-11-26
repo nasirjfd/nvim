@@ -68,6 +68,8 @@ local shortcuts = {
   { name = "cmd+d", key = "<D-d>" },
   { name = "Ctrl+Shift+J", key = "<C-S-j>" },
   { name = "Ctrl+Shift+K", key = "<C-S-k>" },
+  { name = "Cmd+Shift+J", key = "<D-S-j>" },
+  { name = "Cmd+Shift+K", key = "<D-S-k>" },
 }
 for _, shortcut in ipairs(shortcuts) do
   for _, case in ipairs(cases) do
