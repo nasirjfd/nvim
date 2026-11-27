@@ -30,6 +30,16 @@ local last_results = {} -- test id -> its last result (kept while a run clears i
 local known_sets = {} -- test id -> how many data sets it had last time (a run's size is counted in these)
 local expanded = {} -- file key -> true while its tests are shown
 local collapsed = {} -- folder key -> true while folded
+local views = {} -- project -> last query, selected row and viewport across sidebar switches
+
+local function remember_view(picker)
+  return {
+    pattern = picker.input:get(),
+    input = not picker.layout:is_hidden("input"),
+    key = (picker:current() or {}).key,
+    top = picker.list.top,
+  }
+end
 
 local function runner()
   return require("modules.phpunit.runner")
@@ -1032,11 +1042,19 @@ local actions = {
     if not item then
       return
     end
+    local searching = picker.input.filter.pattern ~= ""
+    if not picker.layout:is_hidden("input") then
+      vim.cmd("stopinsert")
+      picker:toggle("input", { enable = false })
+      picker:focus("list")
+    end
     if item.kind == "toggle" then
       options.toggle_parallel()
       refresh(picker, item.key)
     elseif item.kind == "button" then
       run_item(item)
+    elseif item.kind == "file" and searching then
+      kit.goto_line(picker, item.file, item.line or 1)
     elseif foldable(item) then
       toggle_fold(picker, item)
     elseif item.kind == "test" or item.kind == "dataset" then
@@ -1155,6 +1173,9 @@ local actions = {
       if picker.closed then
         return
       end
+      -- A wheel-browsed list can keep its selection off screen. A real click,
+      -- unlike scrolling, explicitly selects the row under the pointer.
+      picker.list:move(picker.list:row2idx(mouse.line), true)
       local item = picker:current()
       if item and item.kind == "toggle" then
         picker:action(zone_at(mouse.wincol) == "flat" and "tests_view" or "tests_parallel")
@@ -1182,7 +1203,10 @@ local function open()
   if snap.sync then
     snap.sync()
   end
+  local project = plan.get().root or vim.fn.getcwd()
   require("core.sidebars").make_room("tests")
+  local saved = views[project] or {}
+  local searching = (saved.pattern or "") ~= ""
   return Snacks.picker.pick({
     source = SOURCE,
     title = "", -- the title is the winbar (kit.set_title); the search box must not repeat it
@@ -1191,20 +1215,53 @@ local function open()
     tree = true,
     show_empty = true,
     focus = "list",
+    pattern = saved.pattern,
     auto_close = false,
     jump = { close = false },
     layout = {
       preset = "sidebar",
       preview = false,
-      hidden = { "input" },
+      hidden = saved.input and {} or { "input" },
       layout = { width = WIDTH + 4, min_width = WIDTH + 4 },
     },
     matcher = { sort_empty = false, fuzzy = false },
     sort = { fields = { "idx" } },
+    filter = {
+      transform = function(_, filter)
+        -- The finder needs to expose folded tests when search starts, and
+        -- restore the ordinary tree when it ends.
+        local active = filter.pattern ~= ""
+        local changed = active ~= searching
+        searching = active
+        return changed
+      end,
+    },
     confirm = "tests_confirm",
     actions = actions,
     on_show = function(picker)
       kit.set_title(picker, TITLE)
+      require("modules.phpunit.pane_view").attach(picker)
+      -- Git can open another tab without closing this pane. Save on leaving
+      -- either pane window too, so the most recently used view wins.
+      for _, win in ipairs({ picker.list.win, picker.input.win }) do
+        win:on("WinLeave", function()
+          if not picker.closed then
+            views[project] = remember_view(picker)
+          end
+        end, { buf = true })
+      end
+      if saved.key then
+        picker:find({
+          on_done = function()
+            if not picker.closed and kit.move_to(picker, saved.key) then
+              picker.list:scroll(saved.top or 1, true)
+            end
+          end,
+        })
+      end
+    end,
+    on_close = function(picker)
+      views[project] = remember_view(picker)
     end,
     -- while the failure view is open it shows the row the cursor is on
     on_change = function(_, item)
@@ -1242,6 +1299,7 @@ local function open()
       },
       input = {
         keys = {
+          ["<CR>"] = { "tests_confirm", mode = { "i", "n" } },
           ["<Esc>"] = { "tests_stop_search_insert", mode = { "i" } },
           ["<Esc>"] = { "tests_clear_search", mode = { "n" } },
         },
